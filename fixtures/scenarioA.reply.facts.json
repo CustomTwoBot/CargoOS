@@ -1,0 +1,48 @@
+{
+  "scenarioId": "A",
+  "questionId": "q_1",
+  "replyDoc": {
+    "_id": "doc_reply_1",
+    "caseId": "case_A",
+    "type": "reply",
+    "title": "Reply from ops lead",
+    "sender": "ops_lead",
+    "sentAt": "2026-10-24T14:05:00-07:00",
+    "text": "approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling"
+  },
+  "interpretation": "partial",
+  "facts": [
+    {
+      "_id": "fact_reply_congestion",
+      "caseId": "case_A",
+      "kind": "approval",
+      "chargeType": "congestion",
+      "amountCents": 20000,
+      "currency": "USD",
+      "statedBy": "ops_lead",
+      "effectiveAt": "2026-10-24T14:05:00-07:00",
+      "origin": "reply",
+      "span": {
+        "docId": "doc_reply_1",
+        "locator": "reply",
+        "quote": "approved the $200 congestion fee on WhatsApp"
+      }
+    },
+    {
+      "_id": "fact_reply_handling",
+      "caseId": "case_A",
+      "kind": "rejection",
+      "chargeType": "handling",
+      "amountCents": 40000,
+      "currency": "USD",
+      "statedBy": "ops_lead",
+      "effectiveAt": "2026-10-24T14:05:00-07:00",
+      "origin": "reply",
+      "span": {
+        "docId": "doc_reply_1",
+        "locator": "reply",
+        "quote": "nobody agreed to $400 rush handling"
+      }
+    }
+  ]
+}
