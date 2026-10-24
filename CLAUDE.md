@@ -1,6 +1,6 @@
 # CLAUDE.md — CargoOS (Cal Hacks 13.0)
 
-Every AI coding agent working in this repo must follow this file. The full product spec is in `HACK.md` (build spec). This file holds the rules; when in doubt, read the matching `HACK.md` section instead of guessing.
+Every AI coding agent working in this repo must follow this file. The full product spec is in `SPEC.md` (build spec; summary plan in `HACK.md`). This file holds the rules; when in doubt, read the matching `SPEC.md` section instead of guessing.
 
 ## What we're building
 CargoOS checks a freight invoice against what was actually agreed (quotes, emails, chats) before the AP clerk pays it. It sorts each invoice line into To dispute / Waiting on answers / Cleared, asks the ops lead when evidence is missing, recomputes when the answer arrives, and drafts a dispute that only the controller can approve. Nothing is ever sent or paid.
@@ -27,7 +27,7 @@ Only edit files in your own area. If you need a change elsewhere, stop and leave
 - `lib/schemas.ts` (Zod mirrors of the types)
 - `convex/schema.ts` (tables and indexes)
 - Convex function names (below)
-- Fixture formats in `fixtures/` (see `HACK.md` section 7)
+- Fixture formats in `fixtures/` (see `SPEC.md` section 7)
 
 Never "improve", rename, or duplicate a shared type. Import it.
 
@@ -51,7 +51,7 @@ Never "improve", rename, or duplicate a shared type. Import it.
 
 ## Testing (required for everything)
 - Every new function ships with tests. A task isn't done until its tests pass locally and in CI.
-- Write tests from the expected values in `HACK.md` (sections 6, 7, 10) first, then the code.
+- Write tests from the expected values in `SPEC.md` (sections 6, 7, 10) first, then the code.
 - Claude calls are tested with **recorded responses** in `tests/recordings/`. CI never calls the API.
 - Mock only the Claude API and time; never mock our own engine in integration tests.
 - **Never edit fixtures or expected values to make a test pass.** If you think the spec is wrong, say so.
