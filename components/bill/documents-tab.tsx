@@ -13,6 +13,7 @@ import { Button, Card, Kicker } from "@/components/app/ui";
 import { cx } from "@/components/case/cx";
 import { highlight } from "@/components/case/evidence";
 import { canAct } from "@/components/case/roles";
+import { AddFiles } from "@/components/upload/add-files";
 import { docRows, itemsOf, segmentsOf, usedFor, type DocRow, type Item } from "@/components/documents/documents";
 import { outcomeText, type EvidenceType } from "@/components/inputs/evidence-input";
 import { isUploaderOnly } from "@/components/shell/person";
@@ -252,7 +253,8 @@ function AddEvidence({ bill }: { bill: Bill }) {
   const [type, setType] = useState<EvidenceType>("email");
   const [text, setText] = useState("");
   const phone = <Link href={`/upload/${bill.x.case._id}`} className="text-[13.5px] font-semibold text-link underline underline-offset-4">Add from a phone</Link>;
-  if (!canAct(person.roles, "addEvidence")) return <div className="px-1">{phone}</div>;
+  const files = person.roles.includes("uploader") ? <AddFiles bill={bill} /> : null;
+  if (!canAct(person.roles, "addEvidence")) return <div className="flex flex-col gap-3">{files}<div className="px-1">{phone}</div></div>;
 
   const add = () => {
     const t = text.trim();
@@ -262,8 +264,10 @@ function AddEvidence({ bill }: { bill: Bill }) {
   };
 
   return (
+    <div className="flex flex-col gap-3">
+    {files}
     <Card className="flex flex-col gap-3 p-4">
-      <h3 className="font-bold">Add evidence</h3>
+      <h3 className="font-bold">Paste evidence</h3>
       <label className="flex flex-col gap-1 text-meta font-semibold text-ink-2">
         Kind
         <select value={type} onChange={(e) => setType(e.target.value as EvidenceType)}
@@ -281,5 +285,6 @@ function AddEvidence({ bill }: { bill: Bill }) {
       <Button onClick={add} disabled={!text.trim()}>Add and recheck</Button>
       {phone}
     </Card>
+    </div>
   );
 }

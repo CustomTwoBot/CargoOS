@@ -48,12 +48,12 @@ export const NEW_BILL_COPY = {
 const useOrigin = () => useSyncExternalStore(() => () => {}, () => window.location.origin, () => "");
 
 /** Reads a text file for its type; PDFs and photos are typed by name. */
-async function textOf(file: File): Promise<string> {
+export async function textOf(file: File): Promise<string> {
   if (keepsFile(file) || typeof file.text !== "function") return "";
   try { return await file.text(); } catch { return ""; }
 }
 
-async function describeFiles(files: File[]) {
+export async function describeFiles(files: File[]) {
   return Promise.all(files.map(async (file) => {
     const docType = typeOfFile(file, await textOf(file));
     return { file, docType, name: file.name };

@@ -19,7 +19,7 @@ export const DROP_COPY = {
 } as const;
 
 /** True while files are dragged over the element, counting nested enter/leave pairs. */
-function useDragOver(onFiles: (files: File[]) => void) {
+export function useDragOver(onFiles: (files: File[]) => void) {
   const depth = useRef(0);
   const [over, setOver] = useState(false);
   const hasFiles = (e: DragEvent) => !e.dataTransfer?.types || Array.from(e.dataTransfer.types).includes("Files");
