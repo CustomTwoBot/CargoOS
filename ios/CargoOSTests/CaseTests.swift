@@ -115,8 +115,15 @@ final class RedesignFlowTests: XCTestCase {
         return store
     }
 
+    private var savedPerson = People.sam
+
+    override func setUp() {
+        super.setUp()
+        savedPerson = DeviceSettings.person
+    }
+
     override func tearDown() {
-        DeviceSettings.person = People.sam
+        DeviceSettings.person = savedPerson
         super.tearDown()
     }
 

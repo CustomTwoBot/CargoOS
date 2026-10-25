@@ -17,6 +17,9 @@ first. Every screen answers "how much of this freight bill can I safely pay?".
 - **Message (L1)**: after Accept, CargoOS's draft signed by Sam. Edit the words; amounts and line numbers are locked.
   Copy text, Share or Save PDF. Nothing is ever sent by CargoOS.
 - **Add**: WhatsApp chat, PDF or email, photo of a paper, paste, or Share → CargoOS from any app. Leo sees no amounts.
+- **Open a bill from the laptop**: scan the QR code on a bill's page (`…/upload/<caseId>`, VisionKit), or paste its link.
+  The bill joins the list (remembered in the App Group, `cargoos.bills`), is polled like the demo case, and the share
+  extension can send documents to it.
 
 Rehearsals: launch with `-demoStage answered|requested|accepted|rejected` to start the replay at that step,
 and `-convexURL none` to force the replay on a simulator that points at a server.
@@ -53,7 +56,9 @@ The phone is set to **Sam** (`personId: "sam"`), who holds `ops_lead` and `uploa
 | Case, lines, totals | `cases:getDemoCase` + `cases:getCaseView`, polled every 3 s (1 s while CargoOS is reading). Totals are the server engine's. | `fixtures/scenarioA.ui.json`, revision 1 then 2, marked "Replay" |
 | Your answer | `ai:submitReply` (`role: ops_lead`). Waits until the agent has read it and the engine has recomputed, then shows the changes caused by it. | Recorded outcome, not computed from your text |
 | Share sheet, Paste, Files | Real; parsed on the phone | Same |
-| Upload of added evidence | `uploads:generateUploadUrl` → file storage → `uploads:addDocument` (`role: uploader`). **Not on the server yet**: items wait with "the server can't take uploads yet" and go up automatically once it is. | Kept on the phone |
+| Upload of added evidence | `uploads:generateUploadUrl` → file storage → `uploads:addDocument`, or `uploads:addPastedText`, as the phone's person | Kept on the phone |
+| Bills from a laptop | QR or link → `cases:getCaseView` for each remembered case id | One recorded bill |
+| Approval, verdicts, rule undo | `drafts:requestApproval` / `approveDraft` / `rejectDraft`, `pipeline:confirmFinding` / `dismissFinding`, `learnedRules:undoLearnedRule` | Kept on the phone |
 | Case inbox email address | Preview only | Same |
 
 ## Layout

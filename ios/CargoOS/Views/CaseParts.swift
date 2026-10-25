@@ -42,6 +42,7 @@ func reasonText(_ f: Finding) -> String {
     case "R7_CONFLICT": "Sources disagree"
     case "R8_APPROVED": "You approved it"
     case "R9_REJECTED": "You said it was never agreed"
+    case "R10_LEARNED": "Accepted before"
     default: f.ruleId
     }
 }

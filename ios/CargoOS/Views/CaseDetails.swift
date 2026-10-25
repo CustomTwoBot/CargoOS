@@ -58,6 +58,17 @@ struct LineDetailView: View {
                     }
                 }
 
+                if f.ruleId == "R10_LEARNED", let ruleId = f.learnedRuleId, store.person.holds(.clerk) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Cleared because you said this charge from \(store.forwarder) was not an issue before.")
+                            .font(.footnote).foregroundStyle(Theme.ink2)
+                        Button("Undo the rule") { Task { await store.undoRule(ruleId) } }
+                            .buttonStyle(SecondaryButtonStyle())
+                    }
+                }
+                if let error = store.actionError {
+                    ErrorNote(text: error) { store.clearError() }
+                }
                 if group != .cleared, store.person.holds(.clerk) {
                     VStack(spacing: 8) {
                         Button("Keep in dispute") { Task { await store.setVerdict(f.key, "confirmed") } }

@@ -34,6 +34,7 @@ targets:
       properties:
         CFBundleDisplayName: CargoOS
         ConvexURL: $(CONVEX_URL)
+        NSCameraUsageDescription: Scan the QR code on a bill's page to open it on this phone.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIApplicationSceneManifest:

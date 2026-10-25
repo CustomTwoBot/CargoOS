@@ -70,6 +70,11 @@ final class CaseStore {
     private let client: ConvexClient?
     private let fixture: UIFixture?
     private var caseId: String?
+    /// Live: the seeded demo case, and the bill opened on this phone when it isn't that one.
+    private(set) var demoCaseId: String?
+    private(set) var selectedBillId: String?
+    /// Live: every bill this phone knows (the demo case plus bills scanned from a laptop), newest data first.
+    private(set) var billSummaries: [BillSummary] = []
     /// Live: the question we answered and are waiting on the agent and engine for.
     private var pendingQuestionId: String?
     // Replay state.
@@ -90,6 +95,7 @@ final class CaseStore {
     func setPerson(_ p: Person) {
         DeviceSettings.person = p
         person = p
+        if isLive { Task { await refresh() } }   // the bills list reads differently for each person
     }
 
     func finishOnboarding(as p: Person) {
@@ -122,33 +128,37 @@ final class CaseStore {
 
     // MARK: - Live loading
 
-    /// Fetches the case once. Called on launch, by the poll loop and after every action.
+    /// Fetches the open bill (the demo case unless another bill was opened) and a summary of every
+    /// bill this phone knows. Called on launch, by the poll loop and after every action.
     func refresh() async {
         guard let client else { return }
         do {
-            if caseId == nil {
-                let id: String? = try await client.query("cases:getDemoCase")
-                guard let id else {
-                    snapshot = nil
-                    loadError = "No case on the server yet. Ask the team to run resetDemo."
-                    connection = .online
-                    return
-                }
-                caseId = id
-            }
-            guard let caseId else { return }
-            let view: CaseView? = try await client.query("cases:getCaseView", ["caseId": caseId])
-            guard let view else {
-                // The case was deleted (resetDemo makes a new one): look it up again next time.
-                self.caseId = nil
+            let demo: String? = try await client.query("cases:getDemoCase")
+            demoCaseId = demo
+            guard let target = selectedBillId ?? demo else {
+                snapshot = nil
+                loadError = "No case on the server yet. Ask the team to run resetDemo."
+                connection = .online
+                await refreshSummaries(current: nil)
                 return
             }
+            if caseId != target { pendingQuestionId = nil }
+            caseId = target
+            let view: CaseView? = try await client.query("cases:getCaseView", ["caseId": target])
+            guard let view else {
+                // The case was deleted (resetDemo makes a new demo case): fall back to the demo case.
+                if selectedBillId == target { forgetBill(target) }
+                caseId = nil
+                snapshot = nil
+                return
+            }
+            guard caseId == view.case.id else { return }   // another bill was opened meanwhile
             snapshot = CaseSnapshot(view)
-            retargetReplayItems(to: view.case.id)
+            if view.case.id == demo { retargetReplayItems(to: view.case.id) }
             loadError = nil
             connection = .online
-            sharedInbox.saveCases([CaseRef(id: view.case.id, title: view.case.title, shipmentRef: view.case.shipmentRef)])
             settlePendingReply()
+            await refreshSummaries(current: view)
         } catch {
             connection = .offline(error.localizedDescription)
             if snapshot == nil { loadError = error.localizedDescription }
@@ -718,11 +728,11 @@ extension CaseStore {
             guard let client, let caseId else { return }
             struct Args: Encodable { let role = "clerk"; let personId: String; let caseId: String; let key: String }
             do {
-                let _: String? = try? await client.mutation(
+                let _: String? = try await client.mutation(
                     verdict == "confirmed" ? "pipeline:confirmFinding" : "pipeline:dismissFinding",
                     Args(personId: person.id, caseId: caseId, key: key))
                 await refresh()
-            }
+            } catch { actionError = error.localizedDescription }
         }
     }
 
@@ -835,8 +845,12 @@ extension CaseStore {
         return .allClear
     }
 
-    /// Bills waiting on this person: 0 or 1 on the phone, which holds one bill.
+    /// Bills waiting on this person: the open bill by its next step, the others by their summaries.
     var needsMeCount: Int {
+        bills.filter { $0.id != openBillId && $0.needsMe }.count + openBillNeedsMe
+    }
+
+    private var openBillNeedsMe: Int {
         switch nextStep {
         case .answer, .decide, .request, .writeLetter: return 1
         case .rejected: return person.holds(.clerk) && draft?.requestedBy == person.id ? 1 : 0
@@ -905,5 +919,162 @@ extension CaseStore {
             replayEvent("draft_rejected", actor: "controller")
         }
         rebuildReplay()
+    }
+}
+
+// MARK: - Several bills: the demo case plus bills opened from a laptop's QR code
+
+/// One row of the bills list, from the server's `getCaseView` (money is the engine's totals).
+struct BillSummary: Identifiable, Hashable {
+    let id: String
+    let forwarder: String
+    let invoiceRef: String
+    let billedCents: Int
+    let payCents: Int
+    let holdCents: Int
+    let askCents: Int
+    let status: String
+    let documents: Int
+    let isDemo: Bool
+    /// Something on this bill waits for the person this phone is set to.
+    var needsMe = false
+}
+
+extension BillSummary {
+    /// The row as `person` sees it: the same words as the open bill's next step.
+    init(_ view: CaseView, isDemo: Bool, person: Person = DeviceSettings.person) {
+        let invoice = view.documents.first { $0.type == .freight_invoice }?.title ?? view.case.shipmentRef
+        let reading = view.documents.filter { $0.readStatus == "reading" }.count
+        let owner = People.owner.first
+        var status: String
+        var needsMe = false
+        if view.findings.isEmpty {
+            status = reading > 0 ? "Reading \(reading) of \(view.documents.count) documents" : (view.documents.isEmpty ? "Waiting for documents" : "Checking…")
+        } else if let q = view.questions.first(where: { $0.status == "open" }) {
+            needsMe = person.holds(q.to)
+            status = needsMe ? "Answer 1 question" : "Waiting for \(owner)'s answer"
+        } else if let d = view.draft, d.status == "pending_approval" {
+            needsMe = person.holds(.controller) && d.requestedBy != person.id
+            status = needsMe ? "\(People.byId(d.requestedBy)?.first ?? "Maya") asks you to approve" : "Waiting for \(owner) · \(Money.usd(d.totalDisputedCents))"
+        } else if view.draft?.status == "approved" {
+            needsMe = person.holds(.controller)
+            status = needsMe ? "Accepted · write to the seller" : "\(owner) accepted · pay \(Money.usd(view.totals.agreed))"
+        } else if view.draft?.status == "rejected" {
+            needsMe = person.holds(.clerk) && view.draft?.requestedBy == person.id
+            status = "\(owner) rejected the dispute"
+        } else if view.totals.atStake > 0 {
+            needsMe = person.holds(.clerk)
+            status = "Ready to dispute · \(Money.usd(view.totals.atStake))"
+        } else {
+            status = "Safe to pay in full"
+        }
+        if person.isUploaderOnly { needsMe = false; status = "\(view.documents.count) documents" }
+        self.init(id: view.case.id, forwarder: view.case.forwarder ?? view.case.title,
+                  invoiceRef: invoice.replacingOccurrences(of: "Invoice ", with: ""),
+                  billedCents: view.totals.billed, payCents: view.totals.agreed, holdCents: view.totals.atStake,
+                  askCents: view.totals.waiting, status: status, documents: view.documents.count, isDemo: isDemo,
+                  needsMe: needsMe)
+    }
+}
+
+extension DeviceSettings {
+    private static let billsKey = "cargoos.bills"
+    private static var store: UserDefaults { UserDefaults(suiteName: SharedInbox.appGroup) ?? .standard }
+
+    /// Bills opened on this phone from a laptop's QR code, oldest first.
+    static var billIds: [String] {
+        get { store.stringArray(forKey: billsKey) ?? [] }
+        set { store.set(newValue, forKey: billsKey) }
+    }
+}
+
+extension CaseStore {
+    /// The case id in what a laptop's QR code or link holds: `https://…/upload/<id>`, `…/bills/<id>`, or the bare id.
+    static func caseId(fromScan raw: String) -> String? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isId = { (s: String) in s.count >= 16 && s.count <= 64 && s.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } }
+        if let url = URL(string: text), url.scheme != nil {
+            let parts = url.pathComponents.filter { $0 != "/" }
+            if let i = parts.firstIndex(where: { $0 == "upload" || $0 == "bills" }), i + 1 < parts.count, isId(parts[i + 1]) {
+                return parts[i + 1]
+            }
+            return nil
+        }
+        return isId(text) ? text : nil
+    }
+
+    /// Every bill for the list: live, the server's summaries; replay, the one recorded bill.
+    var bills: [BillSummary] {
+        if isLive { return billSummaries }
+        guard let s = snapshot else { return [] }
+        let view = CaseView(case: s.caseInfo, documents: s.documents, facts: s.facts, charges: s.charges, findings: s.findings,
+                            changes: s.changes, totals: .init(billed: s.totals.billedCents, agreed: s.totals.agreedCents,
+                                                              atStake: s.totals.atStakeCents, waiting: s.totals.waitingCents, waived: 0),
+                            questions: s.questions, replies: s.replies, draft: s.draft, events: s.events)
+        return [BillSummary(view, isDemo: true, person: person)]
+    }
+
+    /// The id of the bill on screen.
+    var openBillId: String? { caseInfo?.id }
+
+    /// Opens a bill: the bill page then shows it, polled like the demo case.
+    func open(_ id: String) async {
+        guard isLive, id != caseInfo?.id else { return }
+        selectedBillId = id == demoCaseId ? nil : id
+        snapshot = nil
+        caseId = nil
+        await refresh()
+    }
+
+    /// Adds a bill from a laptop's QR code or link, if the server has it, and opens it.
+    func addBill(fromScan raw: String) async -> String? {
+        guard let client else { return "Scanning a bill needs the live server. This phone plays the recorded replay." }
+        guard let id = Self.caseId(fromScan: raw) else { return "That isn't a CargoOS bill code. Scan the QR code on the bill's page." }
+        do {
+            let view: CaseView? = try await client.query("cases:getCaseView", ["caseId": id])
+            guard view != nil else { return "No bill with that code on the server." }
+        } catch {
+            return error.localizedDescription
+        }
+        if id != demoCaseId && !DeviceSettings.billIds.contains(id) { DeviceSettings.billIds.append(id) }
+        await open(id)
+        return nil
+    }
+
+    func forgetBill(_ id: String) {
+        DeviceSettings.billIds.removeAll { $0 == id }
+        if selectedBillId == id { selectedBillId = nil }
+        billSummaries.removeAll { $0.id == id }
+    }
+
+    /// Summaries of every known bill, and the list the share extension offers.
+    func refreshSummaries(current: CaseView?) async {
+        guard let client else { return }
+        var ids: [String] = []
+        for id in [demoCaseId].compactMap({ $0 }) + DeviceSettings.billIds where !ids.contains(id) { ids.append(id) }
+        var out: [BillSummary] = []
+        for id in ids {
+            if let current, current.case.id == id {
+                out.append(BillSummary(current, isDemo: id == demoCaseId, person: person))
+            } else if let view: CaseView? = try? await client.query("cases:getCaseView", ["caseId": id]) {
+                if let view { out.append(BillSummary(view, isDemo: id == demoCaseId, person: person)) }
+                else if id != demoCaseId { DeviceSettings.billIds.removeAll { $0 == id } }
+            } else if let old = billSummaries.first(where: { $0.id == id }) {
+                out.append(old)   // offline: keep what we had
+            }
+        }
+        billSummaries = out
+        sharedInbox.saveCases(out.map { CaseRef(id: $0.id, title: "\($0.forwarder) · \($0.invoiceRef)", shipmentRef: $0.invoiceRef) })
+    }
+
+    // MARK: Learned rules (R10)
+
+    func undoRule(_ ruleId: String) async {
+        guard person.holds(.clerk), let client else { return }
+        struct Args: Encodable { let ruleId: String; let personId: String }
+        do {
+            let _: String? = try await client.mutation("learnedRules:undoLearnedRule", Args(ruleId: ruleId, personId: person.id))
+            await refresh()
+        } catch { actionError = error.localizedDescription }
     }
 }

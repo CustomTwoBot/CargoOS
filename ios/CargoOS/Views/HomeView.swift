@@ -13,15 +13,20 @@ struct HomeView: View {
                 ConnectionBanner()
                 if store.person.isUploaderOnly {
                     uploaderBody
-                } else if store.caseInfo != nil {
+                } else if !store.bills.isEmpty {
                     totals
                     Text("Bills").font(.headline).foregroundStyle(Theme.ink).padding(.top, 4)
-                    NavigationLink(value: BillLink()) { BillRow() }
+                    ForEach(store.bills) { bill in
+                        NavigationLink(value: BillLink(id: bill.id)) {
+                            if bill.id == store.openBillId { BillRow() } else { SummaryRow(bill: bill) }
+                        }
                         .buttonStyle(.plain)
+                    }
                 } else {
                     emptyOrError
                 }
                 addRow
+                if store.isLive { scanRow }
                 TrustLine().padding(.top, 4)
             }
             .padding(.horizontal, 18)
@@ -29,12 +34,37 @@ struct HomeView: View {
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(for: BillLink.self) { _ in BillView() }
+        .navigationDestination(for: BillLink.self) { link in BillView().task { await store.open(link.id) } }
         .navigationDestination(for: DocLink.self) { DocumentView(link: $0) }
         .navigationDestination(for: HistoryLink.self) { _ in HistoryView() }
         .navigationDestination(for: Finding.self) { LineDetailView(finding: $0) }
         .navigationDestination(for: LetterLink.self) { _ in LetterView() }
         .refreshable { await store.refresh() }
+        .sheet(isPresented: $scanning) { BillScannerSheet() }
+    }
+
+    @State private var scanning = false
+
+    private var scanRow: some View {
+        Button { scanning = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "qrcode.viewfinder")
+                    .font(.headline)
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(Theme.ink)
+                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Open a bill from the laptop").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Scan the QR code on the bill's page").font(.footnote).foregroundStyle(Theme.ink3)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.ink4)
+            }
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line))
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
@@ -72,9 +102,11 @@ struct HomeView: View {
 
     private var totals: some View {
         HStack(alignment: .top, spacing: 10) {
-            tile("Safe to pay", Money.usd(store.payCents), Theme.pay, highlight: true)
-            tile("On hold", Money.usd(store.holdCents), Theme.hold)
-            tile("Waiting", Money.usd(store.askCents), store.askCents > 0 ? Theme.ask : Theme.ink4)
+            let bills = store.bills
+            let ask = bills.reduce(0) { $0 + $1.askCents }
+            tile("Safe to pay", Money.usd(bills.reduce(0) { $0 + $1.payCents }), Theme.pay, highlight: true)
+            tile("On hold", Money.usd(bills.reduce(0) { $0 + $1.holdCents }), Theme.hold)
+            tile("Waiting", Money.usd(ask), ask > 0 ? Theme.ask : Theme.ink4)
         }
     }
 
@@ -98,20 +130,17 @@ struct HomeView: View {
 
     private var uploaderBody: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let c = store.caseInfo {
-                NavigationLink(value: BillLink()) {
+            ForEach(store.bills) { bill in
+                NavigationLink(value: BillLink(id: bill.id)) {
                     Card {
-                        Text(store.forwarder).font(.headline).foregroundStyle(Theme.ink)
-                        Text("\(c.title) · \(store.documents.count) documents")
+                        Text(bill.forwarder).font(.headline).foregroundStyle(Theme.ink)
+                        Text("\(bill.invoiceRef) · \(bill.documents) documents")
                             .font(.footnote).foregroundStyle(Theme.ink3).padding(.top, 2)
-                        if store.readingCount > 0 {
-                            Label("CargoOS is reading \(store.readingCount)", systemImage: "hourglass")
-                                .font(.footnote.weight(.semibold)).foregroundStyle(Theme.ink2).padding(.top, 8)
-                        }
                     }
                 }
                 .buttonStyle(.plain)
             }
+            if store.isLive { scanRow }
             Text("You add documents. Maya and Sam see what CargoOS finds.")
                 .font(.footnote).foregroundStyle(Theme.ink3)
         }
@@ -153,7 +182,7 @@ struct HomeView: View {
     }
 }
 
-struct BillLink: Hashable {}
+struct BillLink: Hashable { let id: String }
 struct LetterLink: Hashable {}
 
 /// One bill: forwarder, the mini pay/hold/ask bar, the status in words and the next step.
@@ -168,7 +197,7 @@ struct BillRow: View {
                     Text(store.invoiceRef).font(.footnote).foregroundStyle(Theme.ink3)
                 }
                 Spacer()
-                Text(Money.usd(store.totals.billedCents))
+                Text(store.totals.billedCents > 0 ? Money.usd(store.totals.billedCents) : "—")
                     .font(.headline.monospacedDigit()).foregroundStyle(Theme.ink)
             }
             SplitBar(pay: store.payCents, hold: store.holdCents, ask: store.askCents, height: 8)
@@ -214,5 +243,37 @@ struct SplitBar: View {
         .animation(.smooth(duration: 0.9), value: [pay, hold, ask])
         .accessibilityElement()
         .accessibilityLabel("Pay \(Money.usd(pay)), hold \(Money.usd(hold)), ask \(Money.usd(ask))")
+    }
+}
+
+/// A bill that isn't open: the server's summary, tap to open it.
+struct SummaryRow: View {
+    let bill: BillSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bill.forwarder).font(.headline).foregroundStyle(Theme.ink)
+                    Text(bill.invoiceRef).font(.footnote).foregroundStyle(Theme.ink3)
+                }
+                Spacer()
+                Text(bill.billedCents > 0 ? Money.usd(bill.billedCents) : "—")
+                    .font(.headline.monospacedDigit()).foregroundStyle(Theme.ink)
+            }
+            SplitBar(pay: bill.payCents, hold: bill.holdCents, ask: bill.askCents, height: 8)
+            HStack {
+                Text(bill.status).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink2)
+                Spacer()
+                Text("Open")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .foregroundStyle(Theme.ink)
+                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
+        }
+        .padding(16)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.line))
     }
 }

@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>ConvexURL</key>
 	<string>$(CONVEX_URL)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan the QR code on a bill's page to open it on this phone.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

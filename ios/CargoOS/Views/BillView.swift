@@ -14,7 +14,9 @@ struct BillView: View {
                         .font(.footnote).foregroundStyle(Theme.ink3)
                 }
                 ConnectionBanner()
-                if store.person.isUploaderOnly {
+                if store.caseInfo == nil {
+                    BusyCard(text: "Opening the bill…")
+                } else if store.person.isUploaderOnly {
                     UploaderBill()
                 } else {
                     HeroCard()
