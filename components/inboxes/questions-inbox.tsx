@@ -9,7 +9,7 @@ import { whenAt } from "@/components/case/format";
 import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
 import { ago, type InboxLine, type QuestionItem } from "./items";
-import { CARD, Chevron, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, NothingWaiting, PRIMARY, useNow, useWide } from "./parts";
+import { CARD, Chevron, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, useNow, useWide } from "./parts";
 import { ASKED, firstName, SAM, type Person } from "./people";
 
 type Props = {
@@ -67,14 +67,15 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = SAM, now: fixe
   return (
     <InboxFrame
       title="Questions"
-      count={open.length ? `${open.length} waiting` : "None waiting"}
+      // No count when nothing waits: the empty card says so (once).
+      count={open.length ? `${open.length} waiting` : ""}
       sub={`What CargoOS asked ${asked}, across your cases. Oldest first.`}
       reading={reading} backLabel="Back to questions" onBack={() => setReading(false)}
       list={
         <>
           {open.length ? (
             <ItemList label={canReply ? "Waiting for your answer" : `Waiting for ${askedName}`}>{open.map(row)}</ItemList>
-          ) : wide ? <NothingWaiting>Nothing waiting.</NothingWaiting> : <InboxEmpty {...QUESTIONS_EMPTY} />}
+          ) : !wide && <InboxEmpty {...QUESTIONS_EMPTY} />}
           {answered.length > 0 && (
             <Fold label="Answered" count={answered.length} open={showAnswered} onToggle={() => setFold(!showAnswered)}>
               <ItemList label="Answered" quiet>{answered.map(row)}</ItemList>
@@ -103,6 +104,9 @@ function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }:
   const id = `inbox-answer-${q.id}`;
   const meta = [q.label, now && `Asked ${whenAt(q.askedAt, now)}`, isOpen && `${q.waiting} is waiting on this answer`].filter(Boolean).join(" · ");
   const status = !isOpen ? "Answered" : canReply ? undefined : `Waiting for ${askedName}`;
+  // The same chip on every row says nothing new: say it once above the rows.
+  const chips = isOpen ? q.lines.map(openChip) : [];
+  const sameChip = chips.length > 1 && chips.every((c) => c === chips[0]) ? chips[0] : undefined;
   return (
     <div className="flex max-w-[780px] flex-col gap-3">
       <DetailHead title={q.caseTitle} meta={meta} onOpen={onOpen} />
@@ -123,8 +127,9 @@ function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }:
         <p className="mt-2 text-[18px] leading-[28px]">{q.text}</p>
 
         <div className="mt-4 border-t border-line pt-1">
+          {sameChip && <p className="pb-1 pt-2 text-meta font-medium text-ink-3">{sameChip} for all {q.lines.length} charges</p>}
           <LineRows label={isOpen ? "Charges it covers" : "Where these charges stand now"}
-            rows={q.lines.map((l) => ({ ...l, amount: l.billed, chip: isOpen ? openChip(l) : <StandsChip l={l} /> }))} />
+            rows={q.lines.map((l) => ({ ...l, amount: l.billed, chip: sameChip ? undefined : isOpen ? openChip(l) : <StandsChip l={l} /> }))} />
         </div>
         {q.mentions.length > 0 && <Mentions q={q} />}
 

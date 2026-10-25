@@ -7,7 +7,8 @@ import { openQuestions, questionTitle } from "@/components/case/issues";
 import { groupTotals } from "@/components/case/totals";
 import { currencyOf, instant, toRows, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
 import type { CaseEvent, DocType, Draft, Party, Question, SourceSpan } from "@/lib/types";
-import type { DraftDecision } from "./people";
+import { firstName, personOf, type DraftDecision } from "./people";
+import { signedBy } from "./message";
 
 /** One case as the inboxes read it. `forwarder` names the party a dispute goes to, when known. */
 export type InboxCase = { demo: DemoCase; x: CaseInput; forwarder?: string };
@@ -147,6 +148,11 @@ function replayOf(demo: DemoCase, x: CaseInput, questionId: string): QuestionIte
   };
 }
 
+const signedAs = (body: string, personId?: string) => {
+  const p = personOf(personId);
+  return p ? signedBy(body, firstName(p)) : body;
+};
+
 const STATUS: Partial<Record<string, ApprovalStatus>> = { pending_approval: "pending", approved: "accepted", rejected: "rejected" };
 
 /** Requests to decide (oldest request first), then decided ones (latest decision first). */
@@ -170,7 +176,8 @@ export function approvalItems(cases: InboxCase[]): ApprovalItem[] {
           : status === "rejected" ? eventAt(x.events, "draft_rejected", forDraft) ?? legacy.rejectedAt : undefined,
         rejectionReason: status === "rejected" ? d.rejectionReason : undefined,
         subject: status === "accepted" ? d.subject : "",
-        message: status === "accepted" ? d.editedBody ?? d.body : "",
+        // The owner who accepted writes to the seller, so CargoOS's draft is signed with their name.
+        message: status === "accepted" ? d.editedBody ?? signedAs(d.body, d.approvedBy ?? legacy.acceptedBy) : "",
       }];
     });
   });

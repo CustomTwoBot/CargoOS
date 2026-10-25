@@ -22,6 +22,10 @@ export const who = (id: string | undefined, viewer: Person) => {
   return p ? firstName(p) : "someone";
 };
 
+/** The seeded person with this id; the old one-operator id reads as Sam (who held every role). */
+export const personOf = (id: string | undefined): Person | undefined =>
+  id === LEGACY_SELF ? SAM : id ? personById(id) : undefined;
+
 /** Who CargoOS asks: the seeded person holding ops_lead (Sam). */
 export const ASKED: Person = PEOPLE.find((p) => p.roles.includes("ops_lead"))!;
 

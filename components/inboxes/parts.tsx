@@ -94,11 +94,6 @@ type ItemProps = {
   dot?: string;
 };
 
-/** What the list says on a wide screen when nothing waits; the reason sits in the detail pane. */
-export const NothingWaiting = ({ children }: { children: string }) => (
-  <p className="rounded-xl border border-dashed border-line-strong px-4 py-3 text-meta text-ink-3">{children}</p>
-);
-
 /** A selectable row: title (two lines at most) and one line of meta. The row only selects; actions live in the detail. */
 export function Item({ selected, onSelect, title, meta, dot }: ItemProps) {
   return (
@@ -149,7 +144,7 @@ export function DetailHead({ title, meta, onOpen }: HeadProps) {
   );
 }
 
-export type LineRow = { key: string; lineNo: number; description: string; chip: ReactNode; amount?: string };
+export type LineRow = { key: string; lineNo: number; description: string; chip?: ReactNode; amount?: string };
 
 /**
  * Invoice lines as compact rows: line number, name, one chip, amount. One grid for all rows (subgrid),
@@ -157,14 +152,15 @@ export type LineRow = { key: string; lineNo: number; description: string; chip: 
  */
 export function LineRows({ label, rows }: { label: string; rows: LineRow[] }) {
   const amounts = rows.some((r) => r.amount);
+  const chips = rows.some((r) => r.chip);
+  const cols = ["1.5rem", "minmax(0,1fr)", ...(chips ? ["max-content"] : []), ...(amounts ? ["max-content"] : [])];
   return (
-    <ul aria-label={label}
-      className={cx("grid items-center gap-x-3", amounts ? "grid-cols-[1.5rem_minmax(0,1fr)_max-content_max-content]" : "grid-cols-[1.5rem_minmax(0,1fr)_max-content]")}>
+    <ul aria-label={label} className="grid items-center gap-x-3" style={{ gridTemplateColumns: cols.join(" ") }}>
       {rows.map((r) => (
-        <li key={r.key} className={cx("col-span-full grid grid-cols-subgrid items-center border-b border-line py-2 last:border-0")}>
+        <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center border-b border-line py-2 last:border-0">
           <span className="text-xs text-ink-3">{r.lineNo}</span>
           <span className="text-[14px] font-semibold">{r.description}</span>
-          <span className="inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{r.chip}</span>
+          {chips && <span className="inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{r.chip}</span>}
           {amounts && <b className="text-right text-[14px] font-semibold">{r.amount}</b>}
         </li>
       ))}
