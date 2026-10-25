@@ -1,12 +1,8 @@
-// Pieces of the New case flow: buttons, a document row, the drop area, the recorded-case list.
+// Pieces of the New case flow: buttons, a document row, drop handling, the phone card, recorded cases.
 import { useId, useState, type ReactNode } from "react";
-import { cx } from "@/components/case/cx";
-import { StatusGlyph } from "@/components/case/glyphs";
-import { INPUT } from "@/components/inputs/fields";
-import { Busy } from "@/components/states/shared";
 import {
-  AGREEMENT_TYPES, NEW_CASE_COPY, TYPE_LABEL, describeDoc, docMeta, readLabel,
-  type AgreementType, type NewCaseDocType, type PendingDoc, type ReadResult, type RecordedExample,
+  AGREEMENT_TYPES, NEW_CASE_COPY, TYPE_LABEL, describeDoc, docMeta, keepsFile,
+  type AgreementType, type NewCaseDocType, type PendingDoc, type RecordedExample,
 } from "./model";
 
 const PRIMARY = "flex-none rounded-md bg-primary px-3.5 py-1.5 text-[13px] font-semibold text-primary-ink aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
@@ -27,16 +23,6 @@ export const Secondary = ({ children, onClick }: ButtonProps) => (
   <button type="button" onClick={onClick} className={SECONDARY}>{children}</button>
 );
 
-/** Muted word to the right of a section title: "Required", "Helpful". */
-export function SectionTitle({ title, tag, id }: { title: string; tag: string; id?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h2 id={id} className="text-row font-semibold text-ink">{title}</h2>
-      <span className="text-meta font-medium text-ink-3">{tag}</span>
-    </div>
-  );
-}
-
 export function TypeSelect({ doc, onChange }: { doc: PendingDoc; onChange: (t: AgreementType) => void }) {
   return (
     <select aria-label={`Type of ${doc.title}`} value={doc.type} onChange={(e) => onChange(e.target.value as AgreementType)}
@@ -47,91 +33,69 @@ export function TypeSelect({ doc, onChange }: { doc: PendingDoc; onChange: (t: A
 }
 
 /** One document: type, title, then sender and date when the text gave them. `aside` sits on the right. */
-export function DocRow({ doc, lead, aside, children }: {
-  doc: PendingDoc; lead?: ReactNode; aside?: ReactNode; children?: ReactNode;
-}) {
+export function DocRow({ doc, lead, aside }: { doc: PendingDoc; lead?: ReactNode; aside?: ReactNode }) {
   const meta = docMeta(doc);
   return (
-    <li className="border-t border-line py-2.5 first:border-t-0">
-      <div className="flex items-center gap-3">
-        {lead ?? <span className="w-[96px] flex-none text-[13px] font-semibold text-ink-2">{TYPE_LABEL[doc.type]}</span>}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-body font-semibold text-ink">{doc.title}</p>
-          {meta && <p className="truncate text-meta text-ink-3">{meta}</p>}
-        </div>
-        {aside}
+    <li className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
+      {lead ?? <span className="w-[96px] flex-none text-[13px] font-semibold text-ink-2">{TYPE_LABEL[doc.type]}</span>}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-body font-semibold text-ink">{doc.title}</p>
+        {meta && <p className="truncate text-meta text-ink-3">{meta}</p>}
       </div>
-      {children}
+      {aside}
     </li>
   );
 }
 
-/** What reading this document returned, or that it wasn't read (replay). */
-export function ReadStatus({ doc, result, replay }: { doc: PendingDoc; result?: ReadResult; replay: boolean }) {
-  if (replay) return <span className="flex-none text-[13px] text-ink-3">{NEW_CASE_COPY.notRead}</span>;
-  if (!result) return <Busy label={NEW_CASE_COPY.reading} className="flex-none text-[13px] text-ink-2" />;
-  if (result.kind === "failed") return null;
-  return <span role="status" className="max-w-[300px] flex-none text-right text-[13px] text-ink-2">{readLabel(doc, result)}</span>;
+/** A PDF or photo is kept as a file (the server reads it); a text file (.eml, a WhatsApp .txt) is read here. */
+export async function fileToDoc(file: File, as?: NewCaseDocType): Promise<PendingDoc> {
+  if (keepsFile(file)) return describeDoc("", { as, fileName: file.name, file });
+  return describeDoc(await file.text(), { as, fileName: file.name });
 }
 
-/** The extraction-failed sentence under its document, with the way out: paste the text and read again. */
-export function FailedNote({ doc, where, onReadAgain }: { doc: PendingDoc; where?: string; onReadAgain: (text: string) => void }) {
-  const [pasting, setPasting] = useState(false);
-  const [text, setText] = useState("");
+const ACCEPT = ".pdf,.txt,.eml,.md,.jpg,.jpeg,.png,.heic,.webp,application/pdf,text/plain,message/rfc822,image/*";
+
+/** Files dropped or chosen here become documents; `as` gives them a type, otherwise it is guessed per file. */
+export function DropArea({ label, as, onDocs, className, children }: {
+  label: string; as?: NewCaseDocType; onDocs: (docs: PendingDoc[]) => void; className?: (over: boolean) => string;
+  children: (pick: () => void, over: boolean) => ReactNode;
+}) {
+  const id = useId();
+  const [over, setOver] = useState(false);
+  const pick = () => document.getElementById(id)?.click();
+  const take = async (files: File[]) => onDocs(await Promise.all(files.map((f) => fileToDoc(f, as))));
   return (
-    <div role="alert" className="ml-[108px] mt-2 rounded-lg bg-waiting-tint px-3 py-2.5 text-waiting">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-[3px]"><StatusGlyph group="waiting" /></span>
-        <div className="min-w-0 flex-1 text-[13px]">
-          <p className="font-semibold">{NEW_CASE_COPY.failed}</p>
-          {where && <p className="mt-0.5">{doc.title}, {where}.</p>}
-        </div>
-        {!pasting && (
-          <button type="button" onClick={() => setPasting(true)}
-            className="flex-none rounded-[7px] border border-line-strong bg-surface px-2.5 py-1 text-[13px] font-semibold text-ink hover:bg-sunken">
-            {NEW_CASE_COPY.pasteInstead}
-          </button>
-        )}
-      </div>
-      {pasting && (
-        <div className="mt-2.5 grid gap-2">
-          <textarea aria-label={`Text of ${doc.title}`} value={text} onChange={(e) => setText(e.target.value)} rows={5} autoFocus
-            placeholder="Paste the text exactly as written." className={cx(INPUT, "resize-y py-2 leading-5")} />
-          <div className="flex justify-end">
-            <Primary disabled={!text.trim()} onClick={() => onReadAgain(text)}>{NEW_CASE_COPY.readAgain}</Primary>
-          </div>
-        </div>
-      )}
+    <div className={className?.(over)}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault(); e.stopPropagation(); setOver(false);
+        if (e.dataTransfer.files.length) void take([...e.dataTransfer.files]);
+      }}>
+      <input id={id} type="file" aria-label={label} multiple hidden accept={ACCEPT}
+        onChange={(e) => { if (e.target.files?.length) void take([...e.target.files]); e.target.value = ""; }} />
+      {children(pick, over)}
     </div>
   );
 }
 
-const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
-
-/** A PDF is kept as a file (the server reads it); a text file is read here so its labels show at once. */
-export async function fileToDoc(file: File, as?: NewCaseDocType): Promise<PendingDoc> {
-  if (isPdf(file)) return describeDoc("", { as, fileName: file.name, file });
-  return describeDoc(await file.text(), { as, fileName: file.name });
-}
-
-/** Wraps a section so files can be dropped on it; `pick` opens the file chooser. */
-export function DropArea({ label, multiple, onFiles, children }: {
-  label: string; multiple?: boolean; onFiles: (files: File[]) => void;
-  children: (pick: () => void, over: boolean) => ReactNode;
-}) {
-  const id = useId();
-  const pick = () => document.getElementById(id)?.click();
-  const [over, setOver] = useState(false);
+/**
+ * The phone uploader's address. A real QR code needs a library (Pranav's OK), so for now a plain box
+ * stands where it will go, with the address under it.
+ */
+export function PhoneCard({ url }: { url: string }) {
   return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) onFiles([...e.dataTransfer.files]); }}>
-      <input id={id} type="file" aria-label={label} multiple={multiple} hidden
-        accept=".pdf,.txt,.eml,.md,application/pdf,text/plain,message/rfc822"
-        onChange={(e) => { if (e.target.files?.length) onFiles([...e.target.files]); e.target.value = ""; }} />
-      {children(pick, over)}
-    </div>
+    <section aria-label={NEW_CASE_COPY.phone} className="rounded-xl border border-line bg-surface px-4 py-3.5 shadow-card">
+      <h2 className="text-body font-semibold text-ink">{NEW_CASE_COPY.phone}</h2>
+      <p className="mt-0.5 text-meta text-ink-3">{NEW_CASE_COPY.phoneBody}</p>
+      <div className="mt-3 flex items-center gap-3">
+        <div role="img" aria-label={`${NEW_CASE_COPY.qr} for ${url}`}
+          className="grid size-[104px] flex-none place-items-center rounded-lg border border-line-strong bg-sunken text-meta text-ink-3">
+          {NEW_CASE_COPY.qr}
+        </div>
+        <p className="min-w-0 break-all text-meta font-medium text-ink-2">{url}</p>
+      </div>
+    </section>
   );
 }
 
@@ -159,5 +123,16 @@ export function ExampleList({ examples, onLoad }: { examples: RecordedExample[];
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The recorded-case card for a right column. */
+export function ExamplesCard({ examples, onLoad }: { examples: RecordedExample[]; onLoad: (id: string) => void }) {
+  return (
+    <aside aria-label={NEW_CASE_COPY.examples} className="rounded-xl border border-line bg-surface px-4 pb-1.5 pt-3.5 shadow-card">
+      <h2 className="text-body font-semibold text-ink">{NEW_CASE_COPY.examples}</h2>
+      <p className="mb-1 text-meta text-ink-3">{NEW_CASE_COPY.examplesBody}</p>
+      <ExampleList examples={examples} onLoad={onLoad} />
+    </aside>
   );
 }

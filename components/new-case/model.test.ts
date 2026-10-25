@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import fx from "@/fixtures/scenarioA.json";
 import {
-  NEW_CASE_COPY, RECORDED_EXAMPLES, describeDoc, docMeta, readLabel, readySummary, splitPastes, startBlock, toDraft,
-  type PendingDoc,
+  NEW_CASE_COPY, RECORDED_EXAMPLES, describeDoc, docMeta, keepsFile, placeDocs, progressLabel, readNote, readySummary,
+  splitPastes, startBlock, toDraft, toReadingItem, type PendingDoc, type ReadingItem,
 } from "./model";
 
 const text = (id: string) => fx.documents.find((d) => d.id === id)!.text;
@@ -56,27 +56,82 @@ describe("splitting pastes", () => {
 });
 
 describe("what reading says", () => {
-  const inv = { type: "freight_invoice" } as const;
-  const chat = { type: "chat" } as const;
+  const doc = (key: string, type: PendingDoc["type"]) => ({ key, type, title: key, text: "" }) as PendingDoc;
+
+  it("maps each read result onto a reading item", () => {
+    expect(toReadingItem(doc("c", "chat"), undefined)).toEqual({ key: "c", title: "c", type: "chat", state: "reading" });
+    expect(toReadingItem(doc("c", "chat"), { kind: "no_amounts" })).toMatchObject({ state: "read", facts: 0 });
+    expect(toReadingItem(doc("c", "chat"), { kind: "failed", where: "messages 3–4", facts: 1 }))
+      .toMatchObject({ state: "failed", where: "messages 3–4", facts: 1 });
+  });
+
   it("counts charges on the invoice and facts elsewhere", () => {
-    expect(readLabel(inv, { kind: "read", facts: 0, charges: 8 })).toBe("Read: 8 charges");
-    expect(readLabel(chat, { kind: "read", facts: 7 })).toBe("Read: 7 facts");
-    expect(readLabel(chat, { kind: "read", facts: 1 })).toBe("Read: 1 fact");
-    expect(readLabel(chat, { kind: "failed" })).toBe("Couldn't read part of this document; affected lines are waiting on answers.");
-    expect(readLabel(chat, { kind: "no_amounts" })).toBe("No agreed amounts found in this text. Saved to the case anyway.");
+    const item = (type: ReadingItem["type"], n: Partial<ReadingItem>): ReadingItem => ({ key: "k", title: "t", type, state: "read", ...n });
+    expect(readNote(item("freight_invoice", { charges: 8 }))).toBe("8 charges");
+    expect(readNote(item("chat", { facts: 7 }))).toBe("7 facts");
+    expect(readNote(item("email", { facts: 1 }))).toBe("1 fact");
+    expect(readNote(item("email", { facts: 0 }))).toBe("No agreed amounts found");
+    expect(readNote(item("freight_invoice", { charges: 0 }))).toBe("No charges found");
+  });
+
+  it("says how far reading has got", () => {
+    const states = (...s: ReadingItem["state"][]) => s.map((state, i) => ({ key: `${i}`, title: "t", state }));
+    expect(progressLabel(states("read", "failed", "reading", "reading"))).toBe("Reading documents… 2 of 4");
+    expect(progressLabel(states("read", "read", "failed", "read"))).toBe("Read 4 documents");
+    expect(progressLabel(states("read"))).toBe("Read 1 document");
   });
 
   it("sums up before the first check", () => {
-    const docs = [
-      { key: "i", type: "freight_invoice" }, { key: "q", type: "quote" }, { key: "e", type: "email" },
-      { key: "c", type: "chat" }, { key: "n", type: "other" },
-    ] as PendingDoc[];
-    expect(readySummary(docs, {
-      i: { kind: "read", facts: 0, charges: 8 }, q: { kind: "read", facts: 6 }, e: { kind: "read", facts: 1 },
-      c: { kind: "failed", where: "messages 3–4", facts: 1 }, n: { kind: "no_amounts" },
-    })).toBe("8 charges found on the invoice, 3 documents with agreements.");
-    expect(readySummary(docs.slice(0, 1), { i: { kind: "read", facts: 0, charges: 1 } }))
+    const docs = [doc("i", "freight_invoice"), doc("q", "quote"), doc("e", "email"), doc("c", "chat"), doc("n", "other")];
+    const items = [
+      toReadingItem(docs[0], { kind: "read", facts: 0, charges: 8 }), toReadingItem(docs[1], { kind: "read", facts: 6 }),
+      toReadingItem(docs[2], { kind: "read", facts: 1 }), toReadingItem(docs[3], { kind: "failed", where: "messages 3–4", facts: 1 }),
+      toReadingItem(docs[4], { kind: "no_amounts" }),
+    ];
+    expect(readySummary(items)).toBe("8 charges found on the invoice, 3 documents with agreements.");
+    expect(readySummary([toReadingItem(docs[0], { kind: "read", facts: 0, charges: 1 })]))
       .toBe("1 charge found on the invoice, no agreements found yet.");
+  });
+});
+
+describe("files", () => {
+  it("keeps PDFs and photos as files and reads text files here", () => {
+    expect(keepsFile({ name: "invoice-PCL-INV-1012.pdf", type: "application/pdf" })).toBe(true);
+    expect(keepsFile({ name: "IMG_2041.HEIC", type: "" })).toBe(true);
+    expect(keepsFile({ name: "receipt.jpg", type: "image/jpeg" })).toBe(true);
+    expect(keepsFile({ name: "email-RE-Q-PCL-0902.eml", type: "message/rfc822" })).toBe(false);
+    expect(keepsFile({ name: "whatsapp-derek-pcl.txt", type: "text/plain" })).toBe(false);
+  });
+
+  it("guesses the type of a dropped PDF from its name, and shows a photo's size", () => {
+    expect(describeDoc("", { fileName: "quote-Q-PCL-0902.pdf" }).type).toBe("quote");
+    expect(describeDoc("", { fileName: "invoice-PCL-INV-1012.pdf" }).type).toBe("freight_invoice");
+    expect(describeDoc("", { fileName: "invoice-PCL-INV-1012.pdf" }).title).toBe("Invoice PCL-INV-1012");
+    expect(describeDoc("", { fileName: "quote-Q-PCL-0902.pdf" }).title).toBe("Quote Q-PCL-0902");
+    expect(describeDoc("", { as: "quote", fileName: "IMG_2041.jpg" }).title).toBe("IMG_2041");
+    const photo = new File(["x"], "IMG_2041.jpg", { type: "image/jpeg" });
+    Object.defineProperty(photo, "size", { value: 1.2 * 1024 * 1024 });
+    expect(docMeta(describeDoc("", { as: "quote", fileName: photo.name, file: photo }))).toBe("Photo · 1.2 MB");
+  });
+
+  it("reads an .eml's headers and a WhatsApp export's names", () => {
+    const eml = "From: Derek <derek@pacificcrest.example>\nTo: Maya <maya@bayline.example>\nDate: Sat, 5 Sep 2026 14:21:00 -0700\n"
+      + "Subject: RE: Q-PCL-0902 revised\nContent-Type: text/plain\n\n" + text("doc_email").split("\n")[1];
+    expect(describeDoc(eml, { fileName: "email-RE-Q-PCL-0902.eml" }))
+      .toMatchObject({ type: "email", title: "Email: RE: Q-PCL-0902 revised", sender: "Derek", date: "Sep 5" });
+    expect(describeDoc(text("doc_chat"), { as: "chat", fileName: "whatsapp-derek-pcl.txt" }))
+      .toMatchObject({ title: "WhatsApp chat", sender: "Derek PCL, Sam Bayline" });
+  });
+});
+
+describe("placing documents", () => {
+  it("fills the invoice slot once; a second invoice becomes a note", () => {
+    const a = describeDoc(text("doc_invoice"));
+    const b = describeDoc(text("doc_invoice"));
+    const q = describeDoc(text("doc_quote"));
+    const out = placeDocs({ agreements: [] }, [a, q, b]);
+    expect(out.invoice).toBe(a);
+    expect(out.agreements.map((d) => d.type)).toEqual(["quote", "other"]);
   });
 });
 

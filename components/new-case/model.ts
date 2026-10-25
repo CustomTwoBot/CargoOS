@@ -1,12 +1,13 @@
-// New case: the data the flow collects, what reading returned, and the copy (SPEC.md §3, §5.4, §8;
-// docs/design.md §7.12, §7.14). Pure functions only, so the flow component stays layout.
+// New case: the data the flow collects, what reading returned, and the copy (SPEC.md "Changes on
+// Oct 24 evening" 14, §5.4, §7.7, §8 "Empty case" and "Reading documents"; docs/design.md §7.12, §7.14).
+// Pure functions only, so the components stay layout.
 import type { DocType } from "@/lib/types";
 import { EMPTY_CASE, EXTRACTION_FAILED, PASTE_INSTEAD } from "@/components/states/copy";
 
 export type AgreementType = Extract<DocType, "quote" | "email" | "chat" | "proforma" | "other">;
 export type NewCaseDocType = "freight_invoice" | AgreementType;
 
-/** One document as the flow hands it over. A PDF arrives with `file` and empty `text`; the server reads it. */
+/** One document as the flow hands it over. A PDF or photo arrives with `file` and empty `text`; the server reads it. */
 export type NewCaseDocument = { type: NewCaseDocType; title: string; text: string; file?: File };
 export type NewCaseDraft = { title: string; documents: NewCaseDocument[] };
 
@@ -38,6 +39,24 @@ export const TYPE_LABEL: Record<NewCaseDocType, string> = {
 };
 export const AGREEMENT_TYPES: AgreementType[] = ["quote", "email", "chat", "proforma", "other"];
 
+/** The four large drop targets, invoice first. Whatever lands on a target takes its type. */
+export const DROP_TARGETS: { type: NewCaseDocType; formats: string; paste: string }[] = [
+  { type: "freight_invoice", formats: "PDF or photo", paste: "Paste the invoice exactly as written." },
+  { type: "quote", formats: "PDF or photo", paste: "Paste the quote exactly as written." },
+  { type: "email", formats: ".eml file or pasted text", paste: "Paste the email exactly as written, with its subject line." },
+  { type: "chat", formats: "WhatsApp export, .txt", paste: "Paste the chat exactly as exported." },
+];
+
+/** Where a document stands while CargoOS reads it. The backend's own progress maps onto this too. */
+export type ReadingItem = {
+  key: string; title: string; type?: NewCaseDocType;
+  state: "reading" | "read" | "failed";
+  /** Counts from the validated extraction; 0 on a read means nothing with an amount was found. */
+  facts?: number; charges?: number;
+  /** The part that couldn't be read, e.g. "messages 3–4". */
+  where?: string;
+};
+
 export const NEW_CASE_COPY = {
   heading: "New case",
   sub: "Add the forwarder's invoice and what was agreed.",
@@ -45,18 +64,22 @@ export const NEW_CASE_COPY = {
   name: "Shipment",
   nameHint: "Leave empty to use the invoice number.",
   namePlaceholder: "For example, Bayline 40HC Ningbo-LB",
-  invoice: "Forwarder invoice",
-  invoiceDrop: "Drop the invoice PDF here, or",
-  invoicePlaceholder: "Paste the invoice exactly as written.",
-  agreed: "What was agreed",
-  agreedBody: "Quotes, emails and chats. CargoOS checks each charge against them.",
-  agreedPlaceholder: "Paste a quote, email or chat exactly as written.",
+  documents: "Documents",
+  documentsBody: "The forwarder's invoice, and the quote, emails and chats it is checked against.",
   required: "Required",
-  helpful: "Helpful",
+  drop: "Drop files here, or",
+  choose: "choose files",
+  pasteText: "paste text",
+  severalHint: "Several at once: separate them with a line of three dashes.",
+  added: "Added",
+  phone: "Add from your phone",
+  phoneBody: "Scan to upload a WhatsApp export, a PDF or a photo.",
+  qr: "QR code",
   noAgreements: "Without a quote, email or chat, every charge waits on answers.",
   needInvoice: "Add the forwarder's invoice to continue.",
   read: "Read documents",
   reading: "Reading with Claude…",
+  readingRow: "Reading…",
   failed: EXTRACTION_FAILED,
   pasteInstead: PASTE_INSTEAD,
   readAgain: "Read again",
@@ -73,29 +96,35 @@ export const NEW_CASE_COPY = {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "Read: 8 charges" for the invoice, "Read: 7 facts" for the rest. */
-export function readLabel(doc: Pick<NewCaseDocument, "type">, r: ReadResult): string {
-  if (r.kind === "no_amounts") return doc.type === "freight_invoice"
-    ? "No charges found in this invoice."
-    : "No agreed amounts found in this text. Saved to the case anyway.";
-  if (r.kind === "failed") return NEW_CASE_COPY.failed;
-  return doc.type === "freight_invoice" ? `Read: ${plural(r.charges ?? 0, "charge")}` : `Read: ${plural(r.facts, "fact")}`;
+/** One document's reading state, from what `onRead` returned (undefined = still reading). */
+export function toReadingItem(d: PendingDoc, r: ReadResult | undefined): ReadingItem {
+  const base = { key: d.key, title: d.title, type: d.type };
+  if (!r) return { ...base, state: "reading" };
+  if (r.kind === "no_amounts") return { ...base, state: "read", facts: 0, charges: 0 };
+  if (r.kind === "failed") return { ...base, state: "failed", where: r.where, facts: r.facts, charges: r.charges };
+  return { ...base, state: "read", facts: r.facts, charges: r.charges };
+}
+
+/** "8 charges" on the invoice, "6 facts" elsewhere; what a read with nothing in it found. */
+export function readNote(i: ReadingItem): string {
+  if (i.type === "freight_invoice") return i.charges ? plural(i.charges, "charge") : "No charges found";
+  return i.facts ? plural(i.facts, "fact") : "No agreed amounts found";
+}
+
+/** "Reading documents… 2 of 4" while any is reading, then "Read 4 documents". */
+export function progressLabel(items: ReadingItem[]): string {
+  const done = items.filter((i) => i.state !== "reading").length;
+  return done < items.length ? `Reading documents… ${done} of ${items.length}` : `Read ${plural(items.length, "document")}`;
 }
 
 /** Charges the invoice gave, if any were read (a partial read still counts). */
-export function invoiceCharges(r: ReadResult | undefined): number {
-  return r && r.kind !== "no_amounts" ? r.charges ?? 0 : 0;
-}
+export const invoiceCharges = (items: ReadingItem[]) =>
+  items.find((i) => i.type === "freight_invoice" && i.state !== "reading")?.charges ?? 0;
 
 /** "8 charges found on the invoice, 3 documents with agreements." */
-export function readySummary(docs: PendingDoc[], results: Record<string, ReadResult>): string {
-  const invoice = docs.find((d) => d.type === "freight_invoice");
-  const charges = invoiceCharges(invoice && results[invoice.key]);
-  const agreements = docs.filter((d) => {
-    const r = results[d.key];
-    return d.type !== "freight_invoice" && r && r.kind !== "no_amounts" && (r.facts ?? 0) > 0;
-  }).length;
-  const found = `${plural(charges, "charge")} found on the invoice`;
+export function readySummary(items: ReadingItem[]): string {
+  const agreements = items.filter((i) => i.type !== "freight_invoice" && i.state !== "reading" && (i.facts ?? 0) > 0).length;
+  const found = `${plural(invoiceCharges(items), "charge")} found on the invoice`;
   return agreements ? `${found}, ${plural(agreements, "document")} with agreements.` : `${found}, no agreements found yet.`;
 }
 
@@ -135,7 +164,7 @@ export const splitPastes = (text: string) =>
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CHAT_LINE = /^\[?(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?\]?\s*-?\s*([^:\n]{1,40}):/gim;
 // A reference number has a digit in it: "Q-PCL-0902", never "valid".
-const REF = "\\s*(?:no\\.?|#|:)?\\s*((?=[A-Z0-9-]*\\d)[A-Z0-9][A-Z0-9-]{3,})";
+const REF = "[\\s_:#-]*(?:no\\.?\\s*)?((?=[A-Z0-9-]*\\d)[A-Z0-9][A-Z0-9-]{3,})";
 
 const titleCase = (s: string) => (s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : s);
 const firstLine = (text: string) => text.split("\n").find((l) => l.trim())?.trim() ?? "";
@@ -188,7 +217,7 @@ function detectTitle(text: string, type: NewCaseDocType, fileName?: string): str
   if (type === "quote") { const r = ref("quot(?:e|ation)"); if (r) return `Quote ${r}`; }
   if (type === "proforma") { const r = ref("pro\\s?-?forma"); if (r) return `Proforma ${r}`; }
   if (type === "email") { const s = text.match(/^subject:\s*(.+)$/im)?.[1]?.trim(); if (s) return `Email: ${short(s)}`; }
-  if (type === "chat" && !fileName) return /^\d/.test(text.trim()) ? "WhatsApp chat" : "Chat";
+  if (type === "chat" && /^\[?\d/.test(text.trim())) return "WhatsApp chat";
   if (fileName) return stripExt(fileName);
   return short(firstLine(text)) || TYPE_LABEL[type];
 }
@@ -200,7 +229,9 @@ export function describeDoc(text: string, opts: { as?: NewCaseDocType; fileName?
   const type = opts.as ?? detectType(clean, opts.fileName);
   const doc: PendingDoc = {
     key: `doc_${++seq}`, type, text: clean,
-    title: clean ? detectTitle(clean, type, opts.fileName) : opts.fileName ? stripExt(opts.fileName) : TYPE_LABEL[type],
+    // A PDF or photo isn't read here: its name is all there is ("invoice-PCL-INV-1012.pdf").
+    title: clean ? detectTitle(clean, type, opts.fileName)
+      : opts.fileName ? detectTitle(stripExt(opts.fileName), type, opts.fileName) : TYPE_LABEL[type],
     sender: clean ? detectSender(clean, type) : undefined,
     date: clean ? detectDate(clean, type) : undefined,
   };
@@ -208,9 +239,16 @@ export function describeDoc(text: string, opts: { as?: NewCaseDocType; fileName?
   return doc;
 }
 
-/** "Pacific Crest Logistics · Oct 12", or "PDF · 84 KB" for a file nobody has read yet. */
+const size = (bytes: number) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/** A PDF or a photo is kept as a file for the server to read; anything else is read as text here. */
+export const keepsFile = (f: { name: string; type: string }) =>
+  f.type === "application/pdf" || f.type.startsWith("image/") || /\.(pdf|jpe?g|png|heic|webp)$/i.test(f.name);
+
+/** "Pacific Crest Logistics · Oct 12", or "PDF · 84 KB" / "Photo · 1.2 MB" for a file nobody has read yet. */
 export function docMeta(d: PendingDoc): string {
   const parts = [d.sender, d.date].filter(Boolean) as string[];
-  if (!d.text && d.file) parts.push(`PDF · ${Math.max(1, Math.round(d.file.size / 1024))} KB`);
+  if (!d.text && d.file) parts.push(`${/\.pdf$/i.test(d.file.name) || d.file.type === "application/pdf" ? "PDF" : "Photo"} · ${size(d.file.size)}`);
   return parts.join(" · ");
 }
