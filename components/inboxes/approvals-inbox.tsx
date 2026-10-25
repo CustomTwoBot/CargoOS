@@ -130,7 +130,9 @@ type DetailProps = {
 };
 
 /** One dispute's decision: lines, total, Accept / Reject, then the message to the seller. Also the case's Dispute tab. */
-export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
+export function ApprovalDetail({ d, now: given, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
+  // The case's Dispute tab passes the wall clock; times read on the replay's clock ("at 2:07 PM", not "on Oct 24").
+  const now = replayNow([d]) ?? given;
   const canDecide = canAct(viewer.roles, "approve");
   const ownRequest = !!d.requestedBy && d.requestedBy === viewer.id;
   // One operator drafts and decides; nobody requested it, so there is no requester to name (docs/design.md §0).

@@ -108,7 +108,10 @@ export function Item({ selected, onSelect, title, meta, dot }: ItemProps) {
           {dot && <span className="sr-only">{dot}: </span>}
           <span className={cx("line-clamp-2 text-row font-semibold", !dot && "text-ink-2")} title={title}>{title}</span>
         </span>
-        <span className="mt-0.5 block pl-4 text-meta text-ink-2">{meta}</span>
+        {/* Each " · " part stays whole ("15 minutes ago" never breaks after "minutes"); the line wraps between parts. */}
+        <span className="mt-0.5 block pl-4 text-meta text-ink-2">
+          {meta.split(" · ").map((part, i) => <span key={i}>{i > 0 && " · "}<span className="whitespace-nowrap">{part}</span></span>)}
+        </span>
       </button>
     </li>
   );

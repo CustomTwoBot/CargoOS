@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { ApprovalsInbox } from "./approvals-inbox";
+import { ApprovalDetail, ApprovalsInbox } from "./approvals-inbox";
 import { approvalItems, questionItems } from "./items";
 import { QuestionsInbox } from "./questions-inbox";
 import { LEO, MAYA, SAM } from "./people";
@@ -345,6 +345,12 @@ describe("ApprovalsInbox", () => {
     expect(within(msg).queryByRole("textbox")).not.toBeInTheDocument();
     expect(within(msg).getByText(/^Hi Derek,/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+  });
+
+  it("the Dispute tab's detail reads times on the replay clock even when handed the wall clock", () => {
+    const [d] = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft())]);
+    render(<ApprovalDetail d={d} now={new Date("2026-10-25T09:00:00-07:00")} viewer={SAM} onAccept={vi.fn()} onReject={vi.fn()} />);
+    expect(screen.getByText("Requested by Maya at 2:07 PM.")).toBeInTheDocument();
   });
 
   it("Leo (uploader) gets no approvals", () => {
