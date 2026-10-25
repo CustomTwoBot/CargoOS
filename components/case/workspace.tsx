@@ -58,8 +58,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
           <p className="truncate text-meta text-ink-3">{[caseSubline(x), TRUST].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex flex-none items-center gap-1.5">
-          <span title="Replay of a recorded run. Nothing here reaches the backend or Claude."
-            className="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">Replay</span>
+          <span title={demo.live ? "Live: read from the backend." : "Replay of a recorded run. Nothing here reaches the backend or Claude."}
+            className="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">{demo.live ? "Live" : "Replay"}</span>
           <CaseMenu x={x} onAddEvidence={canAct(person.roles, "addEvidence") ? actions.addEvidence : undefined}
             onReset={() => actions.reset(demo.start)} />
         </div>
@@ -108,7 +108,7 @@ function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; on
     <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
-      {seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}
+      {!demo.live && <>{seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}</>}
       <button type="button" onClick={() => onGo(demo.start)} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
     </div>
   );

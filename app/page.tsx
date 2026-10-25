@@ -1,5 +1,5 @@
-import { CaseScreen } from "@/components/case/case-screen";
+import { LiveCaseScreen } from "@/components/live/live-case-screen";
 
 export default function Home() {
-  return <CaseScreen />;
+  return <LiveCaseScreen />;
 }

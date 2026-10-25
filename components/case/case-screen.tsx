@@ -4,10 +4,10 @@
 // thread), New case, or Settings. There are no Questions or Approvals pages: what waits on you is
 // "Needs you" plus the case's thread. Everything is seen and done as the person this device is set
 // to (Settings → This device). The shell fits the window from 768px up.
-// Replay mode only for now: every case is a DemoCase (recorded snapshots) and `useCaseStore`
-// applies what people do on top. Live Convex data replaces this in SPEC W3 step 8.
+// Every case is a DemoCase (recorded snapshots) and `useCaseStore` applies what people do on top;
+// with `live` (SPEC W3 step 8, `components/live`), Scenario A's slot shows the live Convex case instead.
 import { Tooltip } from "@base-ui/react/tooltip";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { Person, Role } from "@/lib/types";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { NewCaseFlow } from "@/components/new-case/new-case-flow";
@@ -15,6 +15,7 @@ import { SettingsView } from "@/components/settings/settings-view";
 import { AppShell } from "@/components/shell/app-shell";
 import { caseLine, caseName } from "@/components/shell/case-status";
 import { useDevicePerson } from "@/components/shell/person";
+import type { LiveCase } from "@/components/live/use-live-case";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
 import { useCaseStore } from "./case-store";
@@ -39,9 +40,12 @@ type Props = {
   cases?: DemoCase[];
   /** Overrides the roles of the device's person (tests of one role); the person still acts. */
   roles?: readonly Role[];
+  /** The live case from Convex; it takes Scenario A's place, and the recording stays the fallback. */
+  live?: LiveCase;
 };
 
-export function CaseScreen({ cases = DEMO_CASES, roles }: Props) {
+export function CaseScreen({ cases: recorded = DEMO_CASES, roles, live }: Props) {
+  const cases = live ? recorded.map((c) => (c.id === SCENARIO_A.id ? { ...live.demo, id: c.id } : c)) : recorded;
   const person = useDevicePerson();
   const viewer: Person = roles ? { ...person, roles: [...roles] } : person;
   const [activeId, setActiveId] = useState(cases[0]?.id ?? "");
@@ -49,15 +53,19 @@ export function CaseScreen({ cases = DEMO_CASES, roles }: Props) {
   // Bumped on every open, so the case re-picks its pane: a case opened from "Needs you" lands on the thread.
   const [opened, setOpened] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const toastTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clock = useNow();
 
   const toast = (text: string, undo?: () => void) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t.slice(-2), { id, text, undo }]);
-    toastTimers.current.push(setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000));
+    setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000);
   };
-  const store = useCaseStore(cases, toast, viewer);
+  const replay = useCaseStore(recorded, toast, viewer);
+  const store = !live ? replay : {
+    state: { ...replay.state, [SCENARIO_A.id]: live.local },
+    inputs: { ...replay.inputs, [SCENARIO_A.id]: live.input },
+    actionsFor: (d: DemoCase) => (d.id === SCENARIO_A.id ? live.actionsWith(toast) : replay.actionsFor(d)),
+  };
 
   const demo = view === "case" ? cases.find((c) => c.id === activeId) : undefined;
   const open = (id: string) => { setActiveId(id); setView("case"); setOpened((n) => n + 1); };

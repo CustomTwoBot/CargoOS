@@ -6,12 +6,15 @@ import type {
   Case, CaseEvent, Charge, Draft, Fact, Finding, FindingChange, Question, Reply, RuleId, SourceDoc,
 } from "@/lib/types";
 import { money, timeOf, whenAt } from "./format";
+import type { CaseTotals as EngineTotals } from "@/lib/engine/totals";
 import { caseTotals, DISCREPANCY, groupTotals, type CaseTotals, type CurrencyOf } from "./totals";
 
 /** The case as the screen receives it: SPEC 5.3 CaseState plus replies, drafts and events. */
 export type CaseInput = {
   case: Case; documents: SourceDoc[]; facts: Fact[]; charges: Charge[]; findings: Finding[];
   questions: Question[]; replies: Reply[]; drafts: Draft[]; events: CaseEvent[];
+  /** A live case's totals from the engine on the server (`api.cases.getCaseView`); the UI only formats them. */
+  engineTotals?: EngineTotals;
 };
 
 export type UiGroup = "dispute" | "waiting" | "cleared";
@@ -125,7 +128,12 @@ export const currencyOf = (x: CaseInput): CurrencyOf => {
   return (f) => byId.get(f.chargeId) ?? "USD";
 };
 
-export const totalsOf = (x: CaseInput): CaseTotals => caseTotals(currentFindings(x), currencyOf(x));
+export const totalsOf = (x: CaseInput): CaseTotals => x.engineTotals ? fromEngine(x.engineTotals) : caseTotals(currentFindings(x), currencyOf(x));
+
+/** The server's engine totals in the shape the views read. Live cases bill in USD only for now. */
+const fromEngine = (t: EngineTotals): CaseTotals => ({
+  billedCents: t.billed, agreedCents: t.agreed, atStakeCents: t.atStake, waitingCents: t.waiting, waivedCents: t.waived, unconverted: [],
+});
 
 export const latestQuestion = (x: CaseInput): Question | undefined =>
   [...x.questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
