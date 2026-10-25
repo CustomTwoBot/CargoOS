@@ -48,9 +48,11 @@ type ListProps = {
   groups: GroupView[];
   onOpen: (id: string) => void; moveMs: number; movingKey?: string;
   allCharges: ReactNode;
+  /** Whether this screen answers CargoOS's questions; if not, `asked` ("Sam") does. */
+  canReply?: boolean; asked?: string;
 };
 
-export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharges }: ListProps) {
+export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharges, canReply = true, asked = "the owner" }: ListProps) {
   const ref = useRef<HTMLUListElement>(null);
   const [showAll, setShowAll] = useState(false);
   useRowMoves(ref, moveMs, movingKey);
@@ -59,7 +61,7 @@ export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharge
   const group = (g: UiGroup) => groups.find((v) => v.group === g)!;
   const heading = (s: Section): ReactNode[] =>
     s === "dispute" ? ["To dispute", of(s).length, <span key="t" className="text-dispute">{delta(group("dispute").overCents)}</span>]
-    : s === "question" ? ["Questions for you", of(s).length]
+    : s === "question" ? [canReply ? "Questions for you" : `Questions for ${asked}`, of(s).length]
     : ["Waiting", of(s).length];
   const cleared = group("cleared");
   return (
@@ -74,7 +76,7 @@ export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharge
           </li>,
           ...of(s).map((i) => (
             <li key={i.id} data-key={i.id} className="border-t border-line">
-              {i.kind === "question" ? <QuestionRow issue={i} onOpen={onOpen} /> : i.kind === "line" ? <LineRow issue={i} onOpen={onOpen} /> : null}
+              {i.kind === "question" ? <QuestionRow issue={i} onOpen={onOpen} answerer={canReply ? undefined : asked} /> : i.kind === "line" ? <LineRow issue={i} onOpen={onOpen} /> : null}
             </li>
           )),
         ])}
@@ -124,16 +126,19 @@ function LineRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "line" }>
   );
 }
 
-function QuestionRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "question" }>; onOpen: (id: string) => void }) {
+/** "2 charges need your answer", or "2 charges wait for Sam's answer" on a screen that doesn't answer. */
+function QuestionRow({ issue: i, onOpen, answerer }: { issue: Extract<Issue, { kind: "question" }>; onOpen: (id: string) => void; answerer?: string }) {
   const conflict = i.rows.length > 0 && i.rows.every((r) => r.finding.ruleId === "R7_CONFLICT");
-  const name = `${i.title === "Your answer" ? "" : `${i.title}: `}${plural(i.rows.length, "charge needs", "charges need")} your answer`;
+  const need = answerer ? `${plural(i.rows.length, "charge waits", "charges wait")} for ${answerer}'s answer`
+    : `${plural(i.rows.length, "charge needs", "charges need")} your answer`;
+  const name = `${i.title === "Your answer" ? "" : `${i.title}: `}${need}`;
   return (
     <button type="button" onClick={() => onOpen(i.id)} className={ROW} title={covers(i.rows)}>
       <span className="text-waiting"><StatusGlyph group="waiting" /></span>
       <span className="truncate text-row font-semibold">{name}</span>
       {conflict ? <span className={CHIP}>Sources disagree</span> : <span />}
       <span className="text-right text-[15px] font-semibold text-waiting">{i.amount}</span>
-      <span className="text-right text-meta font-semibold text-link">Answer</span>
+      <span className="text-right text-meta font-semibold text-link">{answerer ? "Open" : "Answer"}</span>
     </button>
   );
 }

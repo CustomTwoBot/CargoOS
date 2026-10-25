@@ -5,7 +5,7 @@ import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { ApprovalsInbox } from "./approvals-inbox";
 import { approvalItems, questionItems } from "./items";
 import { QuestionsInbox } from "./questions-inbox";
-import { MAYA, SAM } from "./people";
+import { LEO, MAYA, SAM } from "./people";
 import { allAsking, CASE_B, caseB, DEMO_REJECTION, inboxCase, scenarioAWithDraft } from "./sample";
 
 const NOW = new Date("2026-10-24T15:55:00-07:00");
@@ -29,11 +29,12 @@ describe("QuestionsInbox", () => {
     expect(screen.getByText("3 waiting")).toBeInTheDocument();
     const rows = items("Waiting for your answer");
     expect(rows.map((r) => r.textContent)).toEqual([
-      "Unanswered: Bayline 20GP Yantian-Oakland1 charge · $200 · yesterday",
-      "Unanswered: Bayline 20GP Yantian-Oakland1 charge · $400 · 7 hours ago",
+      "Unanswered: Bayline 20GP Yantian-OaklandQuestion 1 · 1 charge · $200 · yesterday",
+      "Unanswered: Bayline 20GP Yantian-OaklandQuestion 2 · 1 charge · $400 · 7 hours ago",
       "Unanswered: Bayline 40HC Ningbo-LB2 charges · $600 · 2 hours ago",
     ]);
     for (const q of all) expect(list("Waiting for your answer")).not.toHaveTextContent(q.text);
+    expect(rows[2]).toHaveAccessibleName("Unanswered: Bayline 40HC Ningbo-LB, 2 charges · $600 · 2 hours ago");
     // The oldest is shown next to the list without a click, with its question in full.
     expect(rows[0]).toHaveAttribute("aria-current", "true");
     expect(within(screen.getByRole("region", { name: "Question" })).getByText(/\$200 port congestion fee/)).toBeInTheDocument();
@@ -71,7 +72,7 @@ describe("QuestionsInbox", () => {
     const answered = items("Answered");
     expect(answered.map((r) => r.textContent)).toEqual([
       "Bayline 40HC Ningbo-LB2 charges · $600 · answered 1 hour ago",
-      "Bayline 20GP Yantian-Oakland1 charge · $200 · answered 5 hours ago",
+      "Bayline 20GP Yantian-OaklandQuestion 1 · 1 charge · $200 · answered 5 hours ago",
     ]);
 
     fireEvent.click(answered[0]);
@@ -86,6 +87,24 @@ describe("QuestionsInbox", () => {
     ]);
     fireEvent.click(screen.getByRole("button", { name: /^Answered \(2\)$/ }));
     expect(screen.queryByRole("list", { name: "Answered" })).not.toBeInTheDocument();
+  });
+
+  it("two questions from one case say which is which, in the list and the detail", () => {
+    render(<QuestionsInbox items={questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("before"))])} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
+    const [first, second] = items("Waiting for your answer");
+    expect(first).toHaveTextContent(/Question 1 · 4 charges · \$1,665 · /);
+    expect(second).toHaveTextContent(/Question 2 · 1 charge · \$5,850 · /);
+    expect(screen.getByText("Question 1 · Asked today at 1:41 PM · $1,665 is waiting on this answer")).toBeInTheDocument();
+  });
+
+  it("a long case title wraps to two lines in the list and is never cut in the detail", () => {
+    const long = "Juniper Peak Outdoor 3x40HC Shanghai-Oakland-Reno via Union Pacific rail ramp, second invoice";
+    const [q] = questionItems([inboxCase(SCENARIO_A, scenarioAAt("before"))]);
+    render(<QuestionsInbox items={[{ ...q, caseTitle: long }]} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
+    const title = within(items("Waiting for your answer")[0]).getByText(long);
+    expect(title).toHaveClass("line-clamp-2");
+    expect(title).toHaveAttribute("title", long);
+    expect(screen.getByRole("heading", { level: 2, name: long })).not.toHaveClass("truncate");
   });
 
   it("what the chat said stays folded until asked for", () => {
@@ -135,6 +154,8 @@ describe("QuestionsInbox", () => {
     narrow();
     render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
     expect(screen.queryByRole("region", { name: "Question" })).not.toBeInTheDocument();
+    // Nothing is marked selected while the list shows alone.
+    items("Waiting for your answer").forEach((r) => expect(r).not.toHaveAttribute("aria-current"));
     fireEvent.click(items("Waiting for your answer")[2]);
     expect(screen.queryByRole("list", { name: "Waiting for your answer" })).not.toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Question" })).getByText(/Did anyone agree to either charge\?/)).toBeInTheDocument();
@@ -150,14 +171,15 @@ describe("QuestionsInbox", () => {
     fireEvent.change(screen.getByLabelText("Your answer"), { target: { value: "approved congestion" } });
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     rerender(<QuestionsInbox items={after} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
-    expect(screen.getByText("No questions waiting.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing waiting.")).toBeInTheDocument();
     expect(items("Answered")[0]).toHaveAttribute("aria-current", "true");
     expect(screen.getByText(/“approved the \$200 congestion fee/, { selector: "blockquote" })).toBeInTheDocument();
   });
 
-  it("empty: says why there is nothing to answer", () => {
+  it("empty: says why there is nothing to answer (in the detail pane when wide, the list just says nothing waits)", () => {
     render(<QuestionsInbox items={[]} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
     expect(screen.getByText("None waiting")).toBeInTheDocument();
+    expect(screen.getByText("Nothing waiting.")).toBeInTheDocument();
     expect(screen.getByText("No questions waiting.")).toBeInTheDocument();
     expect(screen.getByText("CargoOS asks only when the documents can't settle a charge.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Question" })).not.toBeInTheDocument();
@@ -171,6 +193,20 @@ describe("QuestionsInbox", () => {
     expect(within(q).queryByText("Waiting for your answer")).not.toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Waiting for Sam" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Your answer")).not.toBeInTheDocument();
+  });
+
+  it("Maya reads an answered question as Sam's answer", () => {
+    render(<QuestionsInbox items={questionItems([inboxCase(SCENARIO_A, scenarioAAt("after"))])} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} viewer={MAYA} />);
+    unfold(/^Answered \(1\)$/);
+    fireEvent.click(items("Answered")[0]);
+    expect(screen.getByText("Sam’s answer")).toBeInTheDocument();
+  });
+
+  it("Leo (uploader) gets no questions, amounts or answer box", () => {
+    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} viewer={LEO} />);
+    expect(screen.getByText("Questions aren't on this device.")).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("Sam (owner) is asked directly", () => {
@@ -251,7 +287,7 @@ describe("ApprovalsInbox", () => {
     render(<ApprovalsInbox items={mine} {...props} onAccept={onAccept} viewer={SAM} />);
     const accept = screen.getByRole("button", { name: "Accept" });
     expect(accept).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText("You requested this, so you can't approve it.")).toBeInTheDocument();
+    expect(screen.getByText("You requested this. Another owner decides.")).toBeInTheDocument();
     expect(screen.getByText("Requested by you, 2:07 PM.")).toBeInTheDocument();
     fireEvent.click(accept);
     expect(onAccept).not.toHaveBeenCalled();
@@ -264,6 +300,32 @@ describe("ApprovalsInbox", () => {
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     expect(screen.getByText("Requested by you, 11:40 AM.")).toBeInTheDocument();
+  });
+
+  it("Maya sees only the requests she made, waiting for Sam", () => {
+    const both = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("requested", "sam")), inboxCase(CASE_B, caseB("drafted"))]);
+    render(<ApprovalsInbox items={both} {...props} viewer={MAYA} />);
+    expect(screen.getByText("1 waiting for Sam")).toBeInTheDocument();
+    expect(items("Waiting for Sam").map((r) => r.textContent)).toEqual(["To decide: Bayline 20GP Yantian-Oakland$400 · 1 line · requested 4 hours ago"]);
+    expect(screen.getByText("Waiting for Sam to decide.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing is sent either way.")).toBeInTheDocument();
+  });
+
+  it("Maya sees her accepted request with who accepted it; the message is read-only for her", () => {
+    render(<ApprovalsInbox items={approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("accepted"))])} {...props} viewer={MAYA} />);
+    unfold(/^Decided \(1\)$/);
+    fireEvent.click(items("Decided")[0]);
+    expect(screen.getByText("Accepted by Sam, 2:10 PM. Nothing was sent.")).toBeInTheDocument();
+    const msg = screen.getByRole("region", { name: "Message to the seller" });
+    expect(within(msg).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(msg).getByText(/^Hi Derek,/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+  });
+
+  it("Leo (uploader) gets no approvals", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={LEO} />);
+    expect(screen.getByText("Approvals aren't on this device.")).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
   it("accepted: the message to the seller with locked numbers, Export PDF and Copy text, nothing sent", async () => {
@@ -295,7 +357,7 @@ describe("ApprovalsInbox", () => {
 
   it("rejected: the reason, and that it went back to Maya", () => {
     render(<ApprovalsInbox items={approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("rejected"))])} {...props} viewer={MAYA} />);
-    expect(screen.getByText("No requests waiting.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing waiting for a decision.")).toBeInTheDocument();
     unfold(/^Decided \(1\)$/);
     fireEvent.click(items("Decided")[0]);
     expect(screen.getByText("Rejected by Sam:")).toBeInTheDocument();

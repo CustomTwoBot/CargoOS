@@ -15,7 +15,7 @@ function atWidth(w: number) {
 const nav = () => screen.getByRole("navigation", { name: "Sections" });
 const BAYLINE = "Bayline 40HC Ningbo-LB";
 
-beforeEach(() => { localStorage.removeItem("cargoos.sidebar"); });
+beforeEach(() => { localStorage.removeItem("cargoos.sidebar"); localStorage.removeItem("cargoos.person"); });
 afterEach(() => { cleanup(); Reflect.deleteProperty(window, "matchMedia"); });
 
 describe("sidebar: places shared by every case", () => {
@@ -30,7 +30,7 @@ describe("sidebar: places shared by every case", () => {
     expect(open).toHaveAttribute("aria-current", "page");
     expect(within(cases).getByRole("button", { name: "All cases" })).toBeInTheDocument();
     expect(within(cases).getByRole("button", { name: "New case" })).toBeInTheDocument();
-    expect(within(nav()).getByText(/^Replay of a recorded run\./)).toBeInTheDocument();
+    expect(within(nav()).getByText("Replay")).toHaveAttribute("title", expect.stringMatching(/^Replay of a recorded run\./));
   });
 
   it("follows the case: ready to dispute after the answers, an approval waiting once drafted, nothing to do after accepting", () => {
@@ -44,6 +44,10 @@ describe("sidebar: places shared by every case", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(within(nav()).getByRole("button", { name: "Approvals" })).toBeInTheDocument();
     expect(within(nav()).getByRole("button", { name: `${BAYLINE}, $700 at stake, Nothing to do` })).toBeInTheDocument();
+    fireEvent.click(within(nav()).getByRole("button", { name: "All cases" }));
+    const row = within(screen.getByRole("region", { name: "Cases" })).getByRole("button", { name: /^Bayline/ });
+    expect(row).toHaveTextContent("Dispute accepted");
+    expect(row).not.toHaveTextContent(/to decide/);
   });
 
   it("holds nothing from the open case: no Overview, Open question, Documents, History or repeated title", () => {

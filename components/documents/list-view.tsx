@@ -1,4 +1,5 @@
-// The case's Documents: document list on the left, the selected document with its quotes on the right.
+// The case's Documents: document list on the left, the selected document with its quotes on the right;
+// below 1024px the list sits above the document.
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { ChainGlyph } from "@/components/case/glyphs";
@@ -17,12 +18,12 @@ function StatusLine({ row }: { row: DocRow }) {
   );
 }
 
-export function ListView({ x, rows }: { x: CaseInput; rows: DocRow[] }) {
+export function ListView({ x, rows, facts = true }: { x: CaseInput; rows: DocRow[]; facts?: boolean }) {
   const [selectedId, setSelectedId] = useState(rows[0]?.doc._id);
   const selected = rows.find((r) => r.doc._id === selectedId) ?? rows[0];
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-6 pb-4">
-      <ul aria-label="Documents" className="min-h-0 overflow-auto rounded-xl border border-line bg-surface p-1.5 shadow-card">
+    <div data-testid="documents-layout" className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-6 pb-16 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible">
+      <ul aria-label="Documents" className="max-h-[220px] flex-none overflow-auto rounded-xl border border-line bg-surface p-1.5 shadow-card lg:max-h-none lg:min-h-0">
         {rows.map((r) => (
           <li key={r.doc._id}>
             <button type="button" onClick={() => setSelectedId(r.doc._id)} aria-current={r === selected || undefined}
@@ -40,7 +41,7 @@ export function ListView({ x, rows }: { x: CaseInput; rows: DocRow[] }) {
           </li>
         ))}
       </ul>
-      {selected ? <DocumentCard key={selected.doc._id} x={x} row={selected} />
+      {selected ? <DocumentCard key={selected.doc._id} x={x} row={selected} facts={facts} />
         : <p className="text-why text-ink-2">No documents in this case yet.</p>}
     </div>
   );
