@@ -73,7 +73,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
   const open = openQuestions(x).length;
   const blocked = rechecking ? { why: "CargoOS is rechecking. Wait a moment.", short: "Rechecking…" }
     : totals.atStakeCents === 0 ? { why: "Nothing to dispute. At stake is $0.", short: "Nothing to dispute" }
-    : !ready ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
+    : !ready ? { why: demo.live ? "Answer the open questions first." : "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
         : open ? `Answer ${open} ${open === 1 ? "question" : "questions"} first` : "Answer the questions first" }
     : undefined;
   const onDispute = view === "case" && tab === "dispute";
@@ -81,7 +81,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <CaseHeader title={x.case.title} facts={headerFacts(x, inbox.forwarder)} replay
+      <CaseHeader title={x.case.title} facts={[...headerFacts(x, inbox.forwarder), ...(demo.live ? ["Live"] : [])]} replay={!demo.live}
         pill={!reviews ? undefined : pill.label === "Waiting for your answer" && !canAct(roles, "reply") ? { ...pill, label: `Waiting for ${asked}` } : pill}
         actions={reviews ? (
           <>
@@ -122,8 +122,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
             ) : current.kind === "question" ? (
               <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
                 canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)} asked={asked}
-                replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
-                onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
+                replyNote={demo.live ? undefined : demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
+                onReply={(qid, text) => { actions.reply(qid, text); onTab("overview"); }} />
             ) : approval ? (
               <ApprovalDetail d={approval} now={clock} viewer={inboxViewer(viewer ?? { ...SAM, roles: [...roles] })}
                 onAccept={() => actions.accept(approval.draftId)}
@@ -196,7 +196,7 @@ function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; on
     <div className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
-      {seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}
+      {!demo.live && <>{seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}</>}
       <button type="button" onClick={() => onGo(demo.start)} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
     </div>
   );

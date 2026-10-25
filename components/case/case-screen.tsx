@@ -6,7 +6,7 @@
 // Replay mode only for now: every case is a DemoCase (recorded snapshots) and `useCaseStore`
 // applies what people do on top. Live Convex data replaces this in SPEC W3 step 8.
 import { Tooltip } from "@base-ui/react/tooltip";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { Person, Role } from "@/lib/types";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { ApprovalsInbox } from "@/components/inboxes/approvals-inbox";
@@ -20,6 +20,7 @@ import { ToastRegion } from "@/components/states/shared";
 import { AppShell } from "@/components/shell/app-shell";
 import { caseStatus, waitingOn } from "@/components/shell/case-status";
 import { isUploaderOnly, useDevicePerson } from "@/components/shell/person";
+import type { LiveCase } from "@/components/live/use-live-case";
 import { useCaseStore } from "./case-store";
 import { CasesList, type CaseSummary } from "./cases-list";
 import type { DemoCase } from "./demo-case";
@@ -45,24 +46,31 @@ type Props = {
   cases?: DemoCase[];
   /** Overrides the roles of the device's person (tests of one role); the person still acts. */
   roles?: readonly Role[];
+  /** The live case from Convex (SPEC W3 step 8); it takes Scenario A's place, and the recording stays the fallback. */
+  live?: LiveCase;
 };
 
-export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) {
+export function CaseScreen({ cases: recorded = DEMO_CASES, roles: rolesOverride, live }: Props) {
+  const cases = live ? recorded.map((c) => (c.id === SCENARIO_A.id ? { ...live.demo, id: c.id } : c)) : recorded;
   const person = useDevicePerson();
   const uploader = isUploaderOnly(person);
   const [activeId, setActiveId] = useState(cases[0]?.id ?? "");
   const [chosen, setView] = useState<View>(cases.length ? "case" : "cases");
   const [tabs, setTabs] = useState<Record<string, string>>({});
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const toastTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clock = useNow();
 
   const toast = (text: string, undo?: () => void) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t.slice(-2), { id, text, undo }]);
-    toastTimers.current.push(setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000));
+    setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000);
   };
-  const store = useCaseStore(cases, toast, person);
+  const replay = useCaseStore(recorded, toast, person);
+  const store = !live ? replay : {
+    state: { ...replay.state, [SCENARIO_A.id]: live.local },
+    inputs: { ...replay.inputs, [SCENARIO_A.id]: live.input },
+    actionsFor: (d: DemoCase) => (d.id === SCENARIO_A.id ? live.actionsWith(toast) : replay.actionsFor(d)),
+  };
   // An uploader has no inboxes and works on a case's documents (docs/design.md §0.3).
   const view: View = !uploader ? chosen
     : chosen === "questions" || chosen === "approvals" ? "cases" : chosen === "case" ? "documents" : chosen;
@@ -108,7 +116,7 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
         {view === "questions" && (
           <QuestionsInbox items={questionItems(inboxCases)} viewer={viewer}
             onOpen={(caseId, qid) => open(caseId, qid)}
-            onReply={(caseId, qid) => { actions(caseId).reply(qid); open(caseId); }} />
+            onReply={(caseId, qid, text) => { actions(caseId).reply(qid, text); open(caseId); }} />
         )}
         {view === "approvals" && (
           <ApprovalsInbox items={approvalItems(inboxCases)} viewer={viewer}

@@ -4,7 +4,7 @@
 // Live Convex data replaces this in SPEC W3 step 8; the actions keep the same names as the mutations.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CaseEvent, Charge, Draft, Finding, Person, SourceDoc } from "@/lib/types";
-import type { NewEvidence } from "@/components/inputs/evidence-input";
+import type { EvidenceOutcome, NewEvidence } from "@/components/inputs/evidence-input";
 import type { LineChange } from "@/components/inputs/line-edit";
 import type { DraftDecision } from "@/components/inboxes/people";
 import { DEFAULT_PERSON, OWNER, firstName } from "@/components/shell/person";
@@ -45,13 +45,14 @@ export type Toast = (text: string, undo?: () => void) => void;
 
 export type CaseActions = {
   reset: (stage: string) => void;
-  reply: (questionId: string) => void;
+  /** `text` is what the person typed: the live case sends it; a replay plays the recorded answer instead. */
+  reply: (questionId: string, text?: string) => void;
   verdict: (key: string, v: Verdict) => void;
   draftDispute: () => Draft | undefined;
   accept: (draftId: string) => void;
   reject: (draftId: string, reason: string) => void;
   editMessage: (draftId: string, text: { subject: string; body: string }) => void;
-  addEvidence: (e: NewEvidence) => { kind: "replay" };
+  addEvidence: (e: NewEvidence) => EvidenceOutcome | Promise<EvidenceOutcome>;
   saveLine: (key: string, change: LineChange) => void;
 };
 

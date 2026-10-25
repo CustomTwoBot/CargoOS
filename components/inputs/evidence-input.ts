@@ -13,6 +13,8 @@ export type NewEvidence = { type: EvidenceType; text: string };
 /** What came back from adding. In replay nothing is read, and the result says so. */
 export type EvidenceOutcome =
   | { kind: "replay" }
+  /** Live: saved, and CargoOS reads it and rechecks the lines on the server. */
+  | { kind: "reading" }
   | { kind: "changed"; lines: number }
   | { kind: "no_amounts" };
 
@@ -28,6 +30,7 @@ export const EVIDENCE_COPY = {
 
 export function outcomeText(o: EvidenceOutcome): string {
   if (o.kind === "replay") return "Saved to the case. In this replay it isn't read.";
+  if (o.kind === "reading") return "Added. CargoOS is reading it and will recheck the lines.";
   if (o.kind === "no_amounts") return "No agreed amounts found in this text. Saved to the case anyway.";
   return `Added. ${o.lines} ${o.lines === 1 ? "line" : "lines"} changed.`;
 }

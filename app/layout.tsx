@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Host_Grotesk } from "next/font/google";
+import { LiveProvider } from "@/components/live/live-provider";
 import "./globals.css";
 
 const hostGrotesk = Host_Grotesk({
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full"><LiveProvider>{children}</LiveProvider></body>
     </html>
   );
 }
