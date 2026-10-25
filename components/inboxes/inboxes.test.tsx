@@ -109,6 +109,11 @@ describe("QuestionsInbox", () => {
     expect(screen.getByRole("heading", { level: 2, name: long })).not.toHaveClass("truncate");
   });
 
+  it("without a fixed clock, ages run on the replay's clock, not the wall clock", () => {
+    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} />);
+    expect(items("Waiting for your answer").map((r) => r.textContent?.split(" · ").at(-1))).toEqual(["yesterday", "5 hours ago", "1 minute ago"]);
+  });
+
   it("what the chat said stays folded until asked for", () => {
     render(<QuestionsInbox items={questionItems([inboxCase(SCENARIO_A, scenarioAAt("before"))])} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
     const show = screen.getByRole("button", { name: "Show what the chat said" });
@@ -313,6 +318,22 @@ describe("ApprovalsInbox", () => {
     expect(items("Waiting for Sam").map((r) => r.textContent)).toEqual(["To decide: Bayline 20GP Yantian-Oakland$400 · 1 line · requested 4 hours ago"]);
     expect(screen.getByText("Waiting for Sam to decide.")).toBeInTheDocument();
     expect(screen.getByText("Nothing is sent either way.")).toBeInTheDocument();
+  });
+
+  it("Maya reads Sam's answer as Sam's, not hers, in the line chips", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={MAYA} />);
+    fireEvent.click(items("Waiting for Sam")[1]);
+    const lines = screen.getByRole("region", { name: "Lines to dispute" });
+    expect(within(lines).getByText("Sam said it was never agreed")).toBeInTheDocument();
+    expect(within(lines).queryByText(/You said/)).not.toBeInTheDocument();
+  });
+
+  it("in a card under 560px the chip sits under the line's name; the name keeps the width", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={SAM} />);
+    fireEvent.click(items("Waiting for a decision")[1]);
+    const chip = within(screen.getByRole("region", { name: "Lines to dispute" })).getByText("Agreed $4,500 → Billed $4,800");
+    expect(chip).toHaveClass("col-start-2", "row-start-2", "@[560px]:col-start-3", "@[560px]:row-start-1");
+    expect(chip.closest("ul")?.parentElement).toHaveClass("@container");
   });
 
   it("Maya sees her accepted request with who accepted it; the message is read-only for her", () => {

@@ -8,9 +8,9 @@ import { cx } from "@/components/case/cx";
 import { whenAt } from "@/components/case/format";
 import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
-import { ago, type InboxLine, type QuestionItem } from "./items";
+import { ago, replayNow, type InboxLine, type QuestionItem } from "./items";
 import { CARD, Chevron, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, useNow, useWide } from "./parts";
-import { ASKED, firstName, SAM, type Person } from "./people";
+import { ASKED, firstName, reasonFor, SAM, type Person } from "./people";
 
 type Props = {
   items: QuestionItem[];
@@ -37,7 +37,8 @@ const charges = (n: number) => `${n} ${n === 1 ? "charge" : "charges"}`;
 
 export function QuestionsInbox({ items, onOpen, onReply, viewer = SAM, now: fixed }: Props) {
   const clock = useNow();
-  const now = fixed ?? clock;
+  // A replay has its own clock (recorded times); the wall clock only when the items carry none.
+  const now = fixed ?? replayNow(items) ?? clock;
   const wide = useWide();
   const open = items.filter((q) => q.status === "open");
   const answered = items.filter((q) => q.status === "answered");
@@ -84,7 +85,7 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = SAM, now: fixe
         </>
       }
       detail={!selected ? (wide && <InboxEmpty {...QUESTIONS_EMPTY} />) : (
-        <QuestionDetail key={selected.id} q={selected} now={now} canReply={canReply} asked={asked} askedName={askedName}
+        <QuestionDetail key={selected.id} q={selected} now={now} viewer={viewer} canReply={canReply} asked={asked} askedName={askedName}
           onOpen={() => onOpen(selected.caseId, selected.questionId)}
           // Keep it selected once it moves to Answered, so you see your answer quoted.
           onReply={(text) => { setPicked(selected.id); onReply(selected.caseId, selected.questionId, text); }} />
@@ -94,11 +95,11 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = SAM, now: fixe
 }
 
 type DetailProps = {
-  q: QuestionItem; now: Date | null; canReply: boolean; asked: string; askedName: string;
+  q: QuestionItem; now: Date | null; viewer: Person; canReply: boolean; asked: string; askedName: string;
   onOpen: () => void; onReply: (text: string) => void;
 };
 
-function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }: DetailProps) {
+function QuestionDetail({ q, now, viewer, canReply, asked, askedName, onOpen, onReply }: DetailProps) {
   const [text, setText] = useState("");
   const isOpen = q.status === "open";
   const id = `inbox-answer-${q.id}`;
@@ -129,7 +130,7 @@ function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }:
         <div className="mt-4 border-t border-line pt-1">
           {sameChip && <p className="pb-1 pt-2 text-meta font-medium text-ink-3">{sameChip} for all {q.lines.length} charges</p>}
           <LineRows label={isOpen ? "Charges it covers" : "Where these charges stand now"}
-            rows={q.lines.map((l) => ({ ...l, amount: l.billed, chip: sameChip ? undefined : isOpen ? openChip(l) : <StandsChip l={l} /> }))} />
+            rows={q.lines.map((l) => ({ ...l, amount: l.billed, chip: sameChip ? undefined : isOpen ? openChip(l) : <StandsChip l={l} reason={reasonFor(l.reason, viewer)} /> }))} />
         </div>
         {q.mentions.length > 0 && <Mentions q={q} />}
 
@@ -165,12 +166,12 @@ function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }:
 const openChip = (l: InboxLine) => (l.code === "R6" ? "No agreement" : l.code === "R7" ? "Sources disagree" : l.reason);
 
 /** Where an answered question's line stands now: its status glyph and plain reason. */
-const StandsChip = ({ l }: { l: InboxLine }) => (
+const StandsChip = ({ l, reason }: { l: InboxLine; reason: string }) => (
   <>
     <span className={cx(l.group === "dispute" ? "text-dispute" : l.group === "waiting" ? "text-waiting" : "text-cleared")}>
       <StatusGlyph group={l.group} />
     </span>
-    {l.reason}
+    {reason}
   </>
 );
 
