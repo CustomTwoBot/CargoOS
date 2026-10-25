@@ -123,6 +123,32 @@ describe("tabs and views", () => {
     expect(onView).toHaveBeenLastCalledWith("case");
   });
 
+  it("the Documents and History tabs switch views without losing the case state", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getAllByText("draft_created").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    expect(within(screen.getByRole("list", { name: "Documents" })).getByText("Invoice PCL-INV-1012")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Dispute/ }));
+    expect(screen.getByText(/Drafted by you/)).toBeInTheDocument();
+    expect(screen.getByTestId("at-stake")).toHaveTextContent("$700");
+  });
+
+  it("a rejected draft shows draft_rejected in History", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.change(screen.getByLabelText("Why are you rejecting it?"), { target: { value: "They did expedite it. Pay it this time." } });
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.getAllByText("draft_rejected").length).toBeGreaterThan(0);
+    expect(screen.getByText("Rejected the dispute. Nothing went to the seller.")).toBeInTheDocument();
+  });
+
   it("Documents shows what the invoice was checked against, under the same header", () => {
     render(<Workspace demo={SCENARIO_A} view="documents" onView={() => {}} />);
     expect(screen.getByText("Invoice PCL-INV-1012, checked against Quote Q-PCL-0902, email, chat.")).toBeInTheDocument();
