@@ -4,7 +4,7 @@ import { ACTION_ROLE, ALL_ROLES, canAct } from "./roles";
 import {
   casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestQuestion, groupsOf, toRows, totalsOf, type CaseInput,
 } from "./view-model";
-import { delta, money } from "./format";
+import { delta, inCurrency, money } from "./format";
 
 // Fixture events are on Oct 24, 2026 (Pacific).
 const NOW = new Date("2026-10-24T15:00:00-07:00");
@@ -121,5 +121,23 @@ describe("format", () => {
     expect(delta(30000)).toBe("+$300");
     expect(delta(0)).toBe("—");
     expect(delta(undefined)).toBe("—");
+  });
+});
+
+describe("lines billed in another currency", () => {
+  it("are left out of the USD totals and listed as not converted", () => {
+    const x = scenarioA(1);
+    const cny: CaseInput = { ...x, charges: x.charges.map((c) => (c.lineNo === 3 ? { ...c, currency: "CNY", amountCents: 461500 } : c)) };
+    const findings = cny.findings.map((f) => (f.key === "chg_3" && f.revision === 1 ? { ...f, billedCents: 461500, status: "needs_review" as const, ruleId: "R3_MATH_CURRENCY" as const } : f));
+    const t = totalsOf({ ...cny, findings });
+    expect(t.billedCents).toBe(750000 - 65000);
+    expect(t.waitingCents).toBe(60000);
+    expect(t.unconverted).toEqual([{ currency: "CNY", cents: 461500 }]);
+    expect(toRows({ ...cny, findings }).find((r) => r.lineNo === 3)?.currency).toBe("CNY");
+  });
+
+  it("format in their own currency", () => {
+    expect(inCurrency(461500, "CNY")).toBe("CNY 4,615");
+    expect(inCurrency(480000, "USD")).toBe("$4,800");
   });
 });

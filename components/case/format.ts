@@ -9,6 +9,13 @@ export function money(cents: number): string {
   return cents < 0 ? `${MINUS}${s}` : s;
 }
 
+/** An amount in the currency it was billed in: "$4,800", or "CNY 32,000" (never converted). */
+export function inCurrency(cents: number, currency = "USD"): string {
+  if (currency === "USD") return money(cents);
+  const s = formatUSD(Math.abs(cents)).slice(1);
+  return `${cents < 0 ? MINUS : ""}${currency} ${s}`;
+}
+
 /** Over-by column: +$300, −$50, or "—" for zero / no delta. */
 export function delta(cents: number | undefined): string {
   if (!cents) return "—";

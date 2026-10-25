@@ -5,7 +5,7 @@ import type { Draft, Question, SourceSpan } from "@/lib/types";
 import { RowTagChip, StatusTag } from "./bits";
 import { cx } from "./cx";
 import { Chain, DocumentView } from "./evidence-panel";
-import { capitalize, delta, money, whenAt } from "./format";
+import { inCurrency, capitalize, delta, money, whenAt } from "./format";
 import type { CaseInput, Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
@@ -41,7 +41,7 @@ export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: Line
         </div>
         <div>
           <h2 className="text-title font-[650] tracking-[-0.012em]">{row.description}</h2>
-          <p className="mt-0.5 text-[13px] text-ink-2">Line {row.lineNo} · billed {money(row.billedCents)}</p>
+          <p className="mt-0.5 text-[13px] text-ink-2">Line {row.lineNo} · billed {inCurrency(row.billedCents, row.currency)}</p>
         </div>
         {row.group === "dispute" && <div className="text-hero font-[650] text-dispute">{delta(row.deltaCents)}</div>}
         <p className="text-why text-ink-2">{row.why}</p>
@@ -99,7 +99,7 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
               {rows.map((r) => (
                 <li key={r.key} className="flex justify-between border-b border-line py-2 text-[14px] last:border-0">
                   <span><span className="mr-2 text-xs text-ink-3">{r.lineNo}</span>{r.description}</span>
-                  <b className="font-semibold">{money(r.billedCents)}</b>
+                  <b className="font-semibold">{inCurrency(r.billedCents, r.currency)}</b>
                 </li>
               ))}
             </ul>

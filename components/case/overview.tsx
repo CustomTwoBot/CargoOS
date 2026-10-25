@@ -1,7 +1,7 @@
 // At stake card with the stacked bar (docs/design.md §7.3). Rechecking uses the quiet state (§7.14).
 import { cx } from "./cx";
 import { Hint, HINTS } from "./bits";
-import { money } from "./format";
+import { inCurrency, money } from "./format";
 import { QuietRecheckLine, QUIET_DIM } from "@/components/states/quiet";
 import type { CaseTotals } from "./totals";
 
@@ -30,7 +30,14 @@ export function AtStakeCard({ totals: t, countLine, checked, rechecking, chargeC
       <div>
         <div className="mb-2 flex justify-between text-meta">
           {rechecking ? <QuietRecheckLine count={chargeCount} /> : <span className="text-ink-3">{checked}</span>}
-          <span className="font-medium text-ink-2">Invoice total <b className={cx("text-ink", dim)}>{money(t.billedCents)}</b></span>
+          <span className="font-medium text-ink-2">
+            Invoice total <b className={cx("text-ink", dim)}>{money(t.billedCents)}</b>
+            {t.unconverted.map((u) => (
+              <span key={u.currency} className="ml-1.5 text-ink-3" title="Billed in another currency. CargoOS doesn't convert it, so it isn't in the USD totals.">
+                + {inCurrency(u.cents, u.currency)} not converted
+              </span>
+            ))}
+          </span>
         </div>
         <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] bg-sunken" aria-hidden="true">
           <i className="block h-full bg-line-strong" style={{ width: pct(t.agreedCents) }} />

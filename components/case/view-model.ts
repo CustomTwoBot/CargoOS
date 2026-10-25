@@ -6,7 +6,7 @@ import type {
   Case, CaseEvent, Charge, Draft, Fact, Finding, FindingChange, Question, Reply, RuleId, SourceDoc,
 } from "@/lib/types";
 import { money, timeOf, whenAt } from "./format";
-import { caseTotals, DISCREPANCY, groupTotals, type CaseTotals } from "./totals";
+import { caseTotals, DISCREPANCY, groupTotals, type CaseTotals, type CurrencyOf } from "./totals";
 
 /** The case as the screen receives it: SPEC 5.3 CaseState plus replies, drafts and events. */
 export type CaseInput = {
@@ -47,6 +47,7 @@ export type Row = {
   why: string;                // Finding.explanation, verbatim
   reason: { code: string; plain: string };
   billedCents: number; deltaCents?: number;
+  currency: string;           // as billed; non-USD lines are never converted (SPEC §6 step 1)
   tag?: RowTag;
   finding: Finding;
 };
@@ -92,7 +93,7 @@ export function toRows(x: CaseInput): Row[] {
     return {
       key: f.key, lineNo: f.lineNo, description: charges.get(f.chargeId)?.description ?? `Line ${f.lineNo}`,
       group, why: f.explanation, reason: REASON[f.ruleId],
-      billedCents: f.billedCents, deltaCents: f.deltaCents, tag, finding: f,
+      billedCents: f.billedCents, deltaCents: f.deltaCents, currency: charges.get(f.chargeId)?.currency ?? "USD", tag, finding: f,
     };
   });
 }
@@ -102,7 +103,7 @@ export type GroupView = { group: UiGroup; rows: Row[]; billedCents: number; over
 export const groupsOf = (rows: Row[]): GroupView[] =>
   GROUPS.map((group) => {
     const inGroup = rows.filter((r) => r.group === group);
-    return { group, rows: inGroup, ...groupTotals(inGroup.map((r) => r.finding)) };
+    return { group, rows: inGroup, ...groupTotals(inGroup.map((r) => r.finding), (f) => inGroup.find((r) => r.finding === f)?.currency ?? "USD") };
   });
 
 /** Spec count line: "1 to dispute · 2 waiting on answers · 5 cleared". */
@@ -111,7 +112,13 @@ export function countLine(rows: Row[]): string {
   return `${n("dispute")} to dispute · ${n("waiting")} waiting on answers · ${n("cleared")} cleared`;
 }
 
-export const totalsOf = (x: CaseInput): CaseTotals => caseTotals(currentFindings(x));
+/** The currency each finding's charge was billed in. */
+export const currencyOf = (x: CaseInput): CurrencyOf => {
+  const byId = new Map(x.charges.map((c) => [c._id, c.currency]));
+  return (f) => byId.get(f.chargeId) ?? "USD";
+};
+
+export const totalsOf = (x: CaseInput): CaseTotals => caseTotals(currentFindings(x), currencyOf(x));
 
 export const latestQuestion = (x: CaseInput): Question | undefined =>
   [...x.questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
@@ -168,7 +175,7 @@ export function latestChanges(x: CaseInput): Change[] {
 export function changeSummary(x: CaseInput): string | undefined {
   const prev = x.findings.filter((f) => f.revision === x.case.revision - 1);
   if (!prev.length) return undefined;
-  const a = caseTotals(prev), b = totalsOf(x);
+  const a = caseTotals(prev, currencyOf(x)), b = totalsOf(x);
   return `At stake ${money(a.atStakeCents)} → ${money(b.atStakeCents)}. Waiting for answers ${money(a.waitingCents)} → ${money(b.waitingCents)}.`;
 }
 

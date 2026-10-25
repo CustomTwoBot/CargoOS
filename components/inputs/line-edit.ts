@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatUSD, parseMoneyToCents } from "@/lib/engine/money";
 
-export type EditableLine = { key: string; lineNo: number; description: string; amountCents: number };
+export type EditableLine = { key: string; lineNo: number; description: string; amountCents: number; currency?: string };
 export type LineChange = { description: string; amountCents: number };
 
 export const LINE_COPY = {

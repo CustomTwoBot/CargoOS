@@ -13,20 +13,25 @@ import type { CaseInput, Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
 
+const MAX_NOTES = 3;
+
 export function ChangedBanner({ notes, onOpen }: { notes: ChangeNote[]; onOpen: (key: string) => void }) {
   if (!notes.length) return null;
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-primary-ring bg-surface px-4 py-2.5 text-[13.5px]">
       <b className="font-semibold">Your answer changed {notes.length} {notes.length === 1 ? "charge" : "charges"}</b>
-      {notes.map((n) => (
+      {notes.slice(0, MAX_NOTES).map((n) => (
         <button key={n.key} type="button" onClick={() => onOpen(n.key)} className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink">
           <StatusTag group={n.to} label={n.to === "dispute" ? "To dispute" : n.to === "cleared" ? "Cleared" : "Waiting"} />
           {n.text}{n.amount && <span className="font-semibold text-dispute">{n.amount}</span>}
         </button>
       ))}
+      {notes.length > MAX_NOTES && <span className="text-ink-3">and {notes.length - MAX_NOTES} more in the list below</span>}
     </div>
   );
 }
+
+const sectionCount = (issues: Issue[], kind: Issue["kind"]) => issues.filter((i) => i.kind === kind).length;
 
 type ListProps = {
   issues: Issue[]; cleared: { count: number; billed: string };
@@ -45,7 +50,12 @@ export function IssueList({ issues, cleared, onOpen, moveMs, movingKey, allCharg
         {toDecide.length ? `To decide (${toDecide.length})` : "Nothing left to decide"}
       </h2>
       <ul ref={ref}>
-        {toDecide.map((i) => (
+        {toDecide.map((i, n) => [
+          (n === 0 || toDecide[n - 1].kind !== i.kind) && sectionCount(toDecide, i.kind) > 1 && (
+            <li key={`h-${i.kind}`} data-key={`h-${i.kind}`} className="border-t border-line bg-sunken px-5 py-1.5 text-xs font-medium text-ink-3">
+              {i.kind === "line" ? `To dispute (${sectionCount(toDecide, "line")})` : `Questions for you (${sectionCount(toDecide, "question")})`}
+            </li>
+          ),
           <li key={i.id} data-key={i.id} className="border-t border-line">
             <button type="button" onClick={() => onOpen(i.id)}
               className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">
@@ -62,8 +72,8 @@ export function IssueList({ issues, cleared, onOpen, moveMs, movingKey, allCharg
               <span className={cx("text-[15px] font-semibold", i.kind === "line" ? "text-dispute" : "text-waiting")}>{i.amount}</span>
               <span aria-hidden="true" className="text-ink-3">›</span>
             </button>
-          </li>
-        ))}
+          </li>,
+        ])}
         <li data-key="cleared" className="border-t border-line">
           <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
             className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">

@@ -3,7 +3,7 @@
 import type { Draft, Question } from "@/lib/types";
 import { delta, money } from "./format";
 import { groupTotals } from "./totals";
-import { groupsOf, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
+import { currencyOf, groupsOf, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
 
 export type Issue =
   | { id: string; kind: "line"; row: Row; title: string; amount: string; isNew: boolean }
@@ -24,7 +24,7 @@ export function issuesOf(x: CaseInput): Issue[] {
     const asked = rows.filter((r) => q.findingKeys.includes(r.key) && r.group === "waiting");
     out.push({ id: q._id, kind: "question", question: q, rows: asked,
       title: open.length > 1 ? `Question ${i + 1}` : "Your answer",
-      amount: money(groupTotals(asked.map((r) => r.finding)).billedCents) });
+      amount: money(groupTotals(asked.map((r) => r.finding), currencyOf(x)).billedCents) });
   });
   const d = latestDraft(x);
   if (d) out.push({ id: "dispute", kind: "dispute", draft: d, title: "Dispute", amount: money(d.totalDisputedCents) });

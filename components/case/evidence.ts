@@ -2,7 +2,7 @@
 // Pure: built from the finding, its facts and their source spans. Amounts only from the data.
 import { compareDates, compareInstants, formatShortDate, isoDatePart } from "@/lib/engine/money";
 import type { Fact, SourceDoc, SourceSpan } from "@/lib/types";
-import { delta, money } from "./format";
+import { inCurrency, delta, money } from "./format";
 import { questionFor, type CaseInput, type Row } from "./view-model";
 
 export type ChainIcon = "invoice" | "mail" | "chat" | "quote" | "answer" | "check" | "result";
@@ -45,7 +45,7 @@ export function chainOf(x: CaseInput, row: Row): Chain {
 
   const steps: ChainStep[] = [{
     icon: "invoice", title: "What the invoice says", where: invoice?.sentAt ? whereLabel(invoice, invoice.sentAt) : undefined,
-    quote: charge?.span, text: `${row.description} charged at ${money(row.billedCents)}`,
+    quote: charge?.span, text: `${row.description} charged at ${inCurrency(row.billedCents, row.currency)}`,
   }];
 
   // The rate this one replaced ("The original quote"), struck through.

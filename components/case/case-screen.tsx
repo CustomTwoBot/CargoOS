@@ -236,7 +236,7 @@ function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: 
                   <IssueList issues={issues} cleared={clearedSummary(x)} onOpen={setTab}
                     moveMs={replaying ? 560 : 280} movingKey={moving}
                     allCharges={<AllCharges rows={rows}
-                      lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents }))}
+                      lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents, currency: c.currency }))}
                       onSave={saveLine} />} />
                   <AgreedCard x={x} />
                 </div>

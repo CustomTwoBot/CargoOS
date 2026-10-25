@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { RowTagChip, StatusTag } from "@/components/case/bits";
 import { cx } from "@/components/case/cx";
-import { delta, money } from "@/components/case/format";
+import { delta, inCurrency } from "@/components/case/format";
 import type { Row } from "@/components/case/view-model";
 import type { EditableLine } from "./line-edit";
 
@@ -38,7 +38,7 @@ export function LineRow({ r, line, edited, selected, onSelect, replace, below }:
             <StatusTag group={r.group} />
             <div className="mt-[5px] text-xs leading-[17px] text-ink-2">{r.reason.plain}</div>
           </div>
-          <span className="text-right text-body font-semibold leading-[21px]">{money(line.amountCents)}</span>
+          <span className="text-right text-body font-semibold leading-[21px]">{inCurrency(line.amountCents, line.currency)}</span>
           <span className="text-right text-[13px] leading-[21px]">
             {r.group === "dispute" ? <span className="font-semibold text-dispute">{delta(r.deltaCents)}</span>
               : r.group === "waiting" ? <span className="text-meta font-medium text-waiting">unconfirmed</span>
