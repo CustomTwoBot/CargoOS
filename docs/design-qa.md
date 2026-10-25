@@ -121,3 +121,7 @@ Already with shell before this round: focus stays on the message after Reset dem
 | H6 | nit | New case thread header · all · both | No CargoOS mark; the case thread has one. | Inconsistent. | Same header component. | shell | open |
 | H7 | nit | New case drop zone · all · both | "Drop the invoice and everything that was agreed — / quotes, emails, chats" breaks right after the dash. | Awkward break. | `text-wrap: balance` or a non-breaking space before the dash. | shell | open |
 | S5 | nit | Dev badge · next dev | The Next.js dev indicator covers the composer's send button and the rail avatar. | Dev only, but the demo may run on next dev. | `devIndicators: false` (Pranav). | Pranav | open |
+
+## Paused — 25 Oct
+
+Paused at the coordinator's request while the user decides which version goes to main. Fixes reported after round 1 and not yet re-verified on screen: shell 47eb414 (H1–H7, dark `--link` #9DB8E8), case 5c01a49 (K1–K5), inbox c290ac9 (T1–T6, T8, T9; T7 declined because doc_added events carry no person). K6 ("Export PDF" → "Save PDF") lives in `components/inboxes/seller-message.tsx`, so it belongs to inbox, not case.
