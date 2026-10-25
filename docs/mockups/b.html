@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><title>B · Icons vs colored text</title>
+<link rel="stylesheet" href="base.css">
+<style>
+body { padding: 28px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+h2 { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.sec { font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 7px 14px; background: var(--sunken); border-bottom: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.row:last-child { border-bottom: 0; }
+.row .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .a { font-weight: 600; }
+.g { width: 15px; height: 15px; border-radius: 50%; border: 1.6px solid currentColor; flex: none; display: grid; place-items: center; font-size: 9px; font-weight: 700; }
+.word { font-size: 12.5px; font-weight: 600; width: 92px; flex: none; }
+p.note { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; line-height: 18px; }
+</style></head><body>
+<div class="grid">
+ <div><h2>1 · Icons (now)</h2><div class="list num">
+  <div class="sec">To dispute · 1</div>
+  <div class="row"><span class="g red">×</span><span class="t">Ocean freight 40HC Ningbo–Long Beach</span><span class="a red">+$300</span></div>
+  <div class="sec">Questions for you · 1</div>
+  <div class="row"><span class="g amber">?</span><span class="t">Port congestion fee</span><span class="a amber">$200</span></div>
+  <div class="row"><span class="g amber">?</span><span class="t">Rush handling</span><span class="a amber">$400</span></div>
+  <div class="sec">Cleared · 5</div>
+  <div class="row"><span class="g green">✓</span><span class="t">Destination THC</span><span class="a">$650</span></div>
+ </div><p class="note">Status is a small shape: you need to learn what ×, ? and ✓ mean.</p></div>
+
+ <div><h2>2 · The whole line in color (teammate’s idea)</h2><div class="list num">
+  <div class="sec">To dispute · 1</div>
+  <div class="row red"><span class="t">Ocean freight 40HC Ningbo–Long Beach</span><span class="a">+$300</span></div>
+  <div class="sec">Questions for you · 1</div>
+  <div class="row amber"><span class="t">Port congestion fee</span><span class="a">$200</span></div>
+  <div class="row amber"><span class="t">Rush handling</span><span class="a">$400</span></div>
+  <div class="sec">Cleared · 5</div>
+  <div class="row green"><span class="t">Destination THC</span><span class="a">$650</span></div>
+ </div><p class="note">Loud: whole sentences in red and amber read as errors; amber text is hard to read, and nothing works without color.</p></div>
+
+ <div><h2>3 · Status as a colored word, name stays dark</h2><div class="list num">
+  <div class="row"><span class="t">Ocean freight 40HC Ningbo–Long Beach</span><span class="word red">$300 over</span><span class="a">$4,800</span></div>
+  <div class="row"><span class="t">Port congestion fee</span><span class="word amber">Asked you</span><span class="a">$200</span></div>
+  <div class="row"><span class="t">Rush handling</span><span class="word amber">Asked you</span><span class="a">$400</span></div>
+  <div class="row"><span class="t">Destination THC</span><span class="word green">Matches</span><span class="a">$650</span></div>
+ </div><p class="note">Color and a plain word together: readable at a glance, still clear in grayscale, no icons to learn.</p></div>
+</div></body></html>

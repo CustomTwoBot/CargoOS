@@ -86,7 +86,7 @@ export function NewCaseFlow({ onCancel, onLoadExample, onCreate, onRead, example
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-start justify-between gap-6 px-6 pb-3 pt-3.5">
+      <header className="flex items-start justify-between gap-6 px-4 pb-3 pt-3.5 md:px-6">
         <div>
           <h1 className="flex items-center gap-2.5 text-title font-[650] tracking-[-0.012em]">
             {T.heading}
@@ -100,7 +100,7 @@ export function NewCaseFlow({ onCancel, onLoadExample, onCreate, onRead, example
         <Secondary onClick={onCancel}>{T.cancel}</Secondary>
       </header>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-4 px-6 pb-6">
+      <div className="grid grid-cols-1 items-start gap-4 px-4 pb-6 md:px-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section aria-label={T.heading} className="rounded-xl border border-line bg-surface shadow-card">
           {stage === "start" ? (
             <>

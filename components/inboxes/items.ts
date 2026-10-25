@@ -6,8 +6,9 @@ import { capitalize, delta, inCurrency, money } from "@/components/case/format";
 import { openQuestions, questionTitle } from "@/components/case/issues";
 import { groupTotals } from "@/components/case/totals";
 import { currencyOf, instant, toRows, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
-import type { CaseEvent, DocType, Party, SourceSpan } from "@/lib/types";
-import { decisionOf } from "./people";
+import type { CaseEvent, DocType, Draft, Party, Question, SourceSpan } from "@/lib/types";
+import { firstName, personOf, type DraftDecision } from "./people";
+import { signedBy } from "./message";
 
 /** One case as the inboxes read it. `forwarder` names the party a dispute goes to, when known. */
 export type InboxCase = { demo: DemoCase; x: CaseInput; forwarder?: string };
@@ -30,6 +31,8 @@ export type QuestionItem = {
   /** Unique across cases: `${caseId}:${questionId}`. */
   id: string; caseId: string; caseTitle: string; questionId: string;
   status: "open" | "answered";
+  /** Which question of the case: "Question 1", "Question 2", "Follow-up"; absent when the case has only one. */
+  label?: string;
   text: string; askedAt: string; citations: SourceSpan[];
   /** The citations with their documents, in the same order. */
   mentions: Mention[];
@@ -51,7 +54,6 @@ export type QuestionItem = {
 /** pending_approval → pending, approved → accepted, rejected → rejected. Drafts nobody requested yet stay out. */
 export type ApprovalStatus = "pending" | "accepted" | "rejected";
 
-// TEMPORARY local shape: requestedBy / decidedBy / rejectionReason come from SPEC §5.5 (see people.ts).
 export type ApprovalItem = {
   /** Unique across cases: `${caseId}:${draftId}`. */
   id: string; caseId: string; caseTitle: string; draftId: string;
@@ -98,6 +100,7 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
       return {
         id: `${demo.id}:${q._id}`, caseId: demo.id, caseTitle: demo.title, questionId: q._id,
         status: q.status === "open" ? "open" : "answered",
+        label: labelOf(x, q),
         text: q.text, askedAt: q.createdAt, citations: q.citations, mentions,
         conflict: covered.some((r) => r.finding.ruleId === "R7_CONFLICT") || new Set(q.citations.map((c) => c.docId)).size > 1,
         lines: covered.map(line),
@@ -119,6 +122,12 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
   return [...open, ...answered];
 }
 
+/** questionTitle without its one-question name ("Your answer"), which says nothing in a list of cases. */
+const labelOf = (x: CaseInput, q: Question) => {
+  const t = questionTitle(x, q);
+  return t === "Your answer" ? undefined : t;
+};
+
 const answerText = (x: CaseInput, questionId: string) => {
   const reply = x.replies.find((r) => r.questionId === questionId);
   return reply && x.documents.find((d) => d._id === reply.docId)?.text;
@@ -139,6 +148,11 @@ function replayOf(demo: DemoCase, x: CaseInput, questionId: string): QuestionIte
   };
 }
 
+const signedAs = (body: string, personId?: string) => {
+  const p = personOf(personId);
+  return p ? signedBy(body, firstName(p)) : body;
+};
+
 const STATUS: Partial<Record<string, ApprovalStatus>> = { pending_approval: "pending", approved: "accepted", rejected: "rejected" };
 
 /** Requests to decide (oldest request first), then decided ones (latest decision first). */
@@ -148,20 +162,22 @@ export function approvalItems(cases: InboxCase[]): ApprovalItem[] {
     return x.drafts.flatMap((d): ApprovalItem[] => {
       const status = STATUS[d.status];
       if (!status) return [];
-      const extra = decisionOf(d);
+      const legacy = d as Draft & DraftDecision;
       const forDraft = (p: Record<string, unknown>) => p.draftId === d._id;
       return [{
         id: `${demo.id}:${d._id}`, caseId: demo.id, caseTitle: demo.title, draftId: d._id, status,
         forwarder: forwarder ?? capitalize(d.to), to: d.to,
         total: money(d.totalDisputedCents), lineCount: d.findingKeys.length,
         lines: d.findingKeys.flatMap((k) => (rows.has(k) ? [line(rows.get(k)!)] : [])),
-        requestedBy: extra.requestedBy,
+        requestedBy: d.requestedBy,
         requestedAt: eventAt(x.events, "approval_requested", forDraft) ?? eventAt(x.events, "draft_created", forDraft),
-        decidedBy: status === "accepted" ? extra.acceptedBy : status === "rejected" ? extra.rejectedBy : undefined,
-        decidedAt: status === "accepted" ? eventAt(x.events, "approved", forDraft) : status === "rejected" ? extra.rejectedAt : undefined,
-        rejectionReason: status === "rejected" ? extra.rejectionReason : undefined,
+        decidedBy: status === "accepted" ? d.approvedBy ?? legacy.acceptedBy : status === "rejected" ? d.rejectedBy : undefined,
+        decidedAt: status === "accepted" ? eventAt(x.events, "approved", forDraft)
+          : status === "rejected" ? eventAt(x.events, "draft_rejected", forDraft) ?? legacy.rejectedAt : undefined,
+        rejectionReason: status === "rejected" ? d.rejectionReason : undefined,
         subject: status === "accepted" ? d.subject : "",
-        message: status === "accepted" ? extra.editedBody ?? d.body : "",
+        // The owner who accepted writes to the seller, so CargoOS's draft is signed with their name.
+        message: status === "accepted" ? d.editedBody ?? signedAs(d.body, d.approvedBy ?? legacy.acceptedBy) : "",
       }];
     });
   });

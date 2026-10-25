@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SCENARIO_A } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { caseInitials, caseStatus } from "./case-status";
+import { personById } from "@/lib/people";
+import { caseInitials, caseStatus, waitingOn } from "./case-status";
 import { sidebarMode } from "./layout";
 
 describe("caseStatus", () => {
@@ -25,6 +26,33 @@ describe("caseStatus", () => {
 
   it("has nothing to do after the dispute is accepted", () => {
     expect(caseStatus({ ...after, drafts: [{ ...draft, status: "approved" }] })).toEqual({ tone: "none", label: "Nothing to do" });
+  });
+});
+
+describe("per person", () => {
+  const sam = personById("sam")!, maya = personById("maya")!;
+  const before = SCENARIO_A.at(SCENARIO_A.start);
+  const after = SCENARIO_A.at(SCENARIO_A.end);
+  const requested = { ...after, drafts: [{ ...SCENARIO_A.draft(after)!, status: "pending_approval" as const, requestedBy: "maya" }] };
+
+  it("an open question waits on the owner, and on the bookkeeper's screen it waits for Sam", () => {
+    expect(caseStatus(before, sam).tone).toBe("you");
+    expect(caseStatus(before, maya)).toEqual({ tone: "none", label: "Waiting for Sam" });
+    expect(waitingOn([before], sam).questions).toBe(1);
+    expect(waitingOn([before], maya).questions).toBe(0);
+  });
+
+  it("a bookkeeper's request waits on the owner, not on the bookkeeper", () => {
+    expect(caseStatus(requested, sam).tone).toBe("you");
+    expect(caseStatus(requested, maya)).toEqual({ tone: "none", label: "Waiting for Sam" });
+    expect(waitingOn([requested], sam).approvals).toBe(1);
+    expect(waitingOn([requested], maya).approvals).toBe(0);
+  });
+
+  it("a rejected request comes back to the bookkeeper who made it", () => {
+    const back = { ...requested, drafts: [{ ...requested.drafts[0], status: "rejected" as const }] };
+    expect(waitingOn([back], maya).approvals).toBe(1);
+    expect(caseStatus(back, maya).tone).toBe("dispute");
   });
 });
 
