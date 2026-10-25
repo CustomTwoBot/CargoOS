@@ -1,0 +1,681 @@
+<title>CargoOS Final Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700&family=Onest:wght@400;500;600&display=swap">
+<style>
+/* Layout: same dark workbench as round 2. Live composite on top (light or dark), seven clarity decisions below, each option a cropped render of the same composite. */
+:root{
+  color-scheme: dark;
+  --bg:#0B0C0E; --card:#131518; --line:#25292F; --line-2:#363B43;
+  --tx:#ECEDEF; --tx-2:#A7ADB5; --tx-3:#7D848D; --pick:#F2F3F5; --rec:#F2C25B;
+  --ui:"Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--tx);font:400 15px/24px var(--ui);-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--pick);outline-offset:2px}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+.page{max-width:1240px;margin:0 auto;padding-block:24px 96px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px 48px;padding-bottom:22px}
+@media (max-width:860px){.intro{grid-template-columns:minmax(0,1fr)}}
+.eyebrow{font-size:13px;color:var(--tx-3)}
+.intro h1{margin-top:4px;font:600 34px/40px var(--ui);letter-spacing:-0.015em}
+.intro .lead{margin-top:10px;color:var(--tx-2);max-width:58ch}
+.read{margin:0;padding:0;list-style:none;border-top:1px solid var(--line-2)}
+.read li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:21px}
+.read b{font-weight:600}
+.read span{color:var(--tx-2)}
+@media (max-width:520px){.read li{grid-template-columns:minmax(0,1fr);gap:2px}}
+.status{margin-top:10px;font-size:13px;color:var(--tx-3)}
+.status::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--tx-3);margin-right:8px;vertical-align:1px}
+.status.ok::before{background:#5BC48E}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
+.seg button{height:32px;padding:0 12px;border:0;background:var(--card);color:var(--tx-2);font:500 13px/1 var(--ui);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-2)}
+.seg button[aria-pressed="true"]{background:var(--pick);color:#0B0C0E}
+.btn{height:32px;padding:0 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);color:var(--tx);font:500 13px/1 var(--ui);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--tx-3)}
+.btn.main{background:var(--pick);border-color:var(--pick);color:#0B0C0E}
+.btn:disabled{opacity:.5;cursor:default}
+.ctl .hint{font-size:13px;color:var(--tx-3)}
+.crop{position:relative;width:100%;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:#000}
+.stage{position:absolute;left:0;top:0;width:1280px;height:760px;transform-origin:0 0}
+.sec{padding-block:44px 6px;border-top:1px solid var(--line);margin-top:36px}
+.sec+.sec{margin-top:0}
+.sh{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:6px 40px;margin-bottom:16px}
+@media (max-width:860px){.sh{grid-template-columns:minmax(0,1fr)}}
+.sh .num{font-size:13px;color:var(--tx-3)}
+.sh h2{font:600 22px/28px var(--ui);letter-spacing:-0.01em;margin-top:2px}
+.sh p{color:var(--tx-2);font-size:14.5px;line-height:22px;max-width:62ch}
+.opts{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:14px}
+.opts.three{grid-template-columns:repeat(3, minmax(0,1fr))}
+@media (max-width:1000px){.opts.three{grid-template-columns:repeat(2, minmax(0,1fr))}}
+@media (max-width:760px){.opts,.opts.three{grid-template-columns:minmax(0,1fr)}}
+.opt{display:flex;flex-direction:column;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0}
+.opt:hover{border-color:var(--line-2)}
+.opt[aria-pressed="true"]{border-color:var(--pick);box-shadow:inset 0 0 0 1px var(--pick)}
+.opt .crop{pointer-events:none}
+.oh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:0 4px}
+.oh b{font-size:15px;font-weight:600}
+.oh .tags{display:flex;gap:6px;flex:none}
+.oh .t{font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid var(--line-2);color:var(--tx-2)}
+.oh .t.rec{border-color:rgba(242,194,91,.5);color:var(--rec)}
+.oh .t.on{background:var(--pick);border-color:var(--pick);color:#0B0C0E}
+.od{padding:0 4px 4px;font-size:13.5px;line-height:20px;color:var(--tx-2)}
+.od em{font-style:normal;color:var(--rec)}
+.note{margin-top:12px}
+.note label{display:block;font-size:13px;color:var(--tx-3);margin-bottom:4px}
+textarea{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);color:var(--tx);font:400 14px/21px var(--ui);resize:vertical}
+textarea::placeholder{color:var(--tx-3)}
+.sum{margin-top:44px;padding-top:28px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px 48px}
+@media (max-width:860px){.sum{grid-template-columns:minmax(0,1fr)}}
+.sum h2{font:600 22px/28px var(--ui)}
+.sum pre{margin:10px 0 0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;font:400 13px/20px ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre-wrap;color:var(--tx-2)}
+.fab{position:fixed;right:max(16px, env(safe-area-inset-right, 0px));bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:40;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.ovl{position:fixed;inset:0;z-index:60;background:rgba(5,6,8,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+.ovl .ctl{margin:0}
+.ovl .crop{width:auto}
+
+/* ================= composite app ================= */
+.app{width:1280px;height:760px;display:flex;background:var(--bg-a);color:var(--tx-a);font:400 14px/20px 'Host Grotesk', system-ui, sans-serif;font-variant-numeric:tabular-nums lining-nums;overflow:hidden;position:relative;text-align:left;-webkit-font-smoothing:antialiased;letter-spacing:0}
+.app svg{display:block;flex:none}
+.app mark{background:var(--hl);color:#17140A;border-radius:3px;padding:0 3px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.app .rail{width:60px;flex:none;background:var(--s1);border-right:1px solid var(--ln);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px}
+.app .rl{color:var(--tx-a);margin-bottom:10px}
+.app .ri{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--tx3);position:relative}
+.app .ri.on{background:var(--s2);color:var(--tx-a)}
+.app .ri b{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--amb-fill)}
+.app .rsp{margin-top:auto}
+.app .main{flex:1;min-width:0;display:flex;flex-direction:column}
+.app .hdr{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 24px 10px}
+.app .ttl{display:flex;align-items:center;gap:10px;font-size:20px;line-height:26px;font-weight:650;letter-spacing:-.012em}
+.app .sub{font-size:13px;color:var(--tx2);margin-top:2px}
+.app .sub i{font-style:normal;color:var(--tx3)}
+.app .cs{font-size:12px;font-weight:600;color:var(--amb);border:1px solid var(--amb-b);padding:0 8px;border-radius:999px;line-height:20px}
+.app .cs.ok{color:var(--tx2);border-color:var(--ln2)}
+.app .hr{display:flex;align-items:center;gap:10px}
+.app .thm{display:inline-flex;background:var(--s1);border:1px solid var(--ln);border-radius:9px;padding:3px}
+.app .thm span{width:28px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--tx3)}
+.app .thm .on{background:var(--ln2);color:var(--tx-a)}
+.app .roles{display:inline-flex;background:var(--s1);border:1px solid var(--ln);border-radius:9px;padding:3px}
+.app .roles span{padding:4px 11px;border-radius:6px;font-size:13px;font-weight:500;color:var(--tx2)}
+.app .roles .on{background:var(--ln2);color:var(--tx-a)}
+.app .pb{background:var(--acc);color:var(--acc-ink);border-radius:8px;padding:7px 14px;font-weight:600;font-size:13.5px}
+.app .sb2{border:1px solid var(--ln2);border-radius:8px;padding:6px 12px;font-weight:600;font-size:13px;color:var(--tx-a);background:var(--s1)}
+.app .ov{margin:0 24px;display:grid;gap:10px}
+.app .lb{font-size:12.5px;color:var(--tx2);font-weight:500;display:flex;align-items:center;gap:5px}
+.app .rev{font-size:12.5px;color:var(--tx3)}
+.app .spin{display:inline-block;width:11px;height:11px;border:1.5px solid var(--ln2);border-top-color:var(--tx-a);border-radius:50%;margin-right:6px;vertical-align:-1px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.app.recomputing .ov .big,.app.recomputing .ov b{opacity:.45;transition:opacity .2s}
+.app .cnt{font-size:13px;color:var(--tx2)}
+.app .zero{color:var(--tx3)!important}
+.app .o-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:32px;align-items:center;background:var(--s1);border:1px solid var(--ln);border-radius:14px;padding:14px 22px;box-shadow:var(--card-sh)}
+.app .o-hero .big{font-size:46px;line-height:52px;font-weight:650;color:var(--red);letter-spacing:-.02em}
+.app .o-hero .bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--s2);gap:2px}
+.app .o-hero .bar i{display:block;height:100%}
+.app .o-hero .lg{display:flex;gap:26px;margin-top:10px;font-size:12.5px;color:var(--tx2)}
+.app .o-hero .lg b{display:block;font-size:16px;line-height:22px;color:var(--tx-a);font-weight:600;margin-top:1px}
+.app .o-hero .top{display:flex;justify-content:space-between;margin-bottom:8px}
+.app .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.app .qm{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--ln2);font-size:10px;font-weight:700;color:var(--tx3);line-height:1}
+.app .tip{position:absolute;z-index:8;width:250px;background:var(--tip-bg);color:var(--tip-tx);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:18px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.app .tip b{display:block;font-size:13px;margin-bottom:2px}
+.app .nx{display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--ln);border-radius:12px;padding:10px 14px;font-size:13.5px;line-height:20px;box-shadow:var(--card-sh)}
+.app .nx .ic{width:26px;height:26px;border-radius:8px;background:var(--acc);color:var(--acc-ink);display:grid;place-items:center;flex:none}
+.app .nx b{font-weight:650}
+.app .steps{display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:8px}
+.app .stp{display:flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--ln);border-radius:12px;padding:9px 12px;font-size:13px;line-height:18px;color:var(--tx3);box-shadow:var(--card-sh)}
+.app .stp .dt{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--ln2);display:grid;place-items:center;font-size:11.5px;font-weight:700;flex:none}
+.app .stp.done{color:var(--tx2)}
+.app .stp.done .dt{background:var(--grn);border-color:var(--grn);color:var(--grn-ink)}
+.app .stp.cur{color:var(--tx-a);border-color:var(--acc-b);font-weight:600}
+.app .stp.cur .dt{border-color:var(--tx-a);color:var(--tx-a)}
+.app .stp small{display:block;font-size:11.5px;font-weight:400;color:var(--tx3)}
+.app .tg{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;white-space:nowrap;line-height:20px;height:22px;padding:0 8px;border-radius:6px}
+.app .tg.red{background:var(--red);color:var(--red-ink)}
+.app .tg.amb{color:var(--amb);border:1px dashed var(--amb-b);background:var(--amb-t)}
+.app .tg.grn{color:var(--tx-a);padding-left:0}
+.app .tg.grn svg{color:var(--grn)}
+.app .work{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 404px;gap:16px;padding:12px 24px 16px}
+.app .list{background:var(--s1);border:1px solid var(--ln);border-radius:14px;overflow:hidden;min-height:0;position:relative;box-shadow:var(--card-sh)}
+.app .intro{margin:12px 14px 4px;padding:12px 14px;border-radius:12px;background:var(--s2);border:1px solid var(--ln);font-size:13px;line-height:19px}
+.app .intro b{display:block;font-size:13.5px;margin-bottom:6px}
+.app .intro ol{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.app .intro li{display:flex;gap:8px;color:var(--tx2)}
+.app .intro li span{width:20px;height:20px;border-radius:50%;background:var(--s1);border:1px solid var(--ln2);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--tx-a);flex:none}
+.app .intro .x{float:right;font-size:12px;color:var(--tx3);font-weight:500}
+.app .chd,.app .rw{display:grid;grid-template-columns:22px minmax(0,1fr) 168px 90px 84px;column-gap:12px}
+.app .chd{padding:9px 16px 7px;font-size:11.5px;font-weight:500;color:var(--tx3)}
+.app .chd .r{text-align:right}
+.app .gb{display:flex;align-items:center;gap:10px;min-height:40px;padding:6px 16px;background:var(--s2);border-top:1px solid var(--ln)}
+.app .gsub{font-size:12.5px;color:var(--tx2)}
+.app .ct{font-size:12.5px;color:var(--tx3);font-weight:500}
+.app .lk{font-size:12.5px;color:var(--link);font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.app .gs{margin-left:auto;display:flex;gap:14px;font-weight:600;font-size:13.5px}
+.app .go{min-width:76px;text-align:right}
+.app .rw{position:relative;align-items:start;padding:10px 16px;border-top:1px solid var(--ln);background:var(--s1)}
+.app .rw .no{font-size:12px;color:var(--tx3);text-align:right;padding-top:2px}
+.app .rw .d{font-weight:600;font-size:14.5px;line-height:21px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.app .rw .w{font-size:13px;line-height:19px;color:var(--tx2);margin-top:2px}
+.app .rw .a{text-align:right;font-weight:600;font-size:14px;line-height:21px}
+.app .rw .o{text-align:right;font-size:13px;line-height:21px}
+.app .rsn{font-size:12px;line-height:17px;color:var(--tx2);margin-top:5px}
+.app .rsn i{font-style:normal;color:var(--tx3);margin-left:4px}
+.app .rb{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--ln2);border-radius:5px;padding:0 6px;line-height:18px;font-size:11.5px;color:var(--tx2)}
+.app .rb b{color:var(--tx-a)}
+.app .rd{color:var(--red);font-weight:600}
+.app .amx{color:var(--amb);font-weight:500;font-size:12.5px}
+.app .t3{color:var(--tx3)}
+.app .ac{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.app .ac span{font-size:12px;font-weight:600;border:1px solid var(--ln2);border-radius:7px;padding:2px 9px;color:var(--tx-a);background:var(--s1)}
+.app .ac span small,.app .pa span small{font-size:11.5px;font-weight:400;color:var(--tx3);margin-left:5px}
+.app .pa .pb small{color:var(--acc-ink);opacity:.7}
+.app .mvt{font-size:11px;font-weight:600;color:var(--tx-a);border:1px solid var(--acc-b);border-radius:5px;padding:0 6px;line-height:18px}
+.app .rw.sel{background:var(--s2)}
+.app .rw.sel::after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--tx-a)}
+.app .rw.mv{box-shadow:inset 0 0 0 2px var(--tx-a);z-index:3}
+.app .q{margin:8px 16px 10px 50px;border:1px dashed var(--amb-b);border-radius:12px;padding:10px 12px;background:var(--amb-row);font-size:13.5px;line-height:20px}
+.app .q.done{border-style:solid;border-color:var(--ln2);background:transparent;color:var(--tx2)}
+.app .qh{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:var(--amb);margin-bottom:3px}
+.app .qa{margin-top:6px}
+.app .qf{margin-top:6px;font-size:12px;color:var(--tx3)}
+.app .emp{padding:10px 16px 12px 50px;font-size:13px;color:var(--tx2);border-top:1px solid var(--ln)}
+.app .panel{background:var(--s1);border:1px solid var(--ln);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0;box-shadow:var(--card-sh)}
+.app .ph{padding:12px 16px 10px;border-bottom:1px solid var(--ln)}
+.app .ph .k{font-size:12px;color:var(--tx3);font-weight:500}
+.app .ph .pt{font-size:16px;line-height:22px;font-weight:650;margin-top:2px}
+.app .ph .po{font-size:24px;line-height:30px;font-weight:650;color:var(--red);margin-top:4px}
+.app .ph .pw{font-size:13px;line-height:19px;color:var(--tx2);margin-top:6px}
+.app .pa{display:flex;gap:8px;padding:10px 16px;margin-top:auto;border-top:1px solid var(--ln);flex:none;flex-wrap:wrap}
+.app .pa .pb{padding:6px 14px}
+.app .chain{padding:12px 16px 0;min-height:0;overflow:hidden}
+.app .ci{position:relative;display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding-bottom:10px}
+.app .ci::before{content:"";position:absolute;left:13.5px;top:28px;bottom:2px;width:1px;background:var(--ln2)}
+.app .ci.last::before{display:none}
+.app .cd{width:28px;height:28px;border-radius:50%;border:1px solid var(--ln2);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--tx2);background:var(--s1)}
+.app .cd.r{background:var(--red);border-color:var(--red);color:var(--red-ink)}
+.app .ck{font-size:12px;color:var(--tx3);line-height:17px}
+.app .ckp{font-size:13.5px;font-weight:650;line-height:19px}
+.app .ckp span{font-weight:400;color:var(--tx3);font-size:12px;margin-left:4px}
+.app .cq{font-size:13.5px;line-height:21px;margin-top:3px}
+.app .cv{font-size:13.5px;line-height:20px;margin-top:3px;color:var(--tx2)}
+.app .cv b{color:var(--tx-a);font-weight:650}
+.app .cv.big{font-size:15px;color:var(--tx-a)}
+.app .cv.big b{color:var(--red);font-size:17px}
+.app .cv s{color:var(--tx3)}
+.app .story{padding:12px 16px 0;display:grid;gap:12px;font-size:14px;line-height:22px}
+.app .story .src{font-size:12px;color:var(--tx3);margin-top:3px}
+.app .story .res{font-size:15px;font-weight:600;padding:10px 12px;border-radius:10px;background:var(--red-t);color:var(--tx-a)}
+.app .story .res b{color:var(--red)}
+.app .how{font-size:12px;color:var(--tx3);padding:8px 16px 0}
+.app .wcl{padding:4px 16px}
+.app .wci{padding:12px 0;border-bottom:1px solid var(--ln)}
+.app .wci:last-child{border-bottom:0}
+.app .wch{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;flex-wrap:wrap}
+.app .wci p{font-size:13.5px;line-height:21px;color:var(--tx2);margin-top:6px}
+.app .wcr{font-size:12px;color:var(--tx3);margin-top:6px}
+.app .arr{color:var(--tx3)}
+/* roomy */
+.app.roomy{font-size:15px;line-height:22px}
+.app.roomy .ttl{font-size:22px;line-height:28px}
+.app.roomy .sub{font-size:13.5px}
+.app.roomy .rw{padding:13px 18px}
+.app.roomy .rw .d{font-size:16px;line-height:23px}
+.app.roomy .rw .w{font-size:14px;line-height:21px}
+.app.roomy .rw .a{font-size:15px}
+.app.roomy .gb{min-height:46px;padding:8px 18px}
+.app.roomy .q{font-size:14.5px;line-height:22px}
+.app.roomy .cq,.app.roomy .cv,.app.roomy .story{font-size:14.5px;line-height:22px}
+.app.roomy .ac span{font-size:13px;padding:3px 10px}
+.app.roomy .rsn{font-size:12.5px}
+.app.roomy .chd{display:none}
+</style>
+
+<div class="page">
+  <header class="intro">
+    <div>
+      <div class="eyebrow">CargoOS, эталон финального дизайна</div>
+      <h1>Финальная сборка</h1>
+      <p class="lead">Эталон вида для вёрстки. Переключай светлую и тёмную тему, состояние до и после ответа ops lead, жми «Проиграть». Полное описание: CARGOOS_DESIGN.md.</p>
+    </div>
+    <div>
+      <ul class="read">
+        <li><b>Закреплено</b><span>Graphite, Host Grotesk, цифры гротеска без копеек, узкая рейка, крупное At stake с полосой, статусы формой, полосы групп, две строки, цепочка доказательств, строка едет.</span></li>
+        <li><b>Понятность</b><span>Светлая тема по умолчанию, простые слова, четыре шага, кнопки с пояснением, стандартный размер, объяснение вопросами, подсказки «?».</span></li>
+        <li><b>Принцип</b><span>Сначала понятно, что делать, потом почему, потом детали. Названия групп и главные кнопки остаются как в спеке, команда на них опирается.</span></li>
+      </ul>
+      <p class="status" id="save-status" hidden></p>
+    </div>
+  </header>
+
+  <section aria-label="Живой экран">
+    <div class="ctl">
+      <div class="seg" role="group" aria-label="Тема превью"><button type="button" data-th="light" aria-pressed="true">Светлая</button><button type="button" data-th="dark" aria-pressed="false">Тёмная</button></div>
+      <div class="seg" role="group" aria-label="Состояние"><button type="button" data-phase="1" aria-pressed="true">До ответа</button><button type="button" data-phase="2" aria-pressed="false">После ответа</button></div>
+      <button type="button" class="btn main" id="play">Проиграть ответ ops lead</button>
+      <button type="button" class="btn" id="reset-rec" hidden>Вернуть рекомендации</button>
+    </div>
+    <div class="crop" id="live-crop"><div class="stage"></div></div>
+  </section>
+
+  <div id="sections" hidden></div>
+
+  <section class="sum" hidden>
+    <div>
+      <h2>Твоя сборка</h2>
+      <pre id="summary"></pre>
+      <p style="margin-top:10px"><button type="button" class="btn" id="copy">Скопировать</button></p>
+    </div>
+    <div>
+      <h2>Общее впечатление</h2>
+      <div class="note"><label for="general">Что ещё поменять, чтобы было понятнее или красивее</label><textarea id="general" rows="4" placeholder="Например: светлая слишком серая, хочу больше воздуха, кнопки непонятные"></textarea></div>
+    </div>
+  </section>
+</div>
+
+<button type="button" class="btn main fab" id="open-full">Весь экран</button>
+<div class="ovl" id="ovl" hidden role="dialog" aria-label="Экран целиком">
+  <div class="ctl">
+    <div class="seg" role="group" aria-label="Тема"><button type="button" data-oth="light" aria-pressed="true">Светлая</button><button type="button" data-oth="dark" aria-pressed="false">Тёмная</button></div>
+    <div class="seg" role="group" aria-label="Состояние"><button type="button" data-ophase="1" aria-pressed="true">До ответа</button><button type="button" data-ophase="2" aria-pressed="false">После ответа</button></div>
+    <button type="button" class="btn main" id="oplay">Проиграть ответ</button>
+    <button type="button" class="btn" id="oclose">Закрыть</button>
+  </div>
+  <div class="crop" id="o-crop"><div class="stage"></div></div>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- themes (Graphite light + dark) ---------- */
+  const THEME = {
+    dark: { 'bg-a': '#0D0E10', s1: '#15171A', s2: '#1D2024', ln: '#272B30', ln2: '#363B42', 'tx-a': '#EDEEF0', tx2: '#A4AAB2', tx3: '#7A818A', acc: '#F2F3F5', 'acc-ink': '#0D0E10', 'acc-b': 'rgba(242,243,245,.35)', link: '#D3DAE3',
+      red: '#FF6B5E', 'red-ink': '#1E0906', 'red-t': 'rgba(255,107,94,.13)', amb: '#F2B84B', 'amb-fill': '#F2B84B', 'amb-t': 'rgba(242,184,75,.12)', 'amb-b': 'rgba(242,184,75,.5)', 'amb-row': 'rgba(242,184,75,.05)', grn: '#5BC48E', 'grn-ink': '#06140C',
+      hl: '#FFE066', 'card-sh': 'none', 'tip-bg': '#F2F3F5', 'tip-tx': '#111315' },
+    light: { 'bg-a': '#F2F3F5', s1: '#FFFFFF', s2: '#F6F7F9', ln: '#E3E6EA', ln2: '#CFD4DA', 'tx-a': '#111315', tx2: '#4A5159', tx3: '#656C75', acc: '#111315', 'acc-ink': '#FFFFFF', 'acc-b': 'rgba(17,19,21,.3)', link: '#1F4A8C',
+      red: '#C93A2C', 'red-ink': '#FFFFFF', 'red-t': 'rgba(201,58,44,.08)', amb: '#946100', 'amb-fill': '#EFB33F', 'amb-t': '#FFF5DC', 'amb-b': 'rgba(176,118,0,.55)', 'amb-row': 'rgba(239,179,63,.07)', grn: '#1E8A55', 'grn-ink': '#FFFFFF',
+      hl: '#FFE27A', 'card-sh': '0 1px 2px rgba(17,19,21,.04)', 'tip-bg': '#111315', 'tip-tx': '#F2F3F5' }
+  };
+  const G = {
+    dispute: '<svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    waiting: '<svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.1 1.7"/><path d="M5.5 5.6a1.6 1.6 0 1 1 2.3 1.45c-.5.27-.8.6-.8 1.1v.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".85" fill="currentColor"/></svg>',
+    cleared: '<svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3.2 7.4l2.6 2.6 5-5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+  const SV = (d, w = 18) => `<svg viewBox="0 0 20 20" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const IC = {
+    logo: '<svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true"><rect x="2.5" y="6" width="17" height="10.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6.5 8.5v5.5M9.5 8.5v5.5M12.5 8.5v5.5M15.5 8.5v5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    list: SV('<path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9M3.6 5.5h.01M3.6 10h.01M3.6 14.5h.01"/>'),
+    q: SV('<path d="M3.5 4.5h13v8.5H9.5l-4 3v-3h-2z"/>'),
+    doc: SV('<path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2"/>'),
+    clock: SV('<circle cx="10" cy="10" r="6.5"/><path d="M10 6.5V10l2.5 1.6"/>'),
+    sun: SV('<circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3L6 14M14 6l1.3-1.3"/>', 15),
+    moon: SV('<path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/>', 15),
+    next: SV('<path d="M4 10h11M11 6l4 4-4 4"/>', 16),
+    inv: SV('<path d="M5 2.8h10v14.4l-2.2-1.4-2.3 1.4-2.3-1.4L5 17.2zM8 7h4M8 10h4"/>', 15),
+    mail: SV('<rect x="2.8" y="4.5" width="14.4" height="11" rx="1.5"/><path d="M3.2 5.5l6.8 5 6.8-5"/>', 15),
+    chat: SV('<path d="M3.5 4.5h13v8.5H9.5l-4 3v-3h-2z"/>', 15),
+    quote: SV('<path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2M8 10h4.5M8 13h4.5"/>', 15),
+    scale: SV('<path d="M10 3v14M5 17h10M4 7h12M4 7l-2 5h4zM16 7l-2 5h4z"/>', 15)
+  };
+
+  /* ---------- Scenario A ---------- */
+  const DESC = [['Ocean freight 40HC Ningbo-Long Beach', 4800], ['PSS peak season surcharge', 400], ['Destination THC', 650], ['Port congestion fee', 200], ['Drayage Long Beach -> Ontario CA', 850], ['Rush handling', 400], ['Customs entry', 125], ['Documentation fee', 75]];
+  const usd = n => '$' + n.toLocaleString('en-US');
+  const r0 = n => ({ s: 'cleared', code: 'R0', rname: 'Matches agreed rate', plain: 'Matches the quote', why: `Billed ${usd(DESC[n - 1][1])}. Matches the agreed rate of ${usd(DESC[n - 1][1])} (Quote Q-PCL-0902, Sep 2).` });
+  const ST1 = {
+    1: { s: 'dispute', code: 'R2', rname: 'Rate mismatch', plain: 'Higher than agreed', over: 300, why: 'Billed $4,800. Agreed $4,500 (email, Sep 5, if booked by Sep 10; booked Sep 8). Over by $300.' },
+    2: { s: 'cleared', code: 'R4', rname: 'Allowed by quote', plain: 'Allowed by the quote', why: 'Billed $400. Allowed by the quote: “PSS/GRI as filed by carrier at time of shipment apply”.' },
+    3: r0(3), 5: r0(5), 7: r0(7), 8: r0(8),
+    4: { s: 'waiting', code: 'R6', rname: 'No evidence', plain: 'Nobody agreed to it yet', why: 'Billed $200. Nothing in the quote, emails or chats agrees to this charge.' },
+    6: { s: 'waiting', code: 'R6', rname: 'No evidence', plain: 'Nobody agreed to it yet', why: 'Billed $400. Nothing in the quote, emails or chats agrees to this charge.' }
+  };
+  const L4 = { s: 'cleared', code: 'R8', rname: 'Approved', plain: 'Approved by Sam', moved: 'Just cleared', why: 'Billed $200. Approved by the ops lead on Oct 24: “approved the $200 congestion fee on WhatsApp”.' };
+  const L6 = { s: 'dispute', code: 'R9', rname: 'Rejected', plain: 'Sam says it was never agreed', over: 400, moved: 'Moved from Waiting', why: 'Billed $400. The ops lead said this was not agreed on Oct 24: “nobody agreed to $400 rush handling”. Over by $400.' };
+  const TOT = { 1: { b: 7500, a: 6600, s: 300, w: 600 }, 1.5: { b: 7500, a: 6800, s: 300, w: 400 }, 2: { b: 7500, a: 6800, s: 700, w: 0 } };
+  function data(phase) {
+    const st = Object.assign({}, ST1, phase >= 1.5 ? { 4: L4 } : {}, phase >= 2 ? { 6: L6 } : {});
+    const lines = [1, 2, 3, 4, 5, 6, 7, 8].map(n => Object.assign({ no: n, desc: DESC[n - 1][0], billed: DESC[n - 1][1] }, st[n]));
+    const g = s => lines.filter(l => l.s === s);
+    const d = { phase, lines, dis: g('dispute'), wai: g('waiting'), clr: g('cleared'), t: TOT[phase] };
+    d.counts = `${d.dis.length} to dispute · ${d.wai.length} waiting on answers · ${d.clr.length} cleared`;
+    d.sum = a => a.reduce((s, l) => s + l.billed, 0);
+    d.over = a => a.reduce((s, l) => s + (l.over || 0), 0);
+    return d;
+  }
+  const Q = 'Invoice line 4 bills a $200 congestion fee and line 6 bills $400 rush handling. Neither is in the quote or emails; the WhatsApp chat only says congestion “may be extra”. Did anyone agree to either charge?';
+  const REPLY = 'approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling';
+  const M = n => usd(n);
+
+  /* ---------- decisions ---------- */
+  const SECTIONS = [
+    { key: 'theme', title: 'Тема', q: 'Какая тема открывается по умолчанию?', why: 'Обе темы будут в продукте, переключатель в шапке. Вопрос только в том, с какой открывается приложение и что увидят судьи первым.', crop: 'full', cols: 2,
+      options: [
+        { id: 'light', name: 'Светлая', desc: 'Белые поверхности на светло-сером, чёрная главная кнопка. Привычно бухгалтеру и контролёру, лучше читается днём.', rec: true },
+        { id: 'dark', name: 'Тёмная', desc: 'Graphite из раунда 2. Выглядит дороже и «новее», но непривычна людям из финансов.' }] },
+    { key: 'lang', title: 'Язык', q: 'Насколько простым языком говорит экран?', why: 'Названия групп To dispute, Waiting on answers и Cleared остаются как в спеке. Меняются подписи вокруг: причины, итоги, время пересчёта. Why-строку пишет движок, её не трогаем.', crop: 'head', cols: 3,
+      options: [
+        { id: 'spec', name: 'Как в спеке', desc: 'Коды правил R2 Rate mismatch, Revision 1, Billed и Agreed. Точно, но говорит на языке разработчиков.' },
+        { id: 'plain', name: 'Простые слова', desc: 'Причина словами: «Higher than agreed», код правила мелко рядом. «Checked today at 1:05 PM» вместо Revision.', rec: true },
+        { id: 'human', name: 'Как человек', desc: 'Главное число как фраза «You may not owe $300», у каждой группы пояснение, кодов нет совсем.' }] },
+    { key: 'next', title: 'Следующий шаг', q: 'Как показать, что делать дальше?', why: 'Человек без технического опыта сначала спрашивает «что мне сейчас делать?». Заодно судьи видят весь путь: проверили, спросили, оспорили, одобрили.', crop: 'ov', cols: 3,
+      options: [
+        { id: 'none', name: 'Ничего', desc: 'Как в раунде 2: только итоги. Чище, но шаг приходится угадывать.' },
+        { id: 'hint', name: 'Строка «Next»', desc: 'Одна фраза под итогами: кто сейчас должен действовать и что будет потом.' },
+        { id: 'steps', name: 'Четыре шага', desc: 'Checked → Waiting for Sam → Draft dispute → Controller approves. Текущий шаг выделен.', rec: true }] },
+    { key: 'buttons', title: 'Кнопки', q: 'Как подписать действия в строке?', why: 'Agree легко понять как «согласен заплатить», хотя он значит «согласен с находкой, оспариваем». Подписи из спеки использует end-to-end тест Pranav, поэтому их меняем только вместе с командой.', crop: 'list', cols: 3,
+      options: [
+        { id: 'spec', name: 'Как в спеке', desc: 'Agree и Not an issue без пояснений.' },
+        { id: 'explained', name: 'С пояснением', desc: 'Agree <em>keep in dispute</em>, Not an issue <em>accept charge</em>. Подписи спеки остаются, смысл виден.', rec: true },
+        { id: 'plain', name: 'Простыми глаголами', desc: 'Dispute it и Accept charge. Понятнее всего, но нужно согласовать с командой.' }] },
+    { key: 'size', title: 'Размер', q: 'Сколько воздуха и какой размер текста?', why: 'Крупнее значит понятнее и дороже на вид, но в экран помещается меньше строк. Список всё равно прокручивается.', crop: 'list', cols: 2,
+      options: [
+        { id: 'roomy', name: 'Просторно', desc: 'Текст 15–16px, больше отступов, без строки с названиями колонок.' },
+        { id: 'standard', name: 'Стандартно', desc: 'Как в раунде 2: 14px и заголовки колонок.', rec: true }] },
+    { key: 'panel', title: 'Объяснение', q: 'Как цепочка доказательств объясняет число?', why: 'Это главный момент доверия: человек должен за пять секунд понять, почему $300 лишние.', crop: 'panel', cols: 3,
+      options: [
+        { id: 'tech', name: 'Как документы', desc: 'Шаги подписаны документами: Invoice line 1, Email Sep 5, Rule R2.' },
+        { id: 'plain', name: 'Вопросами', desc: 'Шаги подписаны по-человечески: «What the invoice says», «What Derek promised», «When you booked», «Result».', rec: true },
+        { id: 'story', name: 'Рассказом', desc: 'Три коротких абзаца с цитатами и итог: «You were charged $300 more than agreed».' }] },
+    { key: 'help', title: 'Подсказки', q: 'Как объяснить термины вроде At stake?', why: 'Подсказка помогает новичку, но не должна мешать тому, кто уже понял.', crop: 'head', cols: 3,
+      options: [
+        { id: 'none', name: 'Без подсказок', desc: 'Только сами подписи.' },
+        { id: 'hints', name: 'Знак вопроса', desc: 'Маленький «?» у At stake и у групп, по наведению короткое объяснение. На превью оно открыто.', rec: true },
+        { id: 'intro', name: 'Карточка «Как проверили»', desc: 'При первом открытии вверху списка: прочитали документы, сравнили строки, спросили Сэма. Закрывается.' }] }
+  ];
+  const REC = {}; SECTIONS.forEach(s => { REC[s.key] = s.options.find(o => o.rec).id; });
+  let cfg = Object.assign({}, REC);
+  let notes = {}, general = '';
+  const BASE = 'Graphite, Host Grotesk, цифры гротеска, узкая рейка, крупное At stake и полоса, статусы формой, полосы с подытогами, две строки, цепочка доказательств, строка едет';
+
+  /* ---------- composite ---------- */
+  const T = (c, spec, plain, human) => c.lang === 'spec' ? spec : c.lang === 'plain' ? plain : (human === undefined ? plain : human);
+  function tag(s, label) {
+    const k = s === 'dispute' ? 'red' : s === 'waiting' ? 'amb' : 'grn';
+    const L = label || (s === 'dispute' ? 'To dispute' : s === 'waiting' ? 'Waiting' : 'Cleared');
+    return `<span class="tg ${k}">${G[s]}${L}</span>`;
+  }
+  const qm = c => c.help === 'hints' ? '<span class="qm">?</span>' : '';
+  function navHTML(c, d) {
+    return `<div class="rail"><span class="rl">${IC.logo}</span><span class="ri on">${IC.list}</span><span class="ri">${IC.q}${d.wai.length ? '<b></b>' : ''}</span><span class="ri">${IC.doc}</span><span class="ri">${IC.clock}</span></div>`;
+  }
+  function hdrHTML(c, d) {
+    const cs = d.phase === 2 ? `<span class="cs ok">${T(c, 'Ready for approval', 'Ready to dispute')}</span>` : `<span class="cs">${T(c, 'Awaiting answer', 'Waiting for Sam')}</span>`;
+    const sub = T(c, 'Pacific Crest Logistics, invoice PCL-INV-1012.', 'Invoice PCL-INV-1012 from Pacific Crest Logistics.');
+    return `<div class="hdr"><div><div class="ttl">Bayline 40HC Ningbo-LB ${cs}</div><div class="sub">${sub} <i>Synthetic data. Nothing is sent or paid automatically.</i></div></div>
+      <div class="hr"><span class="thm"><span class="${c.theme === 'light' ? 'on' : ''}">${IC.sun}</span><span class="${c.theme === 'dark' ? 'on' : ''}">${IC.moon}</span></span><span class="roles"><span class="on">Clerk</span><span>Controller</span><span>Ops lead</span></span><span class="pb">Draft dispute</span></div></div>`;
+  }
+  function revLine(c, d, st) {
+    if (st.recomputing) return `<span class="rev"><span class="spin"></span>${T(c, 'Rechecking 8 lines with the ops lead\'s reply…', 'Rechecking 8 charges with Sam\'s answer…')}</span>`;
+    return `<span class="rev">${d.phase === 1 ? T(c, 'Revision 1. Checked Oct 24, 1:05 PM PT', 'Checked today at 1:05 PM') : T(c, 'Revision 2. Checked Oct 24, 2:05 PM PT', 'Updated at 2:05 PM after Sam\'s answer')}</span>`;
+  }
+  function heroHTML(c, d, st) {
+    const t = d.t, pct = v => (v / t.b * 100).toFixed(2) + '%';
+    const label = T(c, 'At stake', 'At stake, may not be owed', 'You may not owe');
+    const under = c.lang === 'human' ? `of the ${M(t.b)} invoice from Pacific Crest` : d.counts;
+    const lgA = T(c, 'Agreed', 'Matches the agreement'), lgW = T(c, 'Waiting on answers', 'Waiting for answers');
+    const top = T(c, 'Billed', 'Invoice total');
+    return `<div class="o-hero"><div><div class="lb">${label} ${qm(c)}</div><div class="big" data-k="s">${M(t.s)}</div><div class="cnt">${under}</div></div>
+      <div><div class="top">${revLine(c, d, st)}<span class="lb">${top} <b data-k="b">${M(t.b)}</b></span></div>
+        <div class="bar"><i style="width:${pct(t.a)};background:var(--ln2)"></i><i style="width:${pct(t.s)};background:var(--red)"></i><i style="width:${pct(t.w)};background:repeating-linear-gradient(135deg,var(--amb-fill) 0 3px,transparent 3px 6px)"></i></div>
+        <div class="lg"><span><span class="sw" style="background:var(--ln2)"></span>${lgA}<b data-k="a">${M(t.a)}</b></span><span><span class="sw" style="background:var(--red)"></span>At stake<b style="color:var(--red)">${M(t.s)}</b></span><span><span class="sw" style="background:var(--amb-fill)"></span>${lgW}<b data-k="w"${t.w ? '' : ' class="zero"'}>${M(t.w)}</b></span></div></div></div>`;
+  }
+  function nextHTML(c, d) {
+    if (c.next === 'none') return '';
+    if (c.next === 'hint') {
+      const txt = d.phase === 1
+        ? `<b>Next:</b> Sam Bayline needs to answer 1 question about 2 charges ($600). You can already draft the dispute for line 1.`
+        : `<b>Next:</b> draft the dispute for ${M(d.t.s)} and ask the controller to approve it. Nothing is sent until then.`;
+      return `<div class="nx"><span class="ic">${IC.next}</span><span>${txt}</span></div>`;
+    }
+    const steps = d.phase === 1
+      ? [['done', 'Checked 8 charges', '4 documents read'], ['cur', 'Waiting for Sam', '1 question, 2 charges'], ['', 'Draft dispute', 'Clerk'], ['', 'Controller approves', 'Nothing is sent']]
+      : [['done', 'Checked 8 charges', '4 documents read'], ['done', 'Sam answered', 'Today at 2:05 PM'], ['cur', 'Draft dispute', `${M(d.t.s)}, 2 lines`], ['', 'Controller approves', 'Nothing is sent']];
+    return `<div class="steps">${steps.map((s, i) => `<div class="stp ${s[0]}"><span class="dt">${s[0] === 'done' ? G.cleared : i + 1}</span><span>${s[1]}<small>${s[2]}</small></span></div>`).join('')}</div>`;
+  }
+  function reason(c, l) {
+    if (c.lang === 'spec') return `<div class="rsn"><span class="rb"><b>${l.code}</b>${l.rname}</span></div>`;
+    if (c.lang === 'plain') return `<div class="rsn">${l.plain}<i>${l.code}</i></div>`;
+    return `<div class="rsn">${l.plain}</div>`;
+  }
+  function acts(c, l, panel) {
+    if (l.s === 'cleared') return '';
+    const A = c.buttons === 'plain' ? 'Dispute it' : c.buttons === 'explained' ? 'Agree<small>keep in dispute</small>' : 'Agree';
+    const N = c.buttons === 'plain' ? 'Accept charge' : c.buttons === 'explained' ? 'Not an issue<small>accept charge</small>' : 'Not an issue';
+    if (panel) return `<div class="pa"><span class="pb">${A}</span><span class="sb2">${N}</span></div>`;
+    return `<div class="ac">${l.s === 'dispute' ? `<span>${A}</span>` : ''}<span>${N}</span></div>`;
+  }
+  function rowHTML(c, d, st, l) {
+    const k = l.s === 'dispute' ? 'red' : l.s === 'waiting' ? 'amb' : 'grn';
+    const sel = st.sel === l.no, mv = st.moved === l.no;
+    const over = l.s === 'dispute' ? `<span class="rd">+${M(l.over)}</span>` : l.s === 'waiting' ? '<span class="amx">unconfirmed</span>' : '<span class="t3">—</span>';
+    const moved = l.moved ? `<span class="mvt">${l.moved}</span>` : '';
+    return `<div class="rw ${k}${sel ? ' sel' : ''}${mv ? ' mv' : ''}" data-key="r${l.no}"><span class="no">${l.no}</span><div><div class="d">${l.desc}${moved}</div><div class="w">${l.why}</div>${acts(c, l)}</div><span>${tag(l.s)}${reason(c, l)}</span><span class="a">${M(l.billed)}</span><span class="o">${over}</span></div>`;
+  }
+  function groupHTML(c, d, s, arr) {
+    const n = arr.length;
+    const name = s === 'dispute' ? 'To dispute' : s === 'waiting' ? 'Waiting on answers' : 'Cleared';
+    const extra = s === 'cleared' ? `<span class="lk">${arr.some(l => l.moved) ? `Show ${arr.filter(l => !l.moved).length} more` : `Show ${n}`}</span>` : '';
+    const sub = c.lang === 'human' ? `<span class="gsub">${s === 'dispute' ? 'Charged more than agreed. Dispute these.' : s === 'waiting' ? 'Nobody confirmed these yet. CargoOS asked Sam.' : 'These match what was agreed.'}</span>` : '';
+    const over = s === 'dispute' && n ? `<span class="go rd">+${M(d.over(arr))}</span>` : s === 'waiting' && n ? '<span class="go amx">unconfirmed</span>' : '<span class="go t3">—</span>';
+    return `<div class="gb" data-key="h${s}">${tag(s, name)}${qm(c)}<span class="ct">${n} ${n === 1 ? 'line' : 'lines'}</span>${sub}${extra}<span class="gs"><span>${n ? M(d.sum(arr)) : '—'}</span>${over}</span></div>`;
+  }
+  function listHTML(c, d, st) {
+    const head = '<div class="chd"><span></span><span>Line</span><span>Status and reason</span><span class="r">Billed</span><span class="r">Over by</span></div>';
+    const intro = c.help === 'intro' && d.phase === 1 ? `<div class="intro"><span class="x">Got it</span><b>How CargoOS checked this invoice</b><ol><li><span>1</span>Read the quote, Derek's email, the WhatsApp chat and the invoice.</li><li><span>2</span>Compared each of the 8 charges with what was agreed.</li><li><span>3</span>Asked Sam about the 2 charges nobody agreed to.</li></ol></div>` : '';
+    let q;
+    const qTitle = T(c, 'Question for Sam Bayline, ops lead', 'CargoOS asked Sam Bayline, ops lead');
+    if (d.phase === 1) q = `<div class="q" data-key="q"><div class="qh"><span>${qTitle}</span><span>${st.answered ? 'Answered' : 'Waiting for reply'}</span></div>${Q}${st.answered ? `<div class="qa">Sam: <mark>“${REPLY}”</mark></div>` : ''}<div class="qf">Asked today at 1:05 PM. $600 is waiting on this answer.</div></div>`;
+    else if (d.wai.length) q = '<div class="q done" data-key="q">Sam answered at 2:05 PM. Rechecking line 6…</div>';
+    else q = '<div class="emp" data-key="ew">Nothing waiting on answers. Sam answered at 2:05 PM.</div>';
+    const R = arr => arr.map(l => rowHTML(c, d, st, l)).join('');
+    return intro + head + groupHTML(c, d, 'dispute', d.dis) + R(d.dis) + groupHTML(c, d, 'waiting', d.wai) + q + R(d.wai) + groupHTML(c, d, 'cleared', d.clr) + R(d.clr.filter(l => l.moved));
+  }
+  function panelHTML(c, d, st) {
+    if (d.phase > 1) {
+      const title = T(c, 'What changed', 'What changed after Sam\'s answer');
+      const e4 = `<div class="wci" data-key="c4"><div class="wch">Line 4 ${tag('waiting')}<span class="arr">→</span>${tag('cleared')}</div><p>${T(c, 'Because the ops lead approved it (reply, Oct 24):', 'Sam approved it:')} <mark>“approved the $200 congestion fee on WhatsApp”</mark></p><div class="wcr">${T(c, 'Decided by rule R8 Approved', 'Checked by CargoOS rules')}</div></div>`;
+      const e6 = d.phase === 2 ? `<div class="wci" data-key="c6"><div class="wch">Line 6 ${tag('waiting')}<span class="arr">→</span>${tag('dispute')}<span class="rd">+${M(400)}</span></div><p>${T(c, 'Because the ops lead said nobody agreed to it (reply, Oct 24):', 'Sam said nobody agreed to it:')} <mark>“nobody agreed to $400 rush handling”</mark></p><div class="wcr">${T(c, 'Decided by rule R9 Rejected', 'Checked by CargoOS rules')}</div></div>` : '';
+      return `<div class="ph"><div class="k">${T(c, 'Revision 2. After Sam Bayline replied, Oct 24, 2:05 PM', 'Today at 2:05 PM')}</div><div class="pt">${title}</div><div class="pw">At stake ${M(300)} → ${M(d.t.s)}. ${T(c, 'Waiting on answers', 'Waiting for answers')} ${M(600)} → ${M(d.t.w)}.</div></div><div class="wcl">${e4}${e6}</div>`;
+    }
+    const l = d.lines[0];
+    const head = `<div class="ph"><div class="k">Line 1, to dispute</div><div class="pt">Ocean freight 40HC Ningbo-Long Beach</div><div class="po">+${M(300)}</div></div>`;
+    if (c.panel === 'tech') return head + `<div class="chain">
+      <div class="ci"><span class="cd">1</span><div><div class="ck">Invoice PCL-INV-1012, line 1. Oct 12</div><div class="cv">Billed <b>${M(4800)}</b></div></div></div>
+      <div class="ci"><span class="cd">2</span><div><div class="ck">Email from Derek, Pacific Crest. Sep 5</div><div class="cq"><mark>Ocean freight reduced to $4,500 if booked by Sep 10</mark></div><div class="cv">Agreed <b>${M(4500)}</b> if booked by Sep 10</div></div></div>
+      <div class="ci"><span class="cd">3</span><div><div class="ck">WhatsApp, Derek PCL. Sep 8</div><div class="cq"><mark>Booking confirmed for your 40HC, booked today Sep 8</mark></div><div class="cv">Booked Sep 8. Condition met</div></div></div>
+      <div class="ci"><span class="cd">4</span><div><div class="ck">Quote Q-PCL-0902. Sep 2</div><div class="cv"><s>${M(4800)}</s> replaced by the email of Sep 5</div></div></div>
+      <div class="ci last"><span class="cd r">=</span><div><div class="ck">Rule R2 Rate mismatch. Decided by code, not by the model</div><div class="cv big">Over by <b>${M(300)}</b></div></div></div></div>` + acts(c, l, true);
+    if (c.panel === 'plain') return head + `<div class="chain">
+      <div class="ci"><span class="cd">${IC.inv}</span><div><div class="ckp">What the invoice says<span>Oct 12</span></div><div class="cv">Ocean freight charged at <b>${M(4800)}</b></div></div></div>
+      <div class="ci"><span class="cd">${IC.mail}</span><div><div class="ckp">What Derek promised<span>Email, Sep 5</span></div><div class="cq"><mark>Ocean freight reduced to $4,500 if booked by Sep 10</mark></div></div></div>
+      <div class="ci"><span class="cd">${IC.chat}</span><div><div class="ckp">When you booked<span>WhatsApp, Sep 8</span></div><div class="cq"><mark>Booking confirmed for your 40HC, booked today Sep 8</mark></div><div class="cv">Sep 8 is before Sep 10, so the lower price applies.</div></div></div>
+      <div class="ci last"><span class="cd r">${IC.scale}</span><div><div class="ckp">Result</div><div class="cv big">Charged <b>${M(300)}</b> more than agreed</div><div class="ck" style="margin-top:3px">Checked by CargoOS rules, not guessed by AI.</div></div></div></div>` + acts(c, l, true);
+    return head + `<div class="story">
+      <div>Derek promised a lower price in his email: <mark>“Ocean freight reduced to $4,500 if booked by Sep 10”</mark><div class="src">Email from Derek, Pacific Crest. Sep 5</div></div>
+      <div>You booked in time: <mark>“Booking confirmed for your 40HC, booked today Sep 8”</mark><div class="src">WhatsApp with Derek. Sep 8</div></div>
+      <div>The invoice still charges the old price of ${M(4800)}.<div class="src">Invoice PCL-INV-1012, line 1. Oct 12</div></div>
+      <div class="res">You were charged <b>${M(300)}</b> more than agreed.</div></div><div class="how">Checked by CargoOS rules, not guessed by AI.</div>` + acts(c, l, true);
+  }
+  function tipHTML(c, st) {
+    if (c.help !== 'hints' || !st.tip) return '';
+    return '<div class="tip" style="left:200px;top:150px"><b>At stake</b>Money on this invoice that doesn\'t match what was agreed. You may not owe it. Nothing is paid or sent automatically.</div>';
+  }
+  function screen(c, st) {
+    const d = data(st.phase);
+    const vars = THEME[c.theme];
+    const style = Object.entries(vars).map(([k, v]) => `--${k}:${v}`).join(';');
+    return `<div class="app${c.size === 'roomy' ? ' roomy' : ''}${st.recomputing ? ' recomputing' : ''}" style="${style}">${navHTML(c, d)}<div class="main">${hdrHTML(c, d)}<div class="ov">${heroHTML(c, d, st)}${nextHTML(c, d)}</div><div class="work"><div class="list">${listHTML(c, d, st)}</div><div class="panel">${panelHTML(c, d, st)}</div></div></div>${tipHTML(c, st)}</div>`;
+  }
+
+  /* ---------- stages ---------- */
+  function offsetIn(el, root) { let x = 0, y = 0; while (el && el !== root) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x, y }; }
+  function region(stage, kind) {
+    const app = stage.firstElementChild;
+    if (!app || kind === 'full') return { x: 0, y: 0, w: 1280, h: 760 };
+    const box = sel => { const el = app.querySelector(sel); const o = offsetIn(el, app); return { x: o.x, y: o.y, w: el.offsetWidth, h: el.offsetHeight }; };
+    const pad = (r, p) => ({ x: Math.max(0, r.x - p), y: Math.max(0, r.y - p), w: r.w + 2 * p, h: r.h + 2 * p });
+    if (kind === 'ov') return pad(box('.ov'), 12);
+    if (kind === 'list') { const r = box('.list'); return pad({ x: r.x, y: r.y, w: r.w, h: Math.min(r.h, 440) }, 12); }
+    if (kind === 'panel') return pad(box('.panel'), 12);
+    if (kind === 'head') { const m = box('.main'), l = box('.list'); return { x: m.x, y: 0, w: l.x + l.w - m.x + 12, h: l.y + 230 }; }
+    return { x: 0, y: 0, w: 1280, h: 760 };
+  }
+  const stages = [];
+  function makeStage(cropEl, kind, base) { const s = { crop: cropEl, el: cropEl.firstElementChild, kind, st: Object.assign({ phase: 1, sel: 1 }, base.st || {}), cfg: base.cfg || null, theme: base.theme || null, t: null, timers: [] }; stages.push(s); return s; }
+  let previewTheme = 'light';
+  const cfgFor = s => Object.assign({}, cfg, { theme: s.theme || previewTheme }, s.cfg || {});
+  function fit(s) {
+    const r = s.r || region(s.el, s.kind); s.r = r;
+    let sc;
+    if (s.kind === 'panel') { const avail = s.crop.parentElement.getBoundingClientRect().width - 22; sc = Math.min(1, avail / r.w); s.crop.style.width = Math.round(r.w * sc) + 'px'; s.crop.style.alignSelf = 'center'; }
+    else sc = s.crop.clientWidth / r.w;
+    s.scale = sc;
+    s.crop.style.height = Math.round(r.h * sc) + 'px';
+    s.el.style.transform = `scale(${sc}) translate(${-r.x}px,${-r.y}px)`;
+  }
+  function tween(el, from, to, dur) {
+    if (!el || from === to || reduce) return;
+    const t0 = performance.now();
+    const step = t => { const p = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - p, 3); el.textContent = M(Math.round(from + (to - from) * e)); if (p < 1) requestAnimationFrame(step); };
+    el.textContent = M(from); requestAnimationFrame(step);
+  }
+  function draw(s, opts = {}) {
+    const c = cfgFor(s);
+    const old = new Map();
+    if (opts.anim && !reduce) s.el.querySelectorAll('[data-key]').forEach(e => old.set(e.dataset.key, e.getBoundingClientRect().top));
+    const prevT = s.t;
+    s.el.innerHTML = screen(c, s.st);
+    s.t = TOT[s.st.phase];
+    if (!opts.keepRegion) s.r = null;
+    fit(s);
+    if (!opts.anim) return;
+    if (prevT) ['b', 'a', 's', 'w'].forEach(k => s.el.querySelectorAll(`[data-k="${k}"]`).forEach(el => tween(el, prevT[k], s.t[k], 600)));
+    if (reduce) return;
+    const sc = s.scale || 1;
+    s.el.querySelectorAll('[data-key]').forEach(e => {
+      const k = e.dataset.key;
+      if (!old.has(k)) { e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'linear' }); return; }
+      const dy = (old.get(k) - e.getBoundingClientRect().top) / sc;
+      if (Math.abs(dy) > .5) e.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 560, easing: 'cubic-bezier(.2,0,0,1)' });
+    });
+  }
+  function play(s, btn) {
+    s.timers.forEach(clearTimeout); s.timers = [];
+    const at = (ms, fn) => s.timers.push(setTimeout(fn, reduce ? ms * .3 : ms));
+    if (btn) btn.disabled = true;
+    s.st = { phase: 1, sel: null }; draw(s, { keepRegion: true });
+    at(250, () => { s.st = { phase: 1, sel: null, answered: true, recomputing: true }; draw(s, { keepRegion: true }); });
+    at(1250, () => { s.st = { phase: 1.5, sel: null, moved: 4 }; draw(s, { anim: true, keepRegion: true }); });
+    at(2800, () => { s.st = { phase: 2, sel: null, moved: 6 }; draw(s, { anim: true, keepRegion: true }); });
+    at(4400, () => { s.st = { phase: 2, sel: null }; draw(s, { keepRegion: true }); if (btn) btn.disabled = false; });
+  }
+
+  /* ---------- page ---------- */
+  const secEl = $('#sections');
+  secEl.innerHTML = SECTIONS.map((sec, i) => `<section class="sec" id="s-${sec.key}"><div class="sh"><div><div class="num">${i + 1} из ${SECTIONS.length}</div><h2>${sec.q}</h2></div><p>${sec.why}</p></div>
+    <div class="opts${sec.cols === 3 ? ' three' : ''}">${sec.options.map(o => `<div class="opt" role="button" tabindex="0" data-sec="${sec.key}" data-id="${o.id}" aria-pressed="false">
+      <div class="crop" data-crop="${sec.key}:${o.id}"><div class="stage"></div></div>
+      <div class="oh"><b>${o.name}</b><span class="tags">${o.rec ? '<span class="t rec">Рекомендую</span>' : ''}<span class="t on" data-chosen hidden>Выбрано</span></span></div>
+      <p class="od">${o.desc}</p></div>`).join('')}</div>
+    <div class="note"><label for="n-${sec.key}">Комментарий к «${sec.title}»</label><textarea id="n-${sec.key}" data-note="${sec.key}" rows="1" placeholder="Что нравится, что поменять"></textarea></div></section>`).join('');
+
+  const live = makeStage($('#live-crop'), 'full', { st: { phase: 1, sel: 1 } });
+  SECTIONS.forEach(sec => sec.options.forEach(o => {
+    const crop = secEl.querySelector(`[data-crop="${sec.key}:${o.id}"]`);
+    const st = { phase: 1, sel: 1, tip: sec.key === 'help' };
+    const s = makeStage(crop, sec.crop, { cfg: { [sec.key]: o.id }, st, theme: sec.key === 'theme' ? o.id : null });
+    s.sec = sec.key; s.opt = o.id;
+  }));
+  const big = makeStage($('#o-crop'), 'full', { st: { phase: 1, sel: 1 } });
+  let bigTheme = 'light';
+
+  function drawAll() { stages.forEach(s => { if (s === big && $('#ovl').hidden) return; s.timers.forEach(clearTimeout); draw(s); }); }
+  function markChosen() {
+    $$('.opt').forEach(o => { const on = cfg[o.dataset.sec] === o.dataset.id; o.setAttribute('aria-pressed', String(on)); o.querySelector('[data-chosen]').hidden = !on; });
+    const lines = [`База раунда 2: ${BASE}`].concat(SECTIONS.map(s => `${s.title}: ${s.options.find(o => o.id === cfg[s.key]).name}${notes[s.key] ? `. ${notes[s.key]}` : ''}`));
+    if (general) lines.push(`Общее: ${general}`);
+    $('#summary').textContent = lines.join('\n');
+  }
+
+  /* ---------- persistence ---------- */
+  const KEY = 'cargoos-round3';
+  /* final reference: always the chosen configuration */
+  let ref = null, chain = Promise.resolve(), noteT = null;
+  const status = $('#save-status');
+  const setStatus = (ok, t) => { status.className = 'status' + (ok ? ' ok' : ''); status.textContent = t; };
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify({ cfg, notes, general })); } catch (_) {}
+    markChosen();
+    if (!ref) return;
+    const body = JSON.parse(JSON.stringify({ choices: cfg, notes, general, updatedAt: new Date().toISOString() }));
+    chain = chain.then(() => ref.set(body)).then(() => setStatus(true, 'Выбор сохранён. Claude увидит его без копирования.'), () => setStatus(false, 'Не получилось сохранить на сервере. Нажми «Скопировать» внизу и пришли в чат.'));
+  }
+  function applyNotes() { $$('[data-note]').forEach(t => { if (document.activeElement !== t) t.value = notes[t.dataset.note] || ''; }); const g = $('#general'); if (document.activeElement !== g) g.value = general; }
+
+  /* ---------- events ---------- */
+  function choose(sec, id) {
+    if (cfg[sec] === id) return; cfg[sec] = id;
+    if (sec === 'theme') { previewTheme = id; $$('[data-th]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.th === id))); }
+    drawAll(); persist();
+  }
+  secEl.addEventListener('click', e => { const o = e.target.closest('.opt'); if (o) choose(o.dataset.sec, o.dataset.id); });
+  secEl.addEventListener('keydown', e => { const o = e.target.closest('.opt'); if (o && e.target === o && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choose(o.dataset.sec, o.dataset.id); } });
+  secEl.addEventListener('input', e => { const k = e.target.dataset.note; if (!k) return; notes[k] = e.target.value.trim(); if (!notes[k]) delete notes[k]; clearTimeout(noteT); noteT = setTimeout(persist, 900); });
+  $('#general').addEventListener('input', e => { general = e.target.value.trim(); clearTimeout(noteT); noteT = setTimeout(persist, 900); });
+  document.addEventListener('focusout', e => { if (e.target.matches && e.target.matches('textarea')) { clearTimeout(noteT); persist(); } });
+  $$('[data-th]').forEach(b => b.addEventListener('click', () => { previewTheme = b.dataset.th; $$('[data-th]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); drawAll(); }));
+  $$('[data-phase]').forEach(b => b.addEventListener('click', () => {
+    live.timers.forEach(clearTimeout); live.st = { phase: +b.dataset.phase, sel: +b.dataset.phase === 1 ? 1 : null }; draw(live, { keepRegion: true });
+    $$('[data-phase]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  $('#play').addEventListener('click', () => { $$('[data-phase]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.phase === '2'))); play(live, $('#play')); });
+  $('#reset-rec').addEventListener('click', () => { cfg = Object.assign({}, REC); previewTheme = cfg.theme; $$('[data-th]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.th === previewTheme))); drawAll(); persist(); });
+  function sizeBig() { const w = Math.min(window.innerWidth - 32, (window.innerHeight - 110) * 1280 / 760); big.crop.style.width = Math.max(280, w) + 'px'; big.r = null; fit(big); }
+  $('#open-full').addEventListener('click', () => {
+    $('#ovl').hidden = false; bigTheme = previewTheme; big.theme = bigTheme;
+    $$('[data-oth]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.oth === bigTheme)));
+    big.st = Object.assign({}, live.st, { recomputing: false }); if (big.st.phase === 1.5) big.st = { phase: 2, sel: null };
+    draw(big); sizeBig(); $('#oclose').focus();
+  });
+  $('#oclose').addEventListener('click', () => { $('#ovl').hidden = true; big.timers.forEach(clearTimeout); $('#open-full').focus(); });
+  $$('[data-oth]').forEach(b => b.addEventListener('click', () => { big.theme = b.dataset.oth; $$('[data-oth]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); draw(big, { keepRegion: true }); }));
+  $$('[data-ophase]').forEach(b => b.addEventListener('click', () => { big.timers.forEach(clearTimeout); big.st = { phase: +b.dataset.ophase, sel: +b.dataset.ophase === 1 ? 1 : null }; draw(big, { keepRegion: true }); $$('[data-ophase]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+  $('#oplay').addEventListener('click', () => { $$('[data-ophase]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.ophase === '2'))); play(big, $('#oplay')); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#ovl').hidden) $('#oclose').click(); });
+  $('#copy').addEventListener('click', () => {
+    const el = $('#summary'), b = $('#copy');
+    const fb = () => { const r = document.createRange(); r.selectNodeContents(el); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); b.textContent = 'Выделено'; };
+    try { navigator.clipboard.writeText(el.textContent).then(() => { b.textContent = 'Скопировано'; setTimeout(() => { b.textContent = 'Скопировать'; }, 1500); }, fb); } catch (_) { fb(); }
+  });
+  const ro = new ResizeObserver(() => stages.forEach(s => { if (s === big) return; fit(s); }));
+  stages.forEach(s => { if (s !== big) ro.observe(s.crop); });
+  window.addEventListener('resize', () => { if (!$('#ovl').hidden) sizeBig(); });
+
+  previewTheme = cfg.theme;
+  $$('[data-th]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.th === previewTheme)));
+  drawAll(); applyNotes(); markChosen();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => stages.forEach(s => { s.r = null; if (s.el.firstElementChild) fit(s); }));
+  setStatus(false, 'Выбор сохраняется в этом браузере. Если Claude его не увидит, нажми «Скопировать» внизу.');
+  (async () => {
+    try {
+      if (!window.claude || typeof window.claude.use !== 'function') return;
+      return; /* final reference: nothing is saved */
+      const snap = await ref.get();
+      if (snap.exists) {
+        const d = snap.data() || {}; cfg = Object.assign({}, REC, d.choices || {}); notes = Object.assign({}, d.notes || {}); general = d.general || '';
+        previewTheme = cfg.theme; $$('[data-th]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.th === previewTheme)));
+        drawAll(); applyNotes(); markChosen();
+      }
+      setStatus(true, 'Выбор сохраняется. Claude увидит его без копирования.');
+    } catch (_) { ref = null; }
+  })();
+})();
+</script>
