@@ -1,28 +1,35 @@
 "use client";
 // TEMPORARY preview of the cross-case inboxes (components/inboxes). Remove at integration, when
-// the sidebar lists these views. Scenario A plus a synthetic second case; answering or approving
-// moves the case to its next recorded stage.
+// the sidebar lists these views. Scenario A plus a synthetic second case; answering, accepting or
+// rejecting moves the case to its next recorded stage. The person picker stands in for the
+// screen's device setting (SPEC §8) and is not a product control.
 import { useState } from "react";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { cx } from "@/components/case/cx";
 import { ThemeToggle } from "@/components/case/theme-toggle";
 import { ApprovalsInbox } from "@/components/inboxes/approvals-inbox";
 import { approvalItems, inboxCounts, questionItems, type InboxCase } from "@/components/inboxes/items";
+import { MAYA, OPERATOR, SAM, type Person } from "@/components/inboxes/people";
 import { QuestionsInbox } from "@/components/inboxes/questions-inbox";
 import { CASE_B, caseB, inboxCase, scenarioAWithDraft, type CaseBStage } from "@/components/inboxes/sample";
 
-type AStage = "asking" | "drafted" | "approved";
-const A_AT = { asking: () => scenarioAAt("before"), drafted: () => scenarioAWithDraft(), approved: () => scenarioAWithDraft(true) };
+type AStage = "asking" | "requested" | "accepted" | "rejected";
+const A_AT: Record<AStage, () => ReturnType<typeof scenarioAAt>> = {
+  asking: () => scenarioAAt("before"), requested: () => scenarioAWithDraft("requested"),
+  accepted: () => scenarioAWithDraft("accepted"), rejected: () => scenarioAWithDraft("rejected"),
+};
 const B_NEXT: Record<CaseBStage, CaseBStage> = { asking: "one_answered", one_answered: "drafted", drafted: "approved", approved: "approved" };
+const VIEWERS: Person[] = [OPERATOR, SAM, MAYA];
 
 export default function InboxesPreview() {
   const [view, setView] = useState<"questions" | "approvals">("questions");
+  const [viewer, setViewer] = useState<Person>(SAM);
   const [a, setA] = useState<AStage>("asking");
   const [b, setB] = useState<CaseBStage>("asking");
   const [empty, setEmpty] = useState(false);
   const cases: InboxCase[] = empty ? [] : [inboxCase(SCENARIO_A, A_AT[a]()), inboxCase(CASE_B, caseB(b))];
   const counts = inboxCounts(cases);
-  const step = (caseId: string, to: "drafted" | "approved") => (caseId === SCENARIO_A.id ? setA(to) : setB(B_NEXT[b]));
+  const step = (caseId: string, to: AStage) => (caseId === SCENARIO_A.id ? setA(to) : setB(B_NEXT[b]));
 
   const navItem = (id: typeof view, label: string, n: number) => (
     <button type="button" onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}
@@ -38,6 +45,12 @@ export default function InboxesPreview() {
         {navItem("questions", "Questions", counts.questions)}
         {navItem("approvals", "Approvals", counts.approvals)}
         <div className="mt-auto flex flex-col gap-2 px-3 text-meta text-ink-2">
+          <label className="flex flex-col gap-1">Screen set to
+            <select value={viewer.id} onChange={(e) => setViewer(VIEWERS.find((p) => p.id === e.target.value)!)}
+              className="rounded-md border border-line-strong bg-surface px-2 py-1 text-ink">
+              {VIEWERS.map((p) => <option key={p.id} value={p.id}>{p.title ? `${p.name} — ${p.title}` : "One operator"}</option>)}
+            </select>
+          </label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={empty} onChange={(e) => setEmpty(e.target.checked)} />No cases</label>
           <button type="button" className="text-left underline" onClick={() => { setA("asking"); setB("asking"); }}>Start over</button>
           <ThemeToggle />
@@ -45,9 +58,11 @@ export default function InboxesPreview() {
       </nav>
       <main className="flex min-w-0 flex-1 flex-col">
         {view === "questions" ? (
-          <QuestionsInbox items={questionItems(cases)} onOpen={() => {}} onReply={(caseId) => step(caseId, "drafted")} />
+          <QuestionsInbox key={viewer.id} items={questionItems(cases)} viewer={viewer} onOpen={() => {}}
+            onReply={(caseId) => step(caseId, "requested")} />
         ) : (
-          <ApprovalsInbox items={approvalItems(cases)} onOpen={() => {}} onApprove={(caseId) => step(caseId, "approved")} />
+          <ApprovalsInbox key={viewer.id} items={approvalItems(cases)} viewer={viewer} onOpen={() => {}}
+            onAccept={(caseId) => step(caseId, "accepted")} onReject={(caseId) => step(caseId, "rejected")} />
         )}
       </main>
     </div>

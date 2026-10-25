@@ -2,21 +2,21 @@
 // Open ones oldest first; pick one to read it in full and answer next to the list. Answered ones
 // sit in a quiet section below with your answer quoted.
 import { useState } from "react";
-import type { Role } from "@/lib/types";
 import { StatusTag } from "@/components/case/bits";
 import { cx } from "@/components/case/cx";
 import { whenAt } from "@/components/case/format";
 import { StatusGlyph } from "@/components/case/glyphs";
-import { ALL_ROLES, canAct } from "@/components/case/roles";
+import { canAct } from "@/components/case/roles";
 import { ago, type QuestionItem } from "./items";
 import { CARD, InboxEmpty, InboxFrame, Item, ItemList, PRIMARY, SECONDARY, SectionLabel, useNow } from "./parts";
+import { ASKED, OPERATOR, type Person } from "./people";
 
 type Props = {
   items: QuestionItem[];
   onOpen: (caseId: string, questionId: string) => void;
   onReply: (caseId: string, questionId: string, text: string) => void;
-  /** Roles this screen holds; the answer box shows only with ops_lead. Default: all three. */
-  roles?: readonly Role[];
+  /** The person this screen is set to; the answer box shows only if they hold ops_lead. Default: one operator holding every role. */
+  viewer?: Person;
   /** Fixed clock for tests; the client clock otherwise. */
   now?: Date;
 };
@@ -26,13 +26,15 @@ export const QUESTIONS_EMPTY = {
   text: "CargoOS asks only when the documents can't settle a charge.",
 };
 
-export function QuestionsInbox({ items, onOpen, onReply, roles = ALL_ROLES, now: fixed }: Props) {
+export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now: fixed }: Props) {
   const clock = useNow();
   const now = fixed ?? clock;
   const open = items.filter((q) => q.status === "open");
   const answered = items.filter((q) => q.status === "answered");
   const [picked, setPicked] = useState<string | undefined>();
   const selected = items.find((q) => q.id === picked) ?? open[0];
+  const canReply = canAct(viewer.roles, "reply");
+  const waitingFor = canReply ? "Waiting for your answer" : `Waiting for ${ASKED.name}`;
 
   const row = (q: QuestionItem) => (
     <Item key={q.id} selected={q.id === selected?.id} onSelect={() => setPicked(q.id)}>
@@ -64,10 +66,10 @@ export function QuestionsInbox({ items, onOpen, onReply, roles = ALL_ROLES, now:
     <InboxFrame
       title="Questions"
       count={open.length ? `${open.length} waiting` : "None waiting"}
-      sub="Every question CargoOS asked you, across your cases. Oldest first."
+      sub={`Every question CargoOS asked ${canReply ? "you" : ASKED.name}, across your cases. Oldest first.`}
       list={
         <>
-          {open.length ? <ItemList label="Waiting for your answer">{open.map(row)}</ItemList> : <InboxEmpty {...QUESTIONS_EMPTY} />}
+          {open.length ? <ItemList label={waitingFor}>{open.map(row)}</ItemList> : <InboxEmpty {...QUESTIONS_EMPTY} />}
           {answered.length > 0 && (
             <>
               <SectionLabel>Answered</SectionLabel>
@@ -77,7 +79,7 @@ export function QuestionsInbox({ items, onOpen, onReply, roles = ALL_ROLES, now:
         </>
       }
       detail={selected && (
-        <QuestionDetail key={selected.id} q={selected} now={now} canReply={canAct(roles, "reply")}
+        <QuestionDetail key={selected.id} q={selected} now={now} canReply={canReply}
           onOpen={() => onOpen(selected.caseId, selected.questionId)}
           // Keep it selected once it moves to Answered, so you see your answer quoted.
           onReply={(text) => { setPicked(selected.id); onReply(selected.caseId, selected.questionId, text); }} />
@@ -102,7 +104,8 @@ function QuestionDetail({ q, now, canReply, onOpen, onReply }: DetailProps) {
         <section aria-label="Question"
           className={cx(CARD, "px-6 py-5", isOpen && "border-dashed border-waiting-line bg-waiting-row")}>
           <div className={cx("flex justify-between text-meta font-semibold", isOpen ? "text-waiting" : "text-ink-3")}>
-            <span>CargoOS asked you</span><span>{isOpen ? "Waiting for your answer" : "Answered"}</span>
+            <span>CargoOS asked {canReply ? "you" : ASKED.name}</span>
+            <span>{isOpen ? (canReply ? "Waiting for your answer" : `Waiting for ${ASKED.name}`) : "Answered"}</span>
           </div>
           <p className="mt-2 text-[17px] leading-[27px]">{q.text}</p>
           {isOpen && canReply && (
@@ -119,7 +122,7 @@ function QuestionDetail({ q, now, canReply, onOpen, onReply }: DetailProps) {
           )}
           {!isOpen && q.answer && (
             <figure className="mt-4">
-              <figcaption className="mb-1.5 text-meta font-semibold">Your answer</figcaption>
+              <figcaption className="mb-1.5 text-meta font-semibold">{canReply ? "Your answer" : `${ASKED.name}’s answer`}</figcaption>
               <blockquote className="rounded-lg bg-sunken px-4 py-3 text-body">“{q.answer.text}”</blockquote>
               {q.answer.at && now && <p className="mt-2 text-xs text-ink-3">Answered {whenAt(q.answer.at, now)}.</p>}
             </figure>

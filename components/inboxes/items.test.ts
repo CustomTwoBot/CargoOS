@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { ago, approvalItems, inboxCounts, questionItems } from "./items";
-import { allAsking, CASE_B, caseB, inboxCase, scenarioAWithDraft } from "./sample";
+import { allAsking, CASE_B, caseB, DEMO_REJECTION, inboxCase, scenarioAWithDraft } from "./sample";
 
 describe("questionItems", () => {
   it("lists every open question across cases, oldest first", () => {
@@ -40,26 +40,39 @@ describe("questionItems", () => {
 });
 
 describe("approvalItems", () => {
-  it("drafts waiting for approval come first, oldest first, with total, lines and when they were drafted", () => {
+  it("requests to decide come first, oldest request first, with who asked, total, lines and chips' numbers", () => {
     const items = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("drafted"))]);
-    expect(items.map((d) => [d.caseTitle, d.status, d.total, d.lineCount, d.draftedAt])).toEqual([
-      ["Bayline 20GP Yantian-Oakland", "waiting", "$400", 1, "2026-10-24T11:40:00-07:00"],
-      ["Bayline 40HC Ningbo-LB", "waiting", "$700", 2, "2026-10-24T14:07:00-07:00"],
+    expect(items.map((d) => [d.caseTitle, d.status, d.total, d.lineCount, d.requestedBy, d.requestedAt])).toEqual([
+      ["Bayline 20GP Yantian-Oakland", "pending", "$400", 1, "maya", "2026-10-24T11:40:05-07:00"],
+      ["Bayline 40HC Ningbo-LB", "pending", "$700", 2, "maya", "2026-10-24T14:07:05-07:00"],
     ]);
-    expect(items[1]).toMatchObject({ forwarder: "Pacific Crest Logistics", subject: "Invoice PCL-INV-1012: 2 disputed lines ($700)" });
-    expect(items[1].lines.map((l) => [l.lineNo, l.description, l.delta])).toEqual([
-      [1, "Ocean freight 40HC Ningbo-Long Beach", "+$300"], [6, "Rush handling", "+$400"],
+    expect(items[1]).toMatchObject({ forwarder: "Pacific Crest Logistics", subject: "", message: "" });
+    expect(items[1].lines.map((l) => [l.lineNo, l.description, l.agreed, l.billed, l.delta])).toEqual([
+      [1, "Ocean freight 40HC Ningbo-Long Beach", "$4,500", "$4,800", "+$300"],
+      [6, "Rush handling", undefined, "$400", "+$400"],
     ]);
   });
 
-  it("approved drafts follow, latest approval first; rejected drafts are left out", () => {
-    const rejected = { ...caseB("drafted"), drafts: [{ ...caseB("drafted").drafts[0], status: "rejected" as const }] };
-    const items = approvalItems([inboxCase(CASE_B, caseB("approved")), inboxCase(SCENARIO_A, scenarioAWithDraft(true))]);
-    expect(items.map((d) => [d.caseId, d.status, d.approvedAt])).toEqual([
-      ["case_A", "approved", "2026-10-24T14:10:00-07:00"],
-      ["case_B", "approved", "2026-10-24T11:52:00-07:00"],
+  it("decided ones follow, latest decision first: accepted with the message, rejected with the reason", () => {
+    const items = approvalItems([inboxCase(CASE_B, caseB("approved")), inboxCase(SCENARIO_A, scenarioAWithDraft("rejected"))]);
+    expect(items.map((d) => [d.caseId, d.status, d.decidedBy, d.decidedAt])).toEqual([
+      ["case_A", "rejected", "sam", "2026-10-24T14:10:00-07:00"],
+      ["case_B", "accepted", "sam", "2026-10-24T11:52:00-07:00"],
     ]);
-    expect(approvalItems([inboxCase(CASE_B, rejected)])).toEqual([]);
+    expect(items[0]).toMatchObject({ rejectionReason: DEMO_REJECTION, message: "" });
+    expect(items[1].subject).toBe("Invoice PCL-INV-2210: 1 disputed line ($400)");
+    expect(items[1].message).toMatch(/^Hi Derek,/);
+  });
+
+  it("an edited message replaces CargoOS's draft", () => {
+    const x = scenarioAWithDraft("accepted");
+    const [d] = approvalItems([inboxCase(SCENARIO_A, { ...x, drafts: [{ ...x.drafts[0], editedBody: "Hi Derek, edited." } as typeof x.drafts[0]] })]);
+    expect(d.message).toBe("Hi Derek, edited.");
+  });
+
+  it("drafts nobody requested yet stay out", () => {
+    const x = scenarioAWithDraft();
+    expect(approvalItems([inboxCase(SCENARIO_A, { ...x, drafts: [{ ...x.drafts[0], status: "draft" }] })])).toEqual([]);
   });
 
   it("without a forwarder name the party is named by its role", () => {
@@ -69,13 +82,13 @@ describe("approvalItems", () => {
 });
 
 describe("inboxCounts", () => {
-  it("counts open questions and drafts waiting for approval, never answered or approved ones", () => {
-    expect(inboxCounts(allAsking())).toEqual({ questions: 3, approvals: 0 });
+  it("counts open questions, requests to decide and rejections, never answered or accepted ones", () => {
+    expect(inboxCounts(allAsking())).toEqual({ questions: 3, approvals: 0, rejected: 0 });
     expect(inboxCounts([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("one_answered"))]))
-      .toEqual({ questions: 1, approvals: 1 });
-    expect(inboxCounts([inboxCase(SCENARIO_A, scenarioAWithDraft(true)), inboxCase(CASE_B, caseB("approved"))]))
-      .toEqual({ questions: 0, approvals: 0 });
-    expect(inboxCounts([])).toEqual({ questions: 0, approvals: 0 });
+      .toEqual({ questions: 1, approvals: 1, rejected: 0 });
+    expect(inboxCounts([inboxCase(SCENARIO_A, scenarioAWithDraft("rejected")), inboxCase(CASE_B, caseB("approved"))]))
+      .toEqual({ questions: 0, approvals: 0, rejected: 1 });
+    expect(inboxCounts([])).toEqual({ questions: 0, approvals: 0, rejected: 0 });
   });
 });
 

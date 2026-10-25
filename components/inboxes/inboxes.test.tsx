@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { ApprovalsInbox } from "./approvals-inbox";
 import { approvalItems, questionItems } from "./items";
 import { QuestionsInbox } from "./questions-inbox";
-import { allAsking, CASE_B, caseB, inboxCase, scenarioAWithDraft } from "./sample";
+import { MAYA, SAM } from "./people";
+import { allAsking, CASE_B, caseB, DEMO_REJECTION, inboxCase, scenarioAWithDraft } from "./sample";
 
 const NOW = new Date("2026-10-24T15:55:00-07:00");
 const list = (name: string) => screen.getByRole("list", { name });
@@ -87,63 +88,129 @@ describe("QuestionsInbox", () => {
     expect(screen.queryByRole("region", { name: "Question" })).not.toBeInTheDocument();
   });
 
-  it("a screen without ops lead reads the question but gets no answer box", () => {
-    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} roles={["clerk"]} />);
-    expect(screen.getByRole("region", { name: "Question" })).toBeInTheDocument();
+  it("Maya (no ops lead) sees the question as waiting for Sam, with no answer box", () => {
+    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} viewer={MAYA} />);
+    const q = screen.getByRole("region", { name: "Question" });
+    expect(within(q).getByText("CargoOS asked Sam")).toBeInTheDocument();
+    expect(within(q).getByText("Waiting for Sam")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Waiting for Sam" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Your answer")).not.toBeInTheDocument();
+  });
+
+  it("Sam (owner) is asked directly", () => {
+    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} viewer={SAM} />);
+    expect(screen.getByText("CargoOS asked you")).toBeInTheDocument();
+    expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
   });
 });
 
 describe("ApprovalsInbox", () => {
   afterEach(cleanup);
-  const drafted = () => approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("drafted"))]);
+  const requested = () => approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("drafted"))]);
+  const props = { onOpen: vi.fn(), onAccept: vi.fn(), onReject: vi.fn(), now: NOW };
 
-  it("lists drafts waiting for approval with forwarder, total, lines and when drafted", () => {
-    render(<ApprovalsInbox items={drafted()} onOpen={vi.fn()} onApprove={vi.fn()} now={NOW} />);
-    expect(screen.getByText("2 waiting")).toBeInTheDocument();
-    const rows = items("Waiting for approval");
+  it("lists requests to decide with forwarder, total, lines and who requested them", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={SAM} />);
+    expect(screen.getByText("2 to decide")).toBeInTheDocument();
+    const rows = items("Waiting for a decision");
     expect(within(rows[0]).getByText("Bayline 20GP Yantian-Oakland")).toBeInTheDocument();
     expect(within(rows[0]).getByText("$400")).toBeInTheDocument();
     expect(within(rows[0]).getByText("Pacific Crest Logistics · 1 line")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Pacific Crest Logistics · 2 lines")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Drafted 1 hour ago")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Requested by Maya, 1 hour ago")).toBeInTheDocument();
   });
 
-  it("selecting one shows the email; Approve sends case and draft", () => {
-    const onApprove = vi.fn(), onOpen = vi.fn();
-    render(<ApprovalsInbox items={drafted()} onOpen={onOpen} onApprove={onApprove} now={NOW} />);
-    fireEvent.click(items("Waiting for approval")[1]);
-    const email = screen.getByRole("region", { name: "Dispute email" });
-    expect(within(email).getByText("Invoice PCL-INV-1012: 2 disputed lines ($700)")).toBeInTheDocument();
-    expect(within(email).getByText("Line 1 +$300, Line 6 +$400")).toBeInTheDocument();
-    expect(within(screen.getByRole("complementary", { name: "Approval" })).getByText("$700")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    expect(onApprove).toHaveBeenCalledWith("case_A", "draft_1");
+  it("the owner sees chips with the numbers, then Accept sends case and draft", () => {
+    const onAccept = vi.fn(), onOpen = vi.fn();
+    render(<ApprovalsInbox items={requested()} {...props} onAccept={onAccept} onOpen={onOpen} viewer={SAM} />);
+    fireEvent.click(items("Waiting for a decision")[1]);
+    const lines = screen.getByRole("region", { name: "Lines to dispute" });
+    expect(within(lines).getByText("Agreed $4,500 → Billed $4,800 (+$300)")).toBeInTheDocument();
+    expect(within(lines).getByText("No agreement · $400")).toBeInTheDocument();
+    const decision = screen.getByRole("complementary", { name: "Decision" });
+    expect(within(decision).getByText("$700")).toBeInTheDocument();
+    expect(within(decision).getByText("Requested by Maya, 2:07 PM.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Message to the seller" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(onAccept).toHaveBeenCalledWith("case_A", "draft_1");
     fireEvent.click(screen.getByRole("button", { name: "Open case" }));
     expect(onOpen).toHaveBeenCalledWith("case_A", "draft_1");
   });
 
-  it("approved ones say nothing was sent and offer no Approve", () => {
-    const cases = [inboxCase(SCENARIO_A, scenarioAWithDraft(true)), inboxCase(CASE_B, caseB("drafted"))];
-    render(<ApprovalsInbox items={approvalItems(cases)} onOpen={vi.fn()} onApprove={vi.fn()} now={NOW} />);
-    expect(screen.getByText("1 waiting")).toBeInTheDocument();
-    const done = items("Approved");
-    expect(within(done[0]).getByText(/Approved today at 2:10 PM\. Nothing was sent\./)).toBeInTheDocument();
+  it("Reject needs a reason, then sends it; Cancel goes back", () => {
+    const onReject = vi.fn();
+    render(<ApprovalsInbox items={requested()} {...props} onReject={onReject} viewer={SAM} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(screen.getByText(/A reason is required\. It goes back to Maya\. Nothing goes to the seller\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(onReject).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Why are you rejecting it?"), { target: { value: ` ${DEMO_REJECTION} ` } });
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(onReject).toHaveBeenCalledWith("case_B", "draft_B", DEMO_REJECTION);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+  });
+
+  it("whoever requested it can't accept it", () => {
+    const onAccept = vi.fn();
+    const mine = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("requested", "sam"))]);
+    render(<ApprovalsInbox items={mine} {...props} onAccept={onAccept} viewer={SAM} />);
+    const accept = screen.getByRole("button", { name: "Accept" });
+    expect(accept).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("You requested this, so you can't approve it.")).toBeInTheDocument();
+    expect(screen.getByText("Requested by you, 2:07 PM.")).toBeInTheDocument();
+    fireEvent.click(accept);
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  it("Maya (no controller) sees the request waiting for Sam, with no Accept or Reject", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={MAYA} />);
+    expect(screen.getByText("Waiting for Sam to decide.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(within(items("Waiting for a decision")[0]).getByText(/Requested by you/)).toBeInTheDocument();
+  });
+
+  it("accepted: the message to the seller with locked numbers, Export PDF and Copy text, nothing sent", async () => {
+    const print = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const cases = [inboxCase(SCENARIO_A, scenarioAWithDraft("accepted")), inboxCase(CASE_B, caseB("drafted"))];
+    render(<ApprovalsInbox items={approvalItems(cases)} {...props} viewer={SAM} print={print} />);
+    expect(screen.getByText("1 to decide")).toBeInTheDocument();
+    const done = items("Decided");
+    expect(within(done[0]).getByText("Accepted by you, 2:10 PM")).toBeInTheDocument();
     fireEvent.click(done[0]);
-    expect(screen.getByText("Approved. Nothing was sent.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.getByText("Accepted by you, 2:10 PM. Nothing was sent.")).toBeInTheDocument();
+    const msg = screen.getByRole("region", { name: "Message to the seller" });
+    expect(within(msg).getByRole("textbox", { name: "Message" })).toHaveAttribute("contenteditable", "true");
+    const locked = [...msg.querySelectorAll("[data-locked]")].map((c) => c.textContent);
+    expect(locked).toEqual(expect.arrayContaining(["$700", "Line 1", "$4,800", "$300", "Line 6", "$400"]));
+    msg.querySelectorAll("[data-locked]").forEach((c) => expect(c).toHaveAttribute("contenteditable", "false"));
+    expect(within(msg).getByText("CargoOS never sends this. You send it yourself.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export PDF" }));
+    expect(print.mock.calls[0][0]).toContain("Invoice PCL-INV-1012: 2 disputed lines ($700)");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Copy text" })); });
+    expect(writeText.mock.calls[0][0]).toMatch(/^Subject: Invoice PCL-INV-1012: 2 disputed lines \(\$700\)\n\nHi Derek,/);
+    expect(screen.getByText("Copied.")).toBeInTheDocument();
   });
 
-  it("empty: says how a dispute gets here", () => {
-    render(<ApprovalsInbox items={[]} onOpen={vi.fn()} onApprove={vi.fn()} now={NOW} />);
-    expect(screen.getByText("No disputes waiting for approval.")).toBeInTheDocument();
-    expect(screen.getByText(/once you draft it in a case/)).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Dispute email" })).not.toBeInTheDocument();
+  it("rejected: the reason, and that it went back to Maya", () => {
+    render(<ApprovalsInbox items={approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("rejected"))])} {...props} viewer={MAYA} />);
+    expect(screen.getByText("No requests waiting.")).toBeInTheDocument();
+    fireEvent.click(items("Decided")[0]);
+    expect(screen.getByText("Rejected by Sam:")).toBeInTheDocument();
+    expect(screen.getByText(`“${DEMO_REJECTION}”`)).toBeInTheDocument();
+    expect(screen.getByText("It went back to you. Nothing went to the seller.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Message to the seller" })).not.toBeInTheDocument();
   });
 
-  it("a screen without controller sees the email but no Approve", () => {
-    render(<ApprovalsInbox items={drafted()} onOpen={vi.fn()} onApprove={vi.fn()} now={NOW} roles={["clerk", "ops_lead"]} />);
-    expect(screen.getByRole("region", { name: "Dispute email" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  it("empty: says how a request gets here", () => {
+    render(<ApprovalsInbox items={[]} {...props} />);
+    expect(screen.getByText("No requests waiting.")).toBeInTheDocument();
+    expect(screen.getByText(/when someone requests approval/)).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Decision" })).not.toBeInTheDocument();
   });
 });

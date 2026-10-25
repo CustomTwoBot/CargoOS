@@ -1,17 +1,22 @@
-// Cross-case inboxes: what waits on the operator across every case in flight (questions to answer,
-// disputes to approve). Pure: built from each case as the case screen receives it, so the sidebar
+// Cross-case inboxes: what waits on each person across every case in flight (questions to answer,
+// approval requests to accept or reject; SPEC "Changes on Oct 24 evening"). Pure: built from each case as the case screen receives it, so the sidebar
 // counts, the lists and the case tabs always agree. Amounts come from the case, never from here.
 import type { DemoCase } from "@/components/case/demo-case";
 import { capitalize, delta, inCurrency, money } from "@/components/case/format";
 import { groupTotals } from "@/components/case/totals";
 import { currencyOf, instant, toRows, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
-import type { CaseEvent, Draft, Party, SourceSpan } from "@/lib/types";
+import type { CaseEvent, Party, SourceSpan } from "@/lib/types";
+import { decisionOf } from "./people";
 
 /** One case as the inboxes read it. `forwarder` names the party a dispute goes to, when known. */
 export type InboxCase = { demo: DemoCase; x: CaseInput; forwarder?: string };
 
 /** An invoice line a question or a dispute covers. */
-export type InboxLine = { key: string; lineNo: number; description: string; group: UiGroup; billed: string; delta: string };
+export type InboxLine = {
+  key: string; lineNo: number; description: string; group: UiGroup; billed: string; delta: string;
+  /** What was agreed for the line, when the engine found an agreement above zero ($0 means nobody agreed to it). */
+  agreed?: string;
+};
 
 export type QuestionItem = {
   /** Unique across cases: `${caseId}:${questionId}`. */
@@ -25,21 +30,32 @@ export type QuestionItem = {
   answer?: { text: string; at?: string };
 };
 
+/** pending_approval → pending, approved → accepted, rejected → rejected. Drafts nobody requested yet stay out. */
+export type ApprovalStatus = "pending" | "accepted" | "rejected";
+
+// TEMPORARY local shape: requestedBy / decidedBy / rejectionReason come from SPEC §5.5 (see people.ts).
 export type ApprovalItem = {
   /** Unique across cases: `${caseId}:${draftId}`. */
   id: string; caseId: string; caseTitle: string; draftId: string;
-  status: "waiting" | "approved";
-  forwarder: string; to: Party; subject: string; body: string;
+  status: ApprovalStatus;
+  forwarder: string; to: Party;
   /** Draft.totalDisputedCents, formatted: "$700". */
   total: string; lineCount: number; lines: InboxLine[];
-  draftedAt?: string; approvedAt?: string;
+  /** Person ids. */
+  requestedBy?: string; decidedBy?: string;
+  requestedAt?: string; decidedAt?: string;
+  rejectionReason?: string;
+  /** The message to the seller, once accepted: CargoOS's draft, or the owner's edit of it. Empty until drafted. */
+  subject: string; message: string;
 };
 
-export type InboxCounts = { questions: number; approvals: number };
+/** What the sidebar shows: open questions, requests waiting for a decision, rejections sent back. */
+export type InboxCounts = { questions: number; approvals: number; rejected: number };
 
 const line = (r: Row): InboxLine => ({
   key: r.key, lineNo: r.lineNo, description: r.description, group: r.group,
   billed: inCurrency(r.billedCents, r.currency), delta: delta(r.deltaCents),
+  agreed: r.finding.expectedCents ? inCurrency(r.finding.expectedCents, r.currency) : undefined,
 });
 
 const eventAt = (events: CaseEvent[], type: CaseEvent["type"], match: (p: Record<string, unknown>) => boolean) =>
@@ -76,37 +92,44 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
   return [...open, ...answered];
 }
 
-const WAITING: Draft["status"][] = ["draft", "pending_approval"];
+const STATUS: Partial<Record<string, ApprovalStatus>> = { pending_approval: "pending", approved: "accepted", rejected: "rejected" };
 
-/** Every dispute draft waiting for approval (oldest first), then approved ones (latest first). Rejected drafts are left out. */
+/** Requests to decide (oldest request first), then decided ones (latest decision first). */
 export function approvalItems(cases: InboxCase[]): ApprovalItem[] {
   const all = cases.flatMap(({ demo, x, forwarder }) => {
     const rows = new Map(toRows(x).map((r) => [r.key, r]));
-    return x.drafts.filter((d) => d.status === "approved" || WAITING.includes(d.status)).map((d): ApprovalItem => {
+    return x.drafts.flatMap((d): ApprovalItem[] => {
+      const status = STATUS[d.status];
+      if (!status) return [];
+      const extra = decisionOf(d);
       const forDraft = (p: Record<string, unknown>) => p.draftId === d._id;
-      return {
-        id: `${demo.id}:${d._id}`, caseId: demo.id, caseTitle: demo.title, draftId: d._id,
-        status: d.status === "approved" ? "approved" : "waiting",
+      return [{
+        id: `${demo.id}:${d._id}`, caseId: demo.id, caseTitle: demo.title, draftId: d._id, status,
         forwarder: forwarder ?? capitalize(d.to), to: d.to,
-        subject: d.subject, body: d.body,
         total: money(d.totalDisputedCents), lineCount: d.findingKeys.length,
         lines: d.findingKeys.flatMap((k) => (rows.has(k) ? [line(rows.get(k)!)] : [])),
-        draftedAt: eventAt(x.events, "draft_created", forDraft),
-        approvedAt: d.status === "approved" ? eventAt(x.events, "approved", forDraft) : undefined,
-      };
+        requestedBy: extra.requestedBy,
+        requestedAt: eventAt(x.events, "approval_requested", forDraft) ?? eventAt(x.events, "draft_created", forDraft),
+        decidedBy: status === "accepted" ? extra.acceptedBy : status === "rejected" ? extra.rejectedBy : undefined,
+        decidedAt: status === "accepted" ? eventAt(x.events, "approved", forDraft) : status === "rejected" ? extra.rejectedAt : undefined,
+        rejectionReason: status === "rejected" ? extra.rejectionReason : undefined,
+        subject: status === "accepted" ? d.subject : "",
+        message: status === "accepted" ? extra.editedBody ?? d.body : "",
+      }];
     });
   });
-  const waiting = all.filter((d) => d.status === "waiting")
-    .sort((a, b) => byTime(a.draftedAt, b.draftedAt) || a.caseTitle.localeCompare(b.caseTitle));
-  const approved = all.filter((d) => d.status === "approved").sort((a, b) => byTime(b.approvedAt, a.approvedAt));
-  return [...waiting, ...approved];
+  const pending = all.filter((d) => d.status === "pending")
+    .sort((a, b) => byTime(a.requestedAt, b.requestedAt) || a.caseTitle.localeCompare(b.caseTitle));
+  const decided = all.filter((d) => d.status !== "pending").sort((a, b) => byTime(b.decidedAt, a.decidedAt));
+  return [...pending, ...decided];
 }
 
-/** What the sidebar shows next to each inbox: open questions and disputes waiting for approval. */
 export function inboxCounts(cases: InboxCase[]): InboxCounts {
+  const drafts = cases.flatMap(({ x }) => x.drafts);
   return {
     questions: cases.reduce((n, { x }) => n + x.questions.filter((q) => q.status === "open").length, 0),
-    approvals: cases.reduce((n, { x }) => n + x.drafts.filter((d) => WAITING.includes(d.status)).length, 0),
+    approvals: drafts.filter((d) => d.status === "pending_approval").length,
+    rejected: drafts.filter((d) => d.status === "rejected").length,
   };
 }
 
