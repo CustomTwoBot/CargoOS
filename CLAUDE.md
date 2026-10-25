@@ -8,7 +8,7 @@ CargoOS checks a freight invoice against what was actually agreed (quotes, email
 ## Stack (nothing else without asking)
 - Next.js (App Router) + TypeScript + Tailwind + shadcn/ui, deployed on Vercel
 - Convex: database, file storage, queries, mutations, actions
-- Claude API via the Anthropic TypeScript SDK. Model: `CLAUDE_MODEL_TBD` (team will fill in; read it from one constant in `lib/ai/config.ts`)
+- Claude API via the Anthropic TypeScript SDK. Model: `claude-sonnet-5-5` (read it from the one constant in `lib/ai/config.ts`)
 - Zod for validating every LLM output
 - Vitest (unit + component), Playwright (end-to-end), GitHub Actions (CI)
 
@@ -16,9 +16,9 @@ CargoOS checks a freight invoice against what was actually agreed (quotes, email
 | Owner | Folders |
 |---|---|
 | Dev | `lib/engine/`, `convex/pipeline.ts` |
-| Arpan | `lib/ai/`, Convex actions that call Claude |
+| Arpan | Claude extraction (`lib/ai/extract.ts`, its Convex action); coordinate with Pranav, who now owns the rest of `lib/ai/` |
 | Dzhamal | `app/`, `components/` |
-| Pranav | `convex/schema.ts`, `convex/seed.ts`, `fixtures/`, `scripts/`, `.github/`, `CLAUDE.md` |
+| Pranav | `convex/schema.ts`, `convex/seed.ts`, `convex/ai.ts`, `lib/ai/` (except `extract.ts`), `fixtures/`, `scripts/`, `.github/`, `CLAUDE.md` |
 
 Only edit files in your own area. If you need a change elsewhere, stop and leave a note (TODO comment + tell the owner) instead of editing it.
 
