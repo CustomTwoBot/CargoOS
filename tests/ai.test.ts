@@ -125,16 +125,35 @@ describe("planQuestion code rules", () => {
     expect(questionCandidates(state, state.findings)?.to).toBe("ops_lead");
   });
 
+  it("every question goes to the owner (ops_lead), whatever role a line was routed to, in one question", () => {
+    const state = INPUTS.planA;
+    const routed = state.findings.map((f, i) =>
+      (f.status === "needs_review" ? { ...f, routeTo: (["clerk", "controller", "uploader"] as const)[i % 3] } : f));
+    const group = questionCandidates(state, routed);
+    expect(group?.to).toBe("ops_lead");
+    expect(group?.findings.map((f) => f.lineNo)).toEqual([4, 6]);
+  });
+
   it("asks nothing, without calling Claude, when no line is askable (A-clean)", async () => {
     await expect(planQuestion(INPUTS.planClean, INPUTS.planClean.findings, { send: neverCalled })).resolves.toBeNull();
   });
 
-  it("never asks again about a line already in an open question; closed questions don't block", async () => {
+  // Changed Oct 25 (agreed with Pranav, SPEC 6 "Engine decisions"): closed_unresolved now blocks too.
+  it("never asks again about a line in an open or closed-unresolved question; answered questions don't block", async () => {
     const open: Question = { ...INPUTS.questionA, status: "open" };
     const state = { ...INPUTS.planA, questions: [open] };
     await expect(planQuestion(state, state.findings, { send: neverCalled })).resolves.toBeNull();
     const closed = { ...INPUTS.planA, questions: [{ ...open, status: "closed_unresolved" as const }] };
-    await expect(planQuestion(closed, closed.findings, { send: fakeSender(plan()) })).resolves.toMatchObject({ findingKeys: ["chg_4", "chg_6"] });
+    await expect(planQuestion(closed, closed.findings, { send: neverCalled })).resolves.toBeNull();
+    const answered = { ...INPUTS.planA, questions: [{ ...open, status: "answered" as const }] };
+    await expect(planQuestion(answered, answered.findings, { send: fakeSender(plan()) })).resolves.toMatchObject({ findingKeys: ["chg_4", "chg_6"] });
+  });
+
+  it("a new waiting line after an unresolved question is asked about alone, without re-asking the closed lines", async () => {
+    const closed: Question = { ...INPUTS.questionA, status: "closed_unresolved" };
+    const extra: Finding = { ...INPUTS.planA.findings[0], key: "chg_9", lineNo: 9, status: "needs_review", ruleId: "R6_NO_EVIDENCE" };
+    const state = { ...INPUTS.planA, questions: [closed] };
+    expect(questionCandidates(state, [...state.findings, extra])?.findings.map((f) => f.lineNo)).toEqual([9]);
   });
 
   it("code sets the lines covered and drops citations that are not real quotes", async () => {
