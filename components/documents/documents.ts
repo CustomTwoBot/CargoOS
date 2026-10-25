@@ -5,7 +5,7 @@ import { compareInstants, formatShortDate } from "@/lib/engine/money";
 import type { CaseEvent, ChargeType, Fact, SourceDoc } from "@/lib/types";
 import { highlight, replacedBy } from "@/components/case/evidence";
 import { money } from "@/components/case/format";
-import { instant, type CaseInput } from "@/components/case/view-model";
+import { currentFindings, instant, type CaseInput } from "@/components/case/view-model";
 
 export const KIND: Record<SourceDoc["type"], string> = {
   quote: "Quote", email: "Email", chat: "Chat", proforma: "Proforma", freight_invoice: "Invoice", reply: "Your answer", other: "Note",
@@ -34,7 +34,7 @@ export const pacificDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric" });
 
 export type DocStatus =
-  | { state: "read"; label: string }
+  | { state: "read"; label: string; read: string }
   | { state: "failed"; label: "Couldn't read" }
   | { state: "waiting"; label: "Waiting to be read" };
 
@@ -55,10 +55,10 @@ export function statusOf(doc: SourceDoc, events: CaseEvent[]): DocStatus {
   const added = mine.filter((e) => e.type === "doc_added").at(-1);
   if (!result || (added && instant(added.at) > instant(result.at))) return { state: "waiting", label: "Waiting to be read" };
   if (result.type === "extraction_failed") return { state: "failed", label: "Couldn't read" };
-  const label = doc.type === "freight_invoice"
-    ? `Read, ${plural(count(result.payload.chargeIds), "invoice line", "invoice lines")}`
-    : `Read, ${plural(count(result.payload.factIds), "fact", "facts")}`;
-  return { state: "read", label };
+  const read = doc.type === "freight_invoice"
+    ? plural(count(result.payload.chargeIds), "invoice line", "invoice lines")
+    : plural(count(result.payload.factIds), "fact", "facts");
+  return { state: "read", label: `Read, ${read}`, read };
 }
 
 /** The case's documents, oldest first; documents without a date go last. */
@@ -73,7 +73,7 @@ export function docRows(x: CaseInput): DocRow[] {
     }));
 }
 
-export type Item = { id: string; quote: string; text: string; note?: string };
+export type Item = { id: string; quote: string; text: string; note?: string; lines?: number[] };
 
 /** What one fact means, in plain words. Numbers come from the fact, never computed. */
 function factText(f: Fact, x: CaseInput): string {
@@ -98,12 +98,14 @@ function factText(f: Fact, x: CaseInput): string {
 export function itemsOf(x: CaseInput, doc: SourceDoc): Item[] {
   const replaced = replacedBy(x.facts);
   const docs = new Map(x.documents.map((d) => [d._id, d]));
+  const findings = currentFindings(x);
   const facts: Item[] = x.facts.filter((f) => f.span.docId === doc._id).map((f) => {
     const newer = replaced.get(f._id);
     const by = newer && docs.get(newer.span.docId);
     return {
       id: f._id, quote: f.span.quote, text: factText(f, x),
       note: newer ? `Replaced by the ${by ? KIND[by.type].toLowerCase() : "document"} of ${formatShortDate(newer.effectiveAt)}` : undefined,
+      lines: findings.filter((g) => g.factIds.includes(f._id)).map((g) => g.lineNo),
     };
   });
   const charges: Item[] = x.charges.filter((c) => c.docId === doc._id).sort((a, b) => a.lineNo - b.lineNo)
@@ -135,4 +137,27 @@ export function segmentsOf(text: string, items: Pick<Item, "id" | "quote">[]): {
   }
   if (pos < text.length) segments.push({ text: text.slice(pos) });
   return { segments, missing };
+}
+
+/** "Used for line 1" / "Used for lines 2 and 4": which invoice lines a fact was checked against. */
+export function usedFor(lines: number[] | undefined): string | undefined {
+  if (!lines?.length) return undefined;
+  if (lines.length === 1) return `Used for line ${lines[0]}`;
+  return `Used for lines ${lines.slice(0, -1).join(", ")} and ${lines.at(-1)}`;
+}
+
+export type Track = { received?: string; read: DocStatus; used?: { n: number; of: number } };
+
+/** Received, read and used in the current checks: the three steps of a document (tracker view). */
+export function trackOf(x: CaseInput, doc: SourceDoc): Track {
+  const arrived = x.events.filter((e) => docIdOf(e) === doc._id && (e.type === "doc_added" || e.type === "reply_received"))
+    .sort((a, b) => instant(a.at) - instant(b.at))[0];
+  const received = arrived && pacificDate(arrived.at);
+  const read = statusOf(doc, x.events);
+  if (read.state !== "read") return { received, read };
+  const findings = currentFindings(x);
+  const checked = doc.type === "freight_invoice"
+    ? x.charges.filter((c) => c.docId === doc._id).map((c) => findings.some((g) => g.chargeId === c._id))
+    : x.facts.filter((f) => f.span.docId === doc._id).map((f) => findings.some((g) => g.factIds.includes(f._id)));
+  return { received, read, used: { n: checked.filter(Boolean).length, of: checked.length } };
 }
