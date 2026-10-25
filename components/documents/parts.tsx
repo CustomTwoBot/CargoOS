@@ -45,7 +45,7 @@ export function DocumentText({ text, items, active, selected, onPick }: {
 }) {
   const { segments } = segmentsOf(text, items);
   return (
-    <p data-testid="document-text" className="whitespace-pre-wrap break-words rounded-lg border border-line bg-surface p-3 text-[13px] leading-5">
+    <p data-testid="document-text" className="min-w-0 whitespace-pre-wrap rounded-lg border border-line bg-surface p-3 text-[13px] leading-5 [overflow-wrap:anywhere]">
       {segments.map((s, i) => s.id
         ? <mark key={i} data-quote={s.id} data-selected={selected === s.id || undefined} onClick={() => onPick?.(s.id!)}
             className={cx("cursor-pointer", selected !== s.id && LIGHT,

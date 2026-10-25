@@ -49,7 +49,7 @@ export function Chain({ x, row, onQuote }: { x: CaseInput; row: Row; onQuote: On
               <div>
                 <div className="text-[14px] font-[650] leading-5">Result</div>
                 <div className="mt-[3px] text-[15px] leading-[22px]">
-                  {chain.result.text}{chain.result.amount && <b className="ml-1.5 text-[17px] font-[650] text-dispute">{chain.result.amount}</b>}
+                  {chain.result.text}
                 </div>
               </div>
             ) : (

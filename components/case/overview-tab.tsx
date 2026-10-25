@@ -6,9 +6,10 @@ import { InlineLineEditor } from "@/components/inputs/line-inline";
 import type { EditableLine, LineChange } from "@/components/inputs/line-edit";
 import { RowTagChip } from "./bits";
 import { cx } from "./cx";
-import { delta, money } from "./format";
+import { delta, inCurrency, money } from "./format";
 import { StatusGlyph } from "./glyphs";
 import type { ChangeNote, Issue } from "./issues";
+import { tagLabel } from "./issue-views";
 import { chipOf } from "./row-chip";
 import { useRowMoves } from "./row-moves";
 import type { GroupView, Row, UiGroup } from "./view-model";
@@ -54,6 +55,7 @@ type ListProps = {
 
 export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharges, canReply = true, asked = "the owner" }: ListProps) {
   const ref = useRef<HTMLUListElement>(null);
+  const [showCleared, setShowCleared] = useState(false);
   const [showAll, setShowAll] = useState(false);
   useRowMoves(ref, moveMs, movingKey);
   const toDecide = issues.filter((i) => i.kind !== "dispute");
@@ -81,14 +83,25 @@ export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharge
           )),
         ])}
         <li data-key="cleared" className="border-t border-line">
-          <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
+          <button type="button" onClick={() => setShowCleared((v) => !v)} aria-expanded={showCleared}
             className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-sunken">
             <span className="text-cleared"><StatusGlyph group="cleared" /></span>
             <Parts parts={["Cleared", cleared.rows.length, money(cleared.billedCents)]} />
-            <span aria-hidden="true" className="ml-auto text-ink-3">{showAll ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true" className="ml-auto text-ink-3">{showCleared ? "⌃" : "⌄"}</span>
           </button>
         </li>
+        {showCleared && cleared.rows.map((r) => (
+          <li key={r.key} data-key={r.key} className="border-t border-line">
+            <ClearedRow row={r} />
+          </li>
+        ))}
       </ul>
+      <div className="border-t border-line px-5 py-2">
+        <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
+          className="text-meta font-medium text-ink-3 hover:text-ink">
+          {showAll ? "Hide invoice lines" : "All invoice lines · edit"}
+        </button>
+      </div>
       {showAll && <div className="border-t border-line px-3 py-3">{allCharges}</div>}
     </section>
   );
@@ -107,7 +120,8 @@ function SectionHead({ parts, first }: { parts: ReactNode[]; first: boolean }) {
   return <h3 className={cx("bg-sunken px-5 py-1.5", first ? "rounded-t-xl" : "border-t border-line")}><Parts parts={parts} /></h3>;
 }
 
-const ROW = "grid w-full grid-cols-[14px_minmax(0,1fr)_auto_88px_52px] items-center gap-x-3 px-5 py-3 text-left hover:bg-sunken";
+const ROW_GRID = "grid w-full grid-cols-[14px_minmax(0,1fr)_auto_88px_52px] items-center gap-x-3 px-5 py-3 text-left";
+const ROW = `${ROW_GRID} hover:bg-sunken`;
 const CHIP = "max-w-[260px] truncate rounded-sm border border-line px-2 text-meta font-medium leading-[22px] text-ink-2";
 
 function LineRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "line" }>; onOpen: (id: string) => void }) {
@@ -127,6 +141,22 @@ function LineRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "line" }>
 }
 
 /** "2 charges need your answer", or "2 charges wait for Sam's answer" on a screen that doesn't answer. */
+/** A cleared line: nothing to decide, so not a button. */
+function ClearedRow({ row: r }: { row: Row }) {
+  return (
+    <div className={ROW_GRID}>
+      <span className="text-cleared"><StatusGlyph group="cleared" /></span>
+      <span className="flex min-w-0 items-center gap-2 text-row font-medium text-ink-2">
+        <span className="truncate">{r.description}</span>
+        {r.tag && r.tag !== "Just cleared" && <RowTagChip>{tagLabel(r.tag)}</RowTagChip>}
+      </span>
+      <span className={CHIP}>{chipOf(r)}</span>
+      <span className="text-right text-[15px] font-semibold text-ink-2">{inCurrency(r.billedCents, r.currency)}</span>
+      <span />
+    </div>
+  );
+}
+
 function QuestionRow({ issue: i, onOpen, answerer }: { issue: Extract<Issue, { kind: "question" }>; onOpen: (id: string) => void; answerer?: string }) {
   const conflict = i.rows.length > 0 && i.rows.every((r) => r.finding.ruleId === "R7_CONFLICT");
   const need = answerer ? `${plural(i.rows.length, "charge waits", "charges wait")} for ${answerer}'s answer`
@@ -138,7 +168,7 @@ function QuestionRow({ issue: i, onOpen, answerer }: { issue: Extract<Issue, { k
       <span className="truncate text-row font-semibold">{name}</span>
       {conflict ? <span className={CHIP}>Sources disagree</span> : <span />}
       <span className="text-right text-[15px] font-semibold text-waiting">{i.amount}</span>
-      <span className="text-right text-meta font-semibold text-link">{answerer ? "Open" : "Answer"}</span>
+      <span aria-hidden="true" className="text-right text-ink-3">›</span>
     </button>
   );
 }

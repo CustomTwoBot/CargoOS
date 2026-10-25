@@ -13,7 +13,7 @@ import { approvalItems, type InboxCase } from "@/components/inboxes/items";
 import { AddEvidenceButton, CaseMenu } from "./case-menu";
 import { CaseTabs, CaseViews, type CaseView } from "./case-tabs";
 import type { CaseActions, CaseLocal } from "./case-store";
-import { CaseHeader, DraftButton } from "./chrome";
+import { CaseHeader, DraftButton, OpenDisputeButton } from "./chrome";
 import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
 import { changeNotes, issuesOf, openQuestions, questionTitle, type Issue } from "./issues";
@@ -69,10 +69,14 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
   const asked = ASKED ? firstName(ASKED) : "the owner";
   const history = reviews ? historyEntries(x) : uploaderEntries(historyEntries(x));
 
-  const draftDisabledReason = rechecking ? "CargoOS is rechecking. Wait a moment."
-    : totals.atStakeCents === 0 ? "Nothing to dispute. At stake is $0."
-    : draft && draft.status !== "rejected" ? (decides ? "A dispute is already drafted." : "Approval is already requested.")
-    : !ready ? "In this replay, answer the open questions first." : undefined;
+  const drafted = !!draft && draft.status !== "rejected";
+  const open = openQuestions(x).length;
+  const blocked = rechecking ? { why: "CargoOS is rechecking. Wait a moment.", short: "Rechecking…" }
+    : totals.atStakeCents === 0 ? { why: "Nothing to dispute. At stake is $0.", short: "Nothing to dispute" }
+    : !ready ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
+        : open ? `Answer ${open} ${open === 1 ? "question" : "questions"} first` : "Answer the questions first" }
+    : undefined;
+  const onDispute = view === "case" && tab === "dispute";
   const pill = casePill(x);
 
   return (
@@ -81,10 +85,10 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
         pill={!reviews ? undefined : pill.label === "Waiting for your answer" && !canAct(roles, "reply") ? { ...pill, label: `Waiting for ${asked}` } : pill}
         actions={reviews ? (
           <>
-            {canAct(roles, "draftDispute") && (
-              <DraftButton label={decides ? "Draft dispute" : "Request approval"} disabledReason={draftDisabledReason}
-                onDraft={() => { if (actions.draftDispute()) openTab("dispute"); }} />
-            )}
+            {canAct(roles, "draftDispute") && (drafted
+              ? !onDispute && <OpenDisputeButton onOpen={() => openTab("dispute")} />
+              : <DraftButton label={decides ? "Draft dispute" : "Request approval"} blocked={blocked}
+                  onDraft={() => { if (actions.draftDispute()) openTab("dispute"); }} />)}
             <CaseMenu onAddEvidence={canAct(roles, "addEvidence") ? actions.addEvidence : undefined} />
           </>
         ) : <AddEvidenceButton onAdd={actions.addEvidence} />} />

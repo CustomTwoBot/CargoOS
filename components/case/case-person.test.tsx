@@ -49,7 +49,10 @@ describe("owner (Sam)", () => {
     render(<Case viewer={SAM} />);
     expect(viewNames()).toEqual(["Review", "Documents4", "History9"]);
     expect(screen.getByTestId("at-stake")).toHaveTextContent("$300");
-    expect(screen.getByRole("button", { name: "Draft dispute" })).toBeInTheDocument();
+    const draft = screen.getByRole("button", { name: "Draft dispute" });
+    expect(draft).toHaveAttribute("aria-disabled", "true");
+    expect(draft).not.toHaveClass("bg-primary");
+    expect(screen.getByTestId("draft-blocked")).toHaveTextContent("Answer 1 question first");
     expect(screen.queryByRole("button", { name: "Request approval" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
@@ -62,7 +65,7 @@ describe("bookkeeper (Maya)", () => {
     render(<Case viewer={MAYA} />);
     expect(screen.getByTestId("case-pill")).toHaveTextContent("Waiting for Sam");
     const list = screen.getByRole("region", { name: "To decide" });
-    expect(within(list).getByRole("button", { name: /2 charges wait for Sam's answer/ })).toHaveTextContent("Open");
+    expect(within(list).getByRole("button", { name: /2 charges wait for Sam's answer/ })).toBeInTheDocument();
     expect(within(list).getAllByRole("heading").map((h) => h.textContent)).toContain("Questions for Sam · 1");
     fireEvent.click(screen.getByRole("tab", { name: /Sam's answer/ }));
     expect(screen.queryByLabelText("Your answer")).not.toBeInTheDocument();
@@ -80,7 +83,10 @@ describe("bookkeeper (Maya)", () => {
     expect(screen.getByRole("tab", { name: /Dispute/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
     expect(screen.getByText("Waiting for Sam to decide.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Request approval" })).toHaveAttribute("title", "Approval is already requested.");
+    expect(screen.queryByRole("button", { name: "Request approval" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open dispute" }));
+    expect(screen.getByRole("tab", { name: /Dispute/ })).toHaveAttribute("aria-selected", "true");
   });
 
   it("sees the owner's reason after a reject and can request again", () => {

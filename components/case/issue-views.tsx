@@ -8,7 +8,10 @@ import { cx } from "./cx";
 import { Chain, DocumentView } from "./evidence-panel";
 import { delta, inCurrency, whenAt } from "./format";
 import { StatusGlyph } from "./glyphs";
-import { GROUP_NAME, type CaseInput, type Row } from "./view-model";
+import { GROUP_NAME, type CaseInput, type Row, type RowTag } from "./view-model";
+
+/** Row tags in this screen's words; "Dismissed by clerk" is a spec string and stays. */
+export const tagLabel = (t: RowTag): string => (t === "Finding confirmed by clerk" ? "You agreed" : t);
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
 /** Two columns from 1024px; below that the story stacks (§0.2, §0.3). */
@@ -44,13 +47,13 @@ export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: Line
           <span data-testid="decision-status" className={cx("inline-flex items-center gap-1.5 text-meta font-semibold", TONE[row.group])}>
             <StatusGlyph group={row.group} />{GROUP_NAME[row.group]}
           </span>
-          {row.tag && <RowTagChip>{row.tag}</RowTagChip>}
+          {row.tag && <RowTagChip>{tagLabel(row.tag)}</RowTagChip>}
         </div>
         <div>
           <h2 className="text-title font-[650] tracking-[-0.012em]">{row.description}</h2>
-          <p className="mt-0.5 text-[13px] text-ink-2">Line {row.lineNo} · billed {inCurrency(row.billedCents, row.currency)}</p>
+          <p className="mt-0.5 text-[13px] text-ink-2">Line {row.lineNo}{row.group !== "dispute" && ` · billed ${inCurrency(row.billedCents, row.currency)}`}</p>
         </div>
-        {row.group === "dispute" && <div className="text-hero font-[650] text-dispute">{delta(row.deltaCents)}</div>}
+        {row.group === "dispute" && <div className="text-delta font-[650] text-dispute">{delta(row.deltaCents)}</div>}
         <p className="text-why text-ink-2">{row.why}</p>
         {canVerdict && row.group !== "cleared" && (
           <div className="flex flex-wrap gap-2 pt-1">
