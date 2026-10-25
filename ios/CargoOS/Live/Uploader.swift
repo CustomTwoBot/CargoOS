@@ -1,9 +1,9 @@
 import Foundation
 import UIKit
 
-/// The person this phone is set to (SPEC §5.5, lib/people.ts): Sam, the owner, holds
-/// `ops_lead` (answers questions) and `uploader` (adds documents). No login.
-let devicePersonId = "sam"
+/// The person this phone is set to (SPEC §5.5, lib/people.ts), picked on the first screen or in
+/// Settings; Sam until then. Every person holds `uploader`. No login.
+var devicePersonId: String { DeviceSettings.person.id }
 
 /// Sends evidence kept on the phone to the case through `convex/uploads.ts` (Pranav):
 /// a file goes to storage (`generateUploadUrl`, POST) and becomes a document (`addDocument`);

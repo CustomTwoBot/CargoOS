@@ -1,17 +1,25 @@
-# CargoOS for iOS (ops lead)
+# CargoOS for iOS
 
-A native SwiftUI app for the **ops lead**, the person who knows what was agreed
-informally. On this phone they:
+A native SwiftUI app with the redesigned interface (docs/design.md §0.5): a bill-pay app that checks
+first. Every screen answers "how much of this freight bill can I safely pay?".
 
-- **answer CargoOS's questions** (Questions tab) and see what their answer changed,
-- **look at a shipment** read-only: At stake, To dispute / Waiting / Cleared, each line's
-  evidence chain with verbatim quotes, documents and history (Shipments tab),
-- **add evidence** (Evidence tab and the system share sheet): WhatsApp chat exports
-  (.txt or .zip), emails (.eml or pasted), PDFs, photos of paper invoices (text read on the
-  phone with Vision), or plain pasted text.
+- **Get started** → **Who uses this phone?** Sam (owner), Maya (bookkeeper) or Leo (uploader). No login;
+  the person is a device setting (App Group `cargoos.person`), changeable in Settings.
+- **Bills**: "Good afternoon, Sam" with Safe to pay / On hold / Waiting, and the bill with its pay / hold / ask bar
+  and the one next step for this person.
+- **Bill**: "You can safely pay $6,600 of $7,500", the approval track (checked → answered → asked → decided →
+  message), the one card that needs you, then every line grouped Hold / Ask / Pay. Tap a line for its evidence,
+  Keep in dispute or Not an issue (bookkeeper).
+- **The answer (M3)**: Sam answers CargoOS; the phone shows how it read each line ("Agreed", "Not agreed", with the
+  words it read it from) before rechecking; lines then move with a "Moved" tag.
+- **Approval (P3)**: Maya asks, Sam accepts or rejects with a required reason; whoever asked can't approve
+  (checked again on the server, logged as approval blocked).
+- **Message (L1)**: after Accept, CargoOS's draft signed by Sam. Edit the words; amounts and line numbers are locked.
+  Copy text, Share or Save PDF. Nothing is ever sent by CargoOS.
+- **Add**: WhatsApp chat, PDF or email, photo of a paper, paste, or Share → CargoOS from any app. Leo sees no amounts.
 
-The phone holds only the `ops_lead` role (`deviceRoles` in `CaseStore.swift`, design §0).
-It never agrees, disputes or approves. Nothing is sent or paid.
+Rehearsals: launch with `-demoStage answered|requested|accepted|rejected` to start the replay at that step,
+and `-convexURL none` to force the replay on a simulator that points at a server.
 
 ## Run it
 

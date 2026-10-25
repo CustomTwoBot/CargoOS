@@ -1,9 +1,34 @@
 import Foundation
+import SwiftUI
 import Observation
 
-/// What this phone holds (design §0, SPEC §5.5): Sam's ops-lead and uploader roles. It answers
-/// CargoOS's questions and adds documents; it never agrees, disputes or approves.
-let deviceRoles: Set<Role> = [.ops_lead, .uploader]
+/// What this phone holds (SPEC §5.5): the roles of the person it is set to. Controls show only
+/// for roles held; the server checks every mutation again by person.
+var deviceRoles: Set<Role> { DeviceSettings.person.roles }
+
+/// How CargoOS read one line of an answer (the M3 "Is this what you meant?" card).
+struct LineReading: Identifiable, Hashable {
+    enum Verdict: String { case agreed = "Agreed", notAgreed = "Not agreed", unsure = "Not sure" }
+    let key: String
+    let lineNo: Int
+    let name: String
+    let billedCents: Int
+    let verdict: Verdict
+    /// The words of the answer that led to it, verbatim.
+    let quote: String?
+    var id: String { key }
+}
+
+/// One step of the approval track (P3): who did it and when, or who does it next.
+struct TrackStep: Identifiable, Hashable {
+    enum State { case done, current, later, refused }
+    let id: String
+    let initial: String
+    let who: String
+    let title: String
+    let detail: String
+    let state: State
+}
 
 /// One case as the screens see it, whichever source it came from.
 struct CaseSnapshot {
@@ -52,6 +77,33 @@ final class CaseStore {
     private var replayRechecking = false
     private var replayReplyText = ""
     private var replayAnsweredAt: String?
+    private var replayDraft: Draft?
+    private var replayVerdicts: [String: String] = [:]
+    private var replayEvents: [CaseEvent] = []
+    /// The owner's edits of the message to the seller, by draft id. Kept on this phone.
+    private(set) var letterEdits: [String: String] = [:]
+
+    /// The person this phone is set to.
+    private(set) var person: Person = DeviceSettings.person
+    private(set) var onboarded: Bool = DeviceSettings.onboarded
+
+    func setPerson(_ p: Person) {
+        DeviceSettings.person = p
+        person = p
+    }
+
+    func finishOnboarding(as p: Person) {
+        setPerson(p)
+        DeviceSettings.onboarded = true
+        onboarded = true
+    }
+
+    func signOut() {
+        DeviceSettings.onboarded = false
+        onboarded = false
+    }
+
+    func clearError() { actionError = nil }
 
     init(sharedInbox: SharedInbox = SharedInbox(), client: ConvexClient? = ServerConfig.deploymentURL.map { ConvexClient(deploymentURL: $0) }) {
         self.sharedInbox = sharedInbox
@@ -179,16 +231,22 @@ final class CaseStore {
 
     // MARK: - Question
 
-    private var myQuestions: [Question] {
-        (snapshot?.questions ?? []).filter { deviceRoles.contains($0.to) }.sorted { $0.createdAt < $1.createdAt }
+    private var allQuestions: [Question] {
+        (snapshot?.questions ?? []).sorted { $0.createdAt < $1.createdAt }
     }
 
-    /// The open question to this phone, or the latest one it answered.
+    /// The open question, or the latest one answered. Everyone sees it; only its addressee answers.
     var question: Question? {
-        myQuestions.last { $0.status == "open" } ?? myQuestions.last
+        allQuestions.last { $0.status == "open" } ?? allQuestions.last
     }
 
-    var hasOpenQuestion: Bool { question?.status == "open" && replyState != .rechecking }
+    /// An open question this person answers.
+    var hasOpenQuestion: Bool {
+        guard let q = question else { return false }
+        return q.status == "open" && replyState != .rechecking && person.holds(q.to)
+    }
+
+    var canAnswer: Bool { question.map { person.holds($0.to) } ?? false }
 
     var replyState: ReplyState {
         switch source {
@@ -243,7 +301,7 @@ final class CaseStore {
 
     func submitReply(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard deviceRoles.contains(.ops_lead), !trimmed.isEmpty, replyState == .open, let q = question else { return }
+        guard let q = question, person.holds(q.to), !trimmed.isEmpty, replyState == .open else { return }
         actionError = nil
         switch source {
         case .replay:
@@ -289,11 +347,33 @@ final class CaseStore {
     }
 
     func resetDemo() {
-        guard source == .replay else { return }
+        letterEdits = [:]
+        actionError = nil
+        guard source == .replay else {
+            Task { await resetLive() }
+            return
+        }
         replayAnswered = false
         replayReplyText = ""
         replayAnsweredAt = nil
+        replayDraft = nil
+        replayVerdicts = [:]
+        replayEvents = []
         rebuildReplay()
+    }
+
+    /// Live: the presenter's reset (`seed:resetLiveDemo`), then the new case is looked up again.
+    private func resetLive() async {
+        guard let client else { return }
+        struct Args: Encodable { let personId: String }
+        do {
+            let _: String = try await client.mutation("seed:resetLiveDemo", Args(personId: person.id))
+            caseId = nil
+            pendingQuestionId = nil
+            await refresh()
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     // MARK: - History
@@ -434,6 +514,7 @@ final class CaseStore {
         guard let f = fixture else { return }
         let revision = replayAnswered ? 2 : 1
         let findings = (f.findings[String(revision)] ?? []).sorted { $0.lineNo < $1.lineNo }
+            .map { $0.with(verdict: replayVerdicts[$0.key]) }
         var caseInfo = f.case
         caseInfo.revision = revision
         var question = f.question
@@ -444,8 +525,8 @@ final class CaseStore {
         snapshot = CaseSnapshot(
             caseInfo: caseInfo, documents: documents, facts: f.facts, charges: f.charges,
             findings: findings, changes: replayAnswered ? f.changes : [], totals: CaseTotals(findings),
-            questions: [question], replies: replayAnswered ? [f.reply] : [], draft: replayAnswered ? f.draft : nil,
-            events: events
+            questions: [question], replies: replayAnswered ? [f.reply] : [], draft: replayDraft,
+            events: events + replayEvents
         )
     }
 }
@@ -459,5 +540,370 @@ extension CaseSnapshot {
             totals: CaseTotals(view.findings, server: view.totals),
             questions: view.questions, replies: view.replies, draft: view.draft, events: view.events
         )
+    }
+}
+
+// MARK: - The redesign: pay / hold / ask, the answer's reading, approval, the letter
+
+extension Finding {
+    /// The same finding with the clerk's verdict set (replay keeps verdicts on the phone).
+    func with(verdict: String?) -> Finding {
+        guard let verdict else { return self }
+        var f = Finding(key: key, caseId: caseId, chargeId: chargeId, lineNo: lineNo, revision: revision, status: status,
+                        ruleId: ruleId, billedCents: billedCents, expectedCents: expectedCents, deltaCents: deltaCents,
+                        factIds: factIds, evidence: evidence, missing: missing, routeTo: routeTo, explanation: explanation,
+                        userVerdict: verdict, userVerdictBy: .clerk)
+        f.learnedRuleId = learnedRuleId
+        return f
+    }
+}
+
+extension Draft {
+    func with(status: String, requestedBy: String? = nil, approvedBy: String? = nil,
+              rejectedBy: String? = nil, rejectionReason: String? = nil) -> Draft {
+        Draft(id: id, caseId: caseId, to: to, subject: subject, body: body, findingKeys: findingKeys,
+              totalDisputedCents: totalDisputedCents, status: status, createdBy: createdBy,
+              requestedBy: requestedBy ?? self.requestedBy, approvedBy: approvedBy ?? self.approvedBy,
+              rejectedBy: rejectedBy ?? self.rejectedBy, rejectionReason: rejectionReason ?? self.rejectionReason)
+    }
+}
+
+extension CaseStore {
+    // MARK: Pay / Hold / Ask
+
+    /// What can safely be paid: everything that matches what was agreed. The engine's agreed total.
+    var payCents: Int { totals.agreedCents }
+    /// More than agreed: the engine's at-stake total.
+    var holdCents: Int { totals.atStakeCents }
+    /// Waiting for an answer.
+    var askCents: Int { totals.waitingCents }
+
+    var forwarder: String { caseInfo?.forwarder ?? "Pacific Crest Logistics" }
+
+    var invoiceRef: String {
+        let title = documents.first { $0.type == .freight_invoice }?.title ?? caseInfo?.shipmentRef ?? "Invoice"
+        return title.replacingOccurrences(of: "Invoice ", with: "")
+    }
+
+    /// Lines in one money group, in invoice order.
+    func lines(_ group: LineGroup) -> [Finding] { findings(in: group) }
+
+    func name(of f: Finding) -> String { charge(for: f)?.description ?? "Line \(f.lineNo)" }
+
+    /// The moves of the latest recheck, by finding key: where the line came from.
+    var movedKeys: Set<String> {
+        Set((snapshot?.changes ?? []).filter { c in
+            guard let from = c.from else { return false }
+            return LineGroup(status: from.status) != LineGroup(status: c.to.status)
+        }.map(\.key))
+    }
+
+    // MARK: The answer's reading (M3)
+
+    private func readings(from facts: [Fact], answer: String) -> [LineReading] {
+        questionFindings.map { f in
+            let type = charge(for: f)?.chargeType
+            let fact = facts.first { $0.chargeType == type && ($0.kind == "approval" || $0.kind == "rejection") }
+            let verdict: LineReading.Verdict = fact?.kind == "approval" ? .agreed : fact?.kind == "rejection" ? .notAgreed : .unsure
+            return LineReading(key: f.key, lineNo: f.lineNo, name: name(of: f), billedCents: f.billedCents,
+                               verdict: verdict, quote: fact?.span.quote)
+        }
+    }
+
+    /// Replay: how CargoOS reads the recorded answer, shown before anything is rechecked.
+    var replayPreviewReadings: [LineReading] {
+        guard source == .replay, let f = fixture else { return [] }
+        return readings(from: f.facts.filter { $0.origin == "reply" }, answer: f.reply.docId)
+    }
+
+    /// After an answer: how CargoOS read it, line by line (facts from the reply).
+    var answerReadings: [LineReading] {
+        guard replyState == .answered, let s = snapshot else { return [] }
+        if source == .replay { return replayAnswered ? readings(from: s.facts.filter { $0.origin == "reply" }, answer: "") : [] }
+        guard let reply = answerReply else { return [] }
+        let ids = Set(reply.factIds)
+        return readings(from: s.facts.filter { ids.contains($0.id) }, answer: reply.docId)
+    }
+
+    // MARK: Approval (P3)
+
+    var canRequest: Bool { person.holds(.clerk) && holdCents > 0 && replyState != .rechecking }
+
+    /// Why this person can't accept or reject the pending draft, or nil when they can (CLAUDE.md rule 8).
+    var decisionBlockedReason: String? {
+        guard let d = draft, d.status == "pending_approval" else { return nil }
+        if !person.holds(.controller) { return "Only \(People.owner.first) can accept or reject a dispute." }
+        if d.requestedBy == person.id { return "You asked for this dispute, so another owner decides." }
+        return nil
+    }
+
+    private func replayEvent(_ type: String, actor: String) {
+        let e = CaseEvent(id: "local_\(replayEvents.count + 1)", caseId: caseInfo?.id ?? "", at: ISODate.string(Date()),
+                          actor: actor, type: type)
+        replayEvents.append(e)
+    }
+
+    struct Decision: Decodable { let ok: Bool; let reason: String? }
+
+    func requestApproval() async {
+        guard canRequest else { return }
+        actionError = nil
+        switch source {
+        case .replay:
+            guard let base = fixture?.draft else { return }
+            replayDraft = base.with(status: "pending_approval", requestedBy: person.id)
+            replayEvent("approval_requested", actor: "clerk")
+            rebuildReplay()
+        case .live:
+            guard let client, let caseId else { return }
+            struct Args: Encodable { let caseId: String; let personId: String }
+            do {
+                let _: String = try await client.mutation("drafts:requestApproval", Args(caseId: caseId, personId: person.id))
+                await refresh()
+            } catch { actionError = error.localizedDescription }
+        }
+    }
+
+    func accept() async { await decide(approve: true, reason: nil) }
+
+    func reject(reason: String) async {
+        let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !why.isEmpty else { actionError = "A reason is required to reject."; return }
+        await decide(approve: false, reason: why)
+    }
+
+    /// Tries to decide; a blocked attempt is refused and logged, as the server does.
+    func decide(approve: Bool, reason: String?) async {
+        guard let d = draft, d.status == "pending_approval" else { return }
+        actionError = nil
+        switch source {
+        case .replay:
+            if let blocked = decisionBlockedReason {
+                replayEvent("approval_blocked", actor: "system")
+                actionError = blocked
+                rebuildReplay()
+                return
+            }
+            replayDraft = approve
+                ? d.with(status: "approved", approvedBy: person.id)
+                : d.with(status: "rejected", rejectedBy: person.id, rejectionReason: reason)
+            replayEvent(approve ? "approved" : "draft_rejected", actor: "controller")
+            rebuildReplay()
+        case .live:
+            guard let client else { return }
+            do {
+                let result: Decision
+                if approve {
+                    struct Args: Encodable { let draftId: String; let personId: String }
+                    result = try await client.mutation("drafts:approveDraft", Args(draftId: d.id, personId: person.id))
+                } else {
+                    struct Args: Encodable { let draftId: String; let personId: String; let reason: String }
+                    result = try await client.mutation("drafts:rejectDraft", Args(draftId: d.id, personId: person.id, reason: reason ?? ""))
+                }
+                if !result.ok { actionError = result.reason ?? "Not allowed." }
+                await refresh()
+            } catch { actionError = error.localizedDescription }
+        }
+    }
+
+    /// Keep in dispute (confirmed) or Not an issue (false_positive), as the clerk.
+    func setVerdict(_ key: String, _ verdict: String) async {
+        guard person.holds(.clerk) else { return }
+        switch source {
+        case .replay:
+            replayVerdicts[key] = verdict
+            replayEvent(verdict == "confirmed" ? "finding_confirmed" : "finding_dismissed", actor: "clerk")
+            rebuildReplay()
+        case .live:
+            guard let client, let caseId else { return }
+            struct Args: Encodable { let role = "clerk"; let personId: String; let caseId: String; let key: String }
+            do {
+                let _: String? = try? await client.mutation(
+                    verdict == "confirmed" ? "pipeline:confirmFinding" : "pipeline:dismissFinding",
+                    Args(personId: person.id, caseId: caseId, key: key))
+                await refresh()
+            }
+        }
+    }
+
+    /// The approval track: checked → answered → asked to approve → decided → message.
+    var track: [TrackStep] {
+        guard let s = snapshot else { return [] }
+        func at(_ type: String) -> String? { s.events.last { $0.type == type }?.at }
+        let owner = People.owner
+        let answered = replyState == .answered
+        let d = s.draft
+        let requester = People.byId(d?.requestedBy)
+        var steps = [
+            TrackStep(id: "checked", initial: "C", who: "CargoOS", title: "Checked \(charges.count) lines",
+                      detail: ISODate.short(at("recomputed")), state: at("recomputed") == nil ? .current : .done),
+            TrackStep(id: "answered", initial: owner.initial, who: owner.first,
+                      title: answered ? "Answered" : "Answer CargoOS",
+                      detail: answered ? ISODate.short(answeredAt) : "waiting", state: answered ? .done : (question == nil ? .done : .current)),
+        ]
+        let requested = d != nil
+        steps.append(TrackStep(id: "requested", initial: requester?.initial ?? "M", who: requester?.first ?? "Maya",
+                               title: requested ? "Asked to approve" : "Ask to approve",
+                               detail: requested ? Money.usd(d!.totalDisputedCents) : "bookkeeper",
+                               state: requested ? .done : (answered && holdCents > 0 ? .current : .later)))
+        switch d?.status {
+        case "approved":
+            steps.append(TrackStep(id: "decided", initial: owner.initial, who: owner.first, title: "Accepted", detail: ISODate.short(at("approved")), state: .done))
+            steps.append(TrackStep(id: "message", initial: owner.initial, who: owner.first, title: "Write to seller", detail: "nothing is sent", state: .current))
+        case "rejected":
+            steps.append(TrackStep(id: "decided", initial: owner.initial, who: owner.first, title: "Rejected", detail: "back to \(requester?.first ?? "Maya")", state: .refused))
+            steps.append(TrackStep(id: "message", initial: owner.initial, who: owner.first, title: "Write to seller", detail: "nothing is sent", state: .later))
+        case "pending_approval":
+            let self_ = d?.requestedBy == owner.id
+            steps.append(TrackStep(id: "decided", initial: self_ ? "?" : owner.initial, who: self_ ? "Another owner" : owner.first,
+                                   title: "Accept or reject", detail: self_ ? "not the one who asked" : "reason to reject", state: .current))
+            steps.append(TrackStep(id: "message", initial: owner.initial, who: owner.first, title: "Write to seller", detail: "nothing is sent", state: .later))
+        default:
+            steps.append(TrackStep(id: "decided", initial: owner.initial, who: owner.first, title: "Accept or reject", detail: "owner", state: .later))
+            steps.append(TrackStep(id: "message", initial: owner.initial, who: owner.first, title: "Write to seller", detail: "nothing is sent", state: .later))
+        }
+        return steps
+    }
+
+    // MARK: The letter (L1)
+
+    /// The message to the seller once accepted: the owner's edit, or CargoOS's draft signed by this person.
+    var letter: (subject: String, body: String)? {
+        guard let d = draft, d.status == "approved" else { return nil }
+        if d.body.isEmpty { return nil }   // live: CargoOS is still writing it
+        return (d.subject, letterEdits[d.id] ?? Self.signed(d.body, by: person.first))
+    }
+
+    var letterBeingWritten: Bool { draft?.status == "approved" && (draft?.body.isEmpty ?? true) }
+
+    func saveLetter(_ body: String) -> String? {
+        guard let d = draft, let original = letter?.body else { return nil }
+        if Self.lockedValues(body) != Self.lockedValues(original) {
+            return "Numbers come from the checked bill and can't be changed. Edit only the words."
+        }
+        letterEdits[d.id] = body
+        return nil
+    }
+
+    func restoreLetter() {
+        guard let d = draft else { return }
+        letterEdits[d.id] = nil
+    }
+
+    /// Amounts and line numbers, in order. An edit must leave this list unchanged.
+    static func lockedValues(_ text: String) -> [String] {
+        let pattern = #"[+−-]?\$\d[\d,]*(?:\.\d{2})?|\b[Ll]ines? \d+\b"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let ns = text as NSString
+        return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+    }
+
+    /// The line after the sign-off ("Thanks,") becomes the name.
+    static func signed(_ body: String, by name: String) -> String {
+        var lines = body.components(separatedBy: "\n")
+        let signOff = #"^(thanks|thank you|best|regards|kind regards|best regards|cheers)[,.!]?$"#
+        guard let i = lines.lastIndex(where: { $0.trimmingCharacters(in: .whitespaces).range(of: signOff, options: [.regularExpression, .caseInsensitive]) != nil }),
+              i + 1 < lines.count, !lines[i + 1].trimmingCharacters(in: .whitespaces).isEmpty else { return body }
+        lines[i + 1] = name
+        return lines.joined(separator: "\n")
+    }
+}
+
+// MARK: - The next step for this person (one card on the bill, one word in the list)
+
+enum NextStep: Equatable {
+    case reading, rechecking, answer, waitingAnswer, request, waitingDecision, decide, blockedSelf,
+         writeLetter, accepted, rejected, allClear
+}
+
+extension CaseStore {
+    var nextStep: NextStep {
+        if findings.isEmpty { return .reading }
+        if replyState == .rechecking { return .rechecking }
+        if let q = question, q.status == "open" { return person.holds(q.to) ? .answer : .waitingAnswer }
+        if let d = draft {
+            switch d.status {
+            case "pending_approval":
+                if decisionBlockedReason == nil { return .decide }
+                return d.requestedBy == person.id && person.holds(.controller) ? .blockedSelf : .waitingDecision
+            case "approved": return person.holds(.controller) ? .writeLetter : .accepted
+            case "rejected": return .rejected
+            default: break
+            }
+        }
+        if holdCents > 0 && person.holds(.clerk) { return .request }
+        return .allClear
+    }
+
+    /// Bills waiting on this person: 0 or 1 on the phone, which holds one bill.
+    var needsMeCount: Int {
+        switch nextStep {
+        case .answer, .decide, .request, .writeLetter: return 1
+        case .rejected: return person.holds(.clerk) && draft?.requestedBy == person.id ? 1 : 0
+        default: return 0
+        }
+    }
+
+    var nextStepLabel: String {
+        switch nextStep {
+        case .reading: return "Reading documents"
+        case .rechecking: return "Rechecking"
+        case .answer: return "Answer 1 question"
+        case .waitingAnswer: return "Waiting for \(People.owner.first)'s answer"
+        case .request: return "Ready to dispute · \(Money.usd(holdCents))"
+        case .waitingDecision: return "Waiting for \(People.owner.first)"
+        case .decide: return "\(People.byId(draft?.requestedBy)?.first ?? "Maya") asks you to approve"
+        case .blockedSelf: return "Another owner decides"
+        case .writeLetter: return "Accepted · write to the seller"
+        case .accepted: return "\(People.owner.first) accepted · pay \(Money.usd(payCents))"
+        case .rejected: return "\(People.owner.first) rejected the dispute"
+        case .allClear: return "Safe to pay in full"
+        }
+    }
+
+    var nextStepAction: String {
+        switch nextStep {
+        case .answer: return "Answer"
+        case .decide: return "Decide"
+        case .request: return "Review"
+        case .writeLetter: return "Write"
+        default: return "Open"
+        }
+    }
+
+    var nextStepColor: Color {
+        switch nextStep {
+        case .answer, .waitingAnswer: return Theme.ask
+        case .request, .decide, .rejected: return Theme.hold
+        case .writeLetter, .accepted, .allClear: return Theme.pay
+        default: return Theme.ink3
+        }
+    }
+}
+
+// MARK: - Replay stages for rehearsals and screenshots (`-demoStage answered|requested|accepted|rejected`)
+
+extension CaseStore {
+    /// Jumps the replay to a point in the story. Replay only; the live case is never touched.
+    func jumpToDemoStage(_ stage: String) {
+        guard source == .replay, let f = fixture else { return }
+        resetDemo()
+        guard ["answered", "requested", "accepted", "rejected"].contains(stage) else { return }
+        replayAnswered = true
+        replayReplyText = f.documents.first { $0.type == .reply }?.text ?? ""
+        replayAnsweredAt = ISODate.string(Date())
+        if stage != "answered" {
+            replayDraft = f.draft.with(status: "pending_approval", requestedBy: People.maya.id)
+            replayEvent("approval_requested", actor: "clerk")
+        }
+        if stage == "accepted", let d = replayDraft {
+            replayDraft = d.with(status: "approved", approvedBy: People.sam.id)
+            replayEvent("approved", actor: "controller")
+        }
+        if stage == "rejected", let d = replayDraft {
+            replayDraft = d.with(status: "rejected", rejectedBy: People.sam.id, rejectionReason: DecisionCard.demoReason)
+            replayEvent("draft_rejected", actor: "controller")
+        }
+        rebuildReplay()
     }
 }

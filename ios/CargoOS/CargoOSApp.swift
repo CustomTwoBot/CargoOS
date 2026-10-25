@@ -9,6 +9,10 @@ struct CargoOSApp: App {
         WindowGroup {
             RootView()
                 .environment(store)
+                .task {
+                    // Rehearsals and screenshots: `-demoStage accepted` starts the replay at that step.
+                    if let stage = UserDefaults.standard.string(forKey: "demoStage") { store.jumpToDemoStage(stage) }
+                }
                 .tint(Theme.primary)
         }
         .onChange(of: scenePhase) { _, phase in
@@ -21,25 +25,32 @@ struct CargoOSApp: App {
 struct RootView: View {
     @Environment(CaseStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab = Tab.questions
+    @State private var tab = Tab.bills
 
-    enum Tab: Hashable { case questions, shipments, evidence }
+    enum Tab: Hashable { case bills, add, settings }
 
     var body: some View {
-        TabView(selection: $tab) {
-            NavigationStack { QuestionsView() }
-                .tabItem { Label("Questions", systemImage: "questionmark.bubble") }
-                .badge(store.hasOpenQuestion ? 1 : 0)
-                .tag(Tab.questions)
+        Group {
+            if store.onboarded {
+                TabView(selection: $tab) {
+                    NavigationStack { HomeView(onAdd: { tab = .add }) }
+                        .tabItem { Label("Bills", systemImage: "doc.text.magnifyingglass") }
+                        .badge(store.needsMeCount)
+                        .tag(Tab.bills)
 
-            NavigationStack { ShipmentsView() }
-                .tabItem { Label("Shipments", systemImage: "shippingbox") }
-                .tag(Tab.shipments)
+                    NavigationStack { EvidenceView() }
+                        .tabItem { Label("Add", systemImage: "plus.rectangle.on.folder") }
+                        .badge(store.pendingCount)
+                        .tag(Tab.add)
 
-            NavigationStack { EvidenceView() }
-                .tabItem { Label("Evidence", systemImage: "tray.and.arrow.down") }
-                .badge(store.pendingCount)
-                .tag(Tab.evidence)
+                    NavigationStack { SettingsView() }
+                        .tabItem { Label("Settings", systemImage: "person.crop.circle") }
+                        .tag(Tab.settings)
+                }
+                .tint(Theme.brand)
+            } else {
+                OnboardingView()
+            }
         }
         // Live: keep the case fresh while the app is on screen (the HTTP API isn't reactive).
         .task(id: scenePhase) {
@@ -58,27 +69,31 @@ struct TrustLine: View {
 }
 
 /// Where the data comes from: "Live" (the team's Convex deployment) or "Replay" (recorded Scenario A).
+/// Takes plain values: toolbar items are hosted outside the view's environment on some pushes.
 struct SourceBadge: View {
-    @Environment(CaseStore.self) private var store
+    let isLive: Bool
+    var offline = false
 
     var body: some View {
         HStack(spacing: 5) {
-            if store.isLive {
-                Circle().fill(liveColor).frame(width: 6, height: 6)
+            if isLive {
+                Circle().fill(offline ? Theme.askFill : Theme.pay).frame(width: 6, height: 6)
             }
-            Text(store.isLive ? "Live" : "Replay")
+            Text(isLive ? "Live" : "Replay")
         }
         .font(.caption2.weight(.semibold))
         .textCase(.uppercase)
         .padding(.horizontal, 7).padding(.vertical, 3)
         .foregroundStyle(Theme.ink2)
         .overlay(Capsule().stroke(Theme.lineStrong))
-        .accessibilityLabel(store.isLive ? "Live data from the CargoOS server" : "Replay of recorded Scenario A data")
+        .accessibilityLabel(isLive ? "Live data from the CargoOS server" : "Replay of recorded Scenario A data")
     }
+}
 
-    private var liveColor: Color {
-        if case .offline = store.connection { return Theme.waitingFill }
-        return Theme.cleared
+extension CaseStore {
+    var badge: SourceBadge {
+        if case .offline = connection { return SourceBadge(isLive: isLive, offline: true) }
+        return SourceBadge(isLive: isLive)
     }
 }
 

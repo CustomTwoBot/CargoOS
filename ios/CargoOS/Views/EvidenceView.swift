@@ -19,7 +19,7 @@ struct EvidenceView: View {
             .padding(16)
         }
         .background(Theme.bg)
-        .navigationTitle("Evidence")
+        .navigationTitle("Add documents")
         .navigationDestination(for: EvidenceRoute.self) { route in
             switch route {
             case .email: ConnectEmailView()
@@ -46,33 +46,54 @@ struct EvidenceView: View {
     }
 
     private var addCard: some View {
-        Card {
-            Text("Add what was agreed").font(.headline).foregroundStyle(Theme.ink)
-            Text("Chats, emails, quotes, photos of paper invoices. CargoOS checks the invoice against them.")
-                .font(.footnote).foregroundStyle(Theme.ink2).padding(.top, 4)
-            HStack(spacing: 10) {
+        Card(emphasized: true) {
+            Kicker("Add to the \(store.forwarder) bill")
+            Text("What was agreed, or the bill itself")
+                .font(.system(size: 19, weight: .bold)).foregroundStyle(Theme.ink).padding(.top, 6)
+            VStack(spacing: 10) {
+                NavigationLink(value: EvidenceRoute.chats) {
+                    bigRow("WA", Theme.lime, Theme.limeInk, "WhatsApp chat", "Chat → ⋯ → Export chat → Without media → CargoOS")
+                }
+                Button { showFiles = true } label: {
+                    bigRow("PDF", Theme.sunken, Theme.ink2, "PDF or email", "A quote, an invoice, an .eml file")
+                }
+                Button { showFiles = true } label: {
+                    bigRow("IMG", Theme.askTint, Theme.ask, "Photo of a paper", "Read on this phone, then sent")
+                }
                 // The system paste button reads the clipboard without the "Allow Paste" prompt.
                 PasteButton(payloadType: String.self) { strings in
                     guard let text = strings.first else { return }
                     Task { @MainActor in paste(text) }
                 }
                 .labelStyle(.titleAndIcon)
-                .buttonBorderShape(.roundedRectangle(radius: 12))
-                .tint(Theme.primary)
-                .frame(maxWidth: .infinity, minHeight: 46)
-                Button { showFiles = true } label: {
-                    Label("Files", systemImage: "folder")
-                }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonBorderShape(.roundedRectangle(radius: 14))
+                .tint(Theme.brand)
+                .frame(maxWidth: .infinity, minHeight: 48)
             }
+            .buttonStyle(.plain)
             .padding(.top, 14)
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.arrow.up").foregroundStyle(Theme.ink2)
-                Text("Fastest: in WhatsApp, Mail or Files tap Share, then CargoOS.")
-                    .font(.footnote).foregroundStyle(Theme.ink2)
-            }
-            .padding(.top, 12)
+            Text(store.person.isUploaderOnly
+                 ? "You see what you added and whether CargoOS read it. No amounts."
+                 : "CargoOS reads it and rechecks the bill. Nothing is sent.")
+                .font(.footnote).foregroundStyle(Theme.ink3).padding(.top, 12)
         }
+    }
+
+    private func bigRow(_ tag: String, _ bg: Color, _ fg: Color, _ title: String, _ detail: String) -> some View {
+        HStack(spacing: 14) {
+            Text(tag).font(.caption.weight(.heavy)).foregroundStyle(fg)
+                .frame(width: 46, height: 46).background(bg, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).foregroundStyle(Theme.ink)
+                Text(detail).font(.caption).foregroundStyle(Theme.ink3).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.ink4)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 76)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line))
     }
 
     private var sourcesCard: some View {
