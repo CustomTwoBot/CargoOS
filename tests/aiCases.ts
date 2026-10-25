@@ -1,8 +1,13 @@
 // Claude-call test cases built from the fixtures. Shared by tests/ai.test.ts (replaying recordings)
 // and scripts/record.ts (calling the real API once to create them).
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { draftDispute, type DisputeDraft } from "../lib/ai/draftDispute";
+import { extractDocument, type Extraction } from "../lib/ai/extract";
+import { emlToText, pdfToText, plainText } from "../lib/ai/fileText";
+import { prepareImage } from "../lib/ai/image";
+import { transcribeImage, type Transcription } from "../lib/ai/transcribe";
 import { interpretReply, resolveReply, type InterpretedReply } from "../lib/ai/interpretReply";
 import { planQuestion } from "../lib/ai/planQuestion";
 import type { ClaudeReply, ClaudeRequest, ClaudeSender } from "../lib/ai/client";
@@ -12,6 +17,7 @@ import { loadScenarios, type Scenario } from "../scripts/evalCore";
 import ui from "../fixtures/scenarioA.ui.json";
 
 export const RECORDINGS_DIR = join(process.cwd(), "tests", "recordings");
+export const LIVE_DIR = join(process.cwd(), "fixtures", "live");
 const SCENARIOS = loadScenarios(join(process.cwd(), "fixtures"));
 const scenario = (id: string) => SCENARIOS.find((s) => s.id === id)!;
 
@@ -60,6 +66,33 @@ export const INPUTS = {
   replyDoc,
 };
 
+// ---- Live demo files (fixtures/live/, SPEC.md 7.7), read the way the upload backend reads them ----
+
+const live = (file: string) => readFileSync(join(LIVE_DIR, file));
+const liveDoc = (id: string, type: SourceDoc["type"], title: string, text: string, extra: Partial<SourceDoc> = {}): SourceDoc =>
+  ({ _id: id, caseId: "case_live", type, title, text, ...extra });
+
+export const LIVE_DOCS = {
+  quote: async () => liveDoc("doc_quote", "quote", "quote.pdf", await pdfToText(new Uint8Array(live("quote.pdf"))), { textFrom: "pdf" }),
+  invoice: async () => liveDoc("doc_invoice", "freight_invoice", "invoice.pdf", await pdfToText(new Uint8Array(live("invoice.pdf"))), { textFrom: "pdf" }),
+  email: async () => {
+    const e = emlToText(live("email.eml").toString("utf8"));
+    return liveDoc("doc_email", "email", "email.eml", e.text, { textFrom: "eml", sentAt: e.sentAt, sender: e.from });
+  },
+  chat: async () => liveDoc("doc_chat", "chat", "whatsapp.txt", plainText(live("whatsapp.txt").toString("utf8")), { textFrom: "txt" }),
+};
+
+async function liveImage(file: string) {
+  const prepared = await prepareImage(new Uint8Array(live(file)), "image/png");
+  if (!prepared.ok) throw new Error(prepared.reason);
+  return prepared.image;
+}
+
+export interface ScreenshotResult {
+  transcription: Transcription;
+  extraction: Extraction | null;
+}
+
 // ---- Cases that call Claude ----
 
 export interface AmbigResult {
@@ -86,6 +119,19 @@ export const AI_CASES = {
     return { first, firstResolution, second, secondResolution: resolveReply(followUp, second, questions) };
   },
   "draftDispute-A": (send: ClaudeSender): Promise<DisputeDraft> => draftDispute(A_AFTER, INPUTS.draftA, { send }),
+  "extract-live-quote": async (send: ClaudeSender): Promise<Extraction> => extractDocument(await LIVE_DOCS.quote(), { send }),
+  "extract-live-invoice": async (send: ClaudeSender): Promise<Extraction> => extractDocument(await LIVE_DOCS.invoice(), { send }),
+  "extract-live-email": async (send: ClaudeSender): Promise<Extraction> => extractDocument(await LIVE_DOCS.email(), { send }),
+  "extract-live-chat": async (send: ClaudeSender): Promise<Extraction> => extractDocument(await LIVE_DOCS.chat(), { send }),
+  // Screenshot: transcribe once, then the normal extraction on the transcription.
+  "transcribe-live-whatsapp-png": async (send: ClaudeSender): Promise<ScreenshotResult> => {
+    const transcription = await transcribeImage(await liveImage("whatsapp.png"), { send });
+    const extraction = transcription.readable
+      ? await extractDocument(liveDoc("doc_chat_png", "chat", "whatsapp.png", transcription.text, { textFrom: "image" }), { send })
+      : null;
+    return { transcription, extraction };
+  },
+  "transcribe-unreadable-png": async (send: ClaudeSender): Promise<Transcription> => transcribeImage(await liveImage("unreadable.png"), { send }),
 } satisfies Record<string, (send: ClaudeSender) => Promise<unknown>>;
 
 export type CaseName = keyof typeof AI_CASES;
@@ -102,6 +148,11 @@ interface Recording {
 const recordingPath = (name: string, dir: string) => join(dir, `${name}.json`);
 export const hasRecording = (name: CaseName, dir = RECORDINGS_DIR) => existsSync(recordingPath(name, dir));
 
+// Images are stored as a hash, so recordings stay small but still notice a changed image.
+const forRecording = (request: ClaudeRequest): ClaudeRequest => request.image
+  ? { ...request, image: { mediaType: request.image.mediaType, data: `sha256:${createHash("sha256").update(request.image.data).digest("hex")}` } }
+  : request;
+
 // Replays a recording in order; a request that differs from the recorded one means the prompt or
 // inputs changed since recording, so the test fails instead of silently passing.
 export function replaySender(name: CaseName, dir = RECORDINGS_DIR): ClaudeSender {
@@ -110,7 +161,7 @@ export function replaySender(name: CaseName, dir = RECORDINGS_DIR): ClaudeSender
   return async (request) => {
     const call = recording.calls[i++];
     if (!call) throw new Error(`${name}: more Claude calls than recorded; re-run npm run record`);
-    if (JSON.stringify(call.request) !== JSON.stringify(request)) {
+    if (JSON.stringify(call.request) !== JSON.stringify(forRecording(request))) {
       throw new Error(`${name}: request differs from the recording (prompt or inputs changed); re-run npm run record`);
     }
     return call.reply;
@@ -121,7 +172,7 @@ export function recordingSender(name: CaseName, live: ClaudeSender, dir = RECORD
   const calls: Recording["calls"] = [];
   const send: ClaudeSender = async (request) => {
     const reply = await live(request);
-    calls.push({ request, reply });
+    calls.push({ request: forRecording(request), reply });
     return reply;
   };
   const save = (model: string) => {
