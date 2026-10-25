@@ -3,7 +3,7 @@ import { SCENARIO_A } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { LEO, MAYA, SAM } from "@/components/inboxes/people";
 import { withDraft } from "./sample";
-import { answerBlocked, dockOf, itemText, pendingFor, threadOf, type ThreadItem } from "./thread";
+import { answerBlocked, dockOf, itemText, threadOf, type ThreadItem } from "./thread";
 
 const PC = "Pacific Crest Logistics";
 const texts = (items: ThreadItem[]) => items.map(itemText);
@@ -109,15 +109,13 @@ describe("threadOf, the dispute", () => {
   });
 });
 
-describe("dockOf and pendingFor", () => {
+describe("dockOf", () => {
   it("an open question to this person: the answer box, in the recorded order", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, SAM)).toEqual(
       { kind: "answer", questionId: "q_1", label: undefined, replay: "In this replay CargoOS reads the recorded answer." });
     const b = SCENARIO_B.at("before");
     expect(dockOf(SCENARIO_B, b, idle, SAM)).toMatchObject({ kind: "answer", questionId: "b_q_1", label: "Answering Question 1" });
     expect(answerBlocked(SCENARIO_B, b, "b_q_2")).toBe("Answer Question 1 first. In this replay the answers play in the order they were recorded.");
-    expect(pendingFor(SCENARIO_A.at("before"), SAM)).toBe(1);
-    expect(pendingFor(b, SAM)).toBe(2);
   });
 
   it("while the answer is being read: rechecking", () => {
@@ -134,9 +132,8 @@ describe("dockOf and pendingFor", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, SAM)).toMatchObject({ kind: "answer" });
   });
 
-  it("someone else's question: a quiet line, nothing pending", () => {
+  it("someone else's question: a quiet line", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, MAYA)).toEqual({ kind: "quiet", text: "Waiting for Sam’s answer." });
-    expect(pendingFor(SCENARIO_A.at("before"), MAYA)).toBe(0);
   });
 
   it("a dispute ready: Maya asks Sam; Sam drafts it himself", () => {
@@ -144,17 +141,14 @@ describe("dockOf and pendingFor", () => {
     expect(dockOf(SCENARIO_A, x, idle, MAYA, PC)).toEqual({ kind: "request", button: "Ask Sam to approve",
       text: "Dispute $700 with Pacific Crest Logistics: lines 1 and 6. Sam decides; nothing goes to the seller until then." });
     expect(dockOf(SCENARIO_A, x, idle, SAM, PC)).toEqual({ kind: "request", button: "Draft dispute", text: "Dispute $700 with Pacific Crest Logistics: lines 1 and 6." });
-    expect(pendingFor(x, MAYA)).toBe(1);
   });
 
   it("a request: Sam decides Maya's, not his own; Maya waits", () => {
     const mayas = withDraft("pending_approval", "maya");
     expect(dockOf(SCENARIO_A, mayas, idle, SAM, PC)).toEqual({ kind: "decide", draftId: "draft_1", text: "Dispute $700 with Pacific Crest Logistics: lines 1 and 6." });
     expect(dockOf(SCENARIO_A, mayas, idle, MAYA, PC)).toEqual({ kind: "quiet", text: "Waiting for Sam to accept or reject the dispute." });
-    expect(pendingFor(mayas, SAM)).toBe(1);
     const own = withDraft("pending_approval", "sam");
     expect(dockOf(SCENARIO_A, own, idle, SAM, PC)).toEqual({ kind: "quiet", text: "You requested this. Another owner decides." });
-    expect(pendingFor(own, SAM)).toBe(0);
   });
 
   it("accepted: the message is ready; rejected: the reason", () => {
@@ -164,8 +158,7 @@ describe("dockOf and pendingFor", () => {
       .toEqual({ kind: "quiet", text: "Sam rejected the dispute: “Pay it this time.”" });
   });
 
-  it("Leo: no next step and nothing pending", () => {
+  it("Leo: no next step", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, LEO)).toEqual({ kind: "none" });
-    expect(pendingFor(SCENARIO_A.at("before"), LEO)).toBe(0);
   });
 });

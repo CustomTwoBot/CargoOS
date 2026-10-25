@@ -31,8 +31,9 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
   }, [last, items.length, dock.kind]);
 
   return (
-    <aside aria-label="CargoOS"
-      className="flex min-h-0 w-full flex-col bg-surface lg:w-[360px] lg:flex-none lg:border-l lg:border-line xl:w-[420px]">
+    // Fills the workspace's thread column (420px from 1280, 360px from 1024, the whole pane below); the
+    // workspace owns the widths, the thread draws its left edge only beside the invoice.
+    <aside aria-label="CargoOS" className="flex min-h-0 w-full min-w-0 flex-1 flex-col bg-surface lg:border-l lg:border-line">
       <header className="flex-none border-b border-line px-[18px] pb-3 pt-3.5">
         <p className="flex items-center gap-2 text-[14.5px] font-[650]">
           <span aria-hidden="true" className="size-[18px] rounded-[5px] bg-ink" />CargoOS

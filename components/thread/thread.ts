@@ -353,16 +353,6 @@ export function dockOf(demo: DemoCase, x: CaseInput, local: Pick<CaseLocal, "rep
   return { kind: "quiet", text: totalsOf(x).atStakeCents ? "Nothing waits on you." : "Every charge matches what was agreed. Nothing to dispute." };
 }
 
-/** How many things wait on this person in the case: the badge on the narrow "CargoOS n" switch. */
-export function pendingFor(x: CaseInput, viewer: Person): number {
-  if (!seesFindings(viewer)) return 0;
-  let n = canAct(viewer.roles, "reply") ? openQs(x).length : 0;
-  const draft = x.drafts.at(-1);
-  if (draft?.status === "pending_approval" && canAct(viewer.roles, "approve") && draft.requestedBy !== viewer.id) n += 1;
-  if (!draft && !openQs(x).length && totalsOf(x).atStakeCents > 0 && canAct(viewer.roles, "draftDispute")) n += 1;
-  return n;
-}
-
 /** A sentence as plain text (tests, screen readers). */
 export const paraText = (p: Para) => p.map((s) => s.text).join("");
 
