@@ -116,19 +116,22 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
 
 type DetailProps = {
   d: ApprovalItem; now: Date | null; viewer: Person; print?: (html: string) => void;
-  onOpen: () => void; onAccept: () => void; onReject: (reason: string) => void;
+  /** Shows "Open case"; left out inside the case itself. */
+  onOpen?: () => void; onAccept: () => void; onReject: (reason: string) => void;
   onMessageChange?: (text: { subject: string; body: string }) => void;
 };
 
-function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
+/** One dispute's decision: lines, total, Accept / Reject, then the message to the seller. Also the case's Dispute tab. */
+export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
   const canDecide = canAct(viewer.roles, "approve");
   const ownRequest = !!d.requestedBy && d.requestedBy === viewer.id;
-  const requested = `Requested by ${who(d.requestedBy, viewer)}${d.requestedAt && now ? `, ${at(d.requestedAt, now)}` : ""}`;
+  // One operator drafts and decides; nobody requested it, so there is no requester to name (docs/design.md §0).
+  const requested = `${d.requestedBy ? `Requested by ${who(d.requestedBy, viewer)}` : "Drafted by you"}${d.requestedAt && now ? `, ${at(d.requestedAt, now)}` : ""}`;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <h2 className="truncate text-panel font-[650]">{d.caseTitle}</h2>
-        <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>
+        {onOpen && <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] items-start gap-4">
         <div className="flex max-h-full min-h-0 flex-col gap-4 overflow-auto">
@@ -169,7 +172,7 @@ function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReject, onM
             </div>
           )}
           <p className="text-xs text-ink-3">
-            {d.status === "rejected" ? `It went back to ${who(d.requestedBy, viewer)}. Nothing went to the seller.`
+            {d.status === "rejected" ? `${d.requestedBy ? `It went back to ${who(d.requestedBy, viewer)}. ` : "Change the lines and draft it again. "}Nothing went to the seller.`
               : d.status === "pending" ? "Accepting drafts a message to the seller. Nothing is sent."
               : "CargoOS never sends email."}
           </p>

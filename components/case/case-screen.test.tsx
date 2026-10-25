@@ -56,14 +56,27 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400New"]);
   });
 
-  it("one operator drafts and approves; nothing is sent", () => {
+  it("one operator drafts and accepts; the message to the seller is drafted and nothing is sent", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
     expect(tab(/Dispute/)).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    expect(screen.getByText("Approved. Nothing was sent.")).toBeInTheDocument();
-    expect(screen.queryByText("Requires controller")).not.toBeInTheDocument();
+    expect(screen.getByText(/Drafted by you/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(screen.getByText(/Accepted by you/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Message to the seller" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Send/ })).not.toBeInTheDocument();
+  });
+
+  it("reject needs a reason and leaves the dispute ready to draft again", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.change(screen.getByLabelText("Why are you rejecting it?"), { target: { value: "They did expedite it. Pay it this time." } });
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(screen.getByText("“They did expedite it. Pay it this time.”")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draft dispute" })).not.toHaveAttribute("aria-disabled");
   });
 
   it("the rail switches to Documents and History without losing the case state", () => {

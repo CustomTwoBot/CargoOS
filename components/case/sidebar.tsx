@@ -5,10 +5,10 @@ import { useSyncExternalStore, type ReactNode } from "react";
 import { cx } from "./cx";
 import { money } from "./format";
 import {
-  CasesIcon, CollapseIcon, DocumentsIcon, ExpandIcon, HistoryIcon, ListIcon, Logo, PlusIcon, QuestionsIcon,
+  ApproveIcon, CasesIcon, CollapseIcon, DocumentsIcon, ExpandIcon, HistoryIcon, ListIcon, Logo, PlusIcon, QuestionsIcon,
 } from "./glyphs";
 
-export type View = "cases" | "case" | "documents" | "history";
+export type View = "cases" | "case" | "documents" | "history" | "questions" | "approvals" | "new";
 
 export type SidebarCase = { id: string; title: string; atStakeCents: number; openQuestions: number };
 
@@ -16,6 +16,8 @@ type Props = {
   view: View; onView: (v: View) => void;
   cases: SidebarCase[]; activeId: string; onOpenCase: (id: string) => void;
   counts: { questions: number; documents: number; events: number };
+  /** Across every case: open questions and disputes waiting for a decision. */
+  inbox: { questions: number; approvals: number };
   onQuestion: () => void;
   onNewCase?: () => void;
 };
@@ -41,7 +43,7 @@ const Badge = ({ n, tone = "neutral" }: { n: number; tone?: "waiting" | "neutral
   ) : null
 );
 
-function Expanded({ view, onView, cases, activeId, onOpenCase, counts, onQuestion, onNewCase }: Props) {
+function Expanded({ view, onView, cases, activeId, onOpenCase, counts, inbox, onQuestion, onNewCase }: Props) {
   const active = cases.find((c) => c.id === activeId);
   const nav = (label: string, icon: ReactNode, on: boolean, onClick: () => void, badge?: ReactNode) => (
     <button type="button" onClick={onClick} aria-current={on ? "page" : undefined}
@@ -60,6 +62,12 @@ function Expanded({ view, onView, cases, activeId, onOpenCase, counts, onQuestio
       </div>
 
       <div className="px-2">
+        <div className="px-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Waiting on you</div>
+        {nav("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), <Badge n={inbox.questions} tone="waiting" />)}
+        {nav("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), <Badge n={inbox.approvals} tone="waiting" />)}
+      </div>
+
+      <div className="mt-2 px-2">
         <div className="flex items-center justify-between px-2.5 pb-1 pt-2">
           <button type="button" onClick={() => onView("cases")}
             className={cx("text-[11.5px] font-medium", view === "cases" ? "text-ink" : "text-ink-3 hover:text-ink")}>Cases</button>
@@ -92,7 +100,7 @@ function Expanded({ view, onView, cases, activeId, onOpenCase, counts, onQuestio
         <div className="mt-3 border-t border-line px-2 pt-3">
           <div className="truncate px-2.5 pb-1 text-[11.5px] font-medium text-ink-3">{active.title}</div>
           {nav("Overview", <ListIcon />, view === "case", () => onView("case"))}
-          {nav("Questions", <QuestionsIcon />, false, onQuestion, <Badge n={counts.questions} tone="waiting" />)}
+          {counts.questions > 0 && nav("Open question", <QuestionsIcon />, false, onQuestion, <Badge n={counts.questions} tone="waiting" />)}
           {nav("Documents", <DocumentsIcon />, view === "documents", () => onView("documents"), <Badge n={counts.documents} />)}
           {nav("History", <HistoryIcon />, view === "history", () => onView("history"), <Badge n={counts.events} />)}
         </div>
@@ -105,7 +113,7 @@ function Expanded({ view, onView, cases, activeId, onOpenCase, counts, onQuestio
   );
 }
 
-function Collapsed({ view, onView, cases, counts, onQuestion }: Props) {
+function Collapsed({ view, onView, cases, inbox }: Props) {
   const item = (label: string, icon: ReactNode, on: boolean, onClick: () => void, dot = false) => (
     <button type="button" title={label} aria-label={label} aria-current={on ? "page" : undefined} onClick={onClick}
       className={cx("relative grid size-[38px] place-items-center rounded-[10px] text-ink-3", on ? "bg-sunken text-ink" : "hover:text-ink")}>
@@ -118,7 +126,8 @@ function Collapsed({ view, onView, cases, counts, onQuestion }: Props) {
       <span className="mb-2.5 text-ink"><Logo /></span>
       {cases.length > 1 && item("All cases", <CasesIcon />, view === "cases", () => onView("cases"))}
       {item("Overview", <ListIcon />, view === "case", () => onView("case"))}
-      {item("Questions", <QuestionsIcon />, false, onQuestion, counts.questions > 0)}
+      {item("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), inbox.questions > 0)}
+      {item("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), inbox.approvals > 0)}
       {item("Documents", <DocumentsIcon />, view === "documents", () => onView("documents"))}
       {item("History", <HistoryIcon />, view === "history", () => onView("history"))}
       <button type="button" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar"
