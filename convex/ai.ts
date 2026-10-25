@@ -9,7 +9,7 @@ import type { CaseState } from "../lib/ai/types";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery, mutation, type MutationCtx } from "./_generated/server";
-import schema, { role, sourceSpan } from "./schema";
+import schema, { personId, role, sourceSpan } from "./schema";
 
 const newQuestion = v.object({
   to: role,
@@ -97,7 +97,7 @@ export const saveQuestion = internalMutation({
 
 // The ops-lead inbox calls this. Saves the reply as a document and interprets it in the background.
 export const submitReply = mutation({
-  args: { role, questionId: v.id("questions"), text: v.string() },
+  args: { role, personId, questionId: v.id("questions"), text: v.string() },
   handler: async (ctx, { role: actor, questionId, text }) => {
     const question = await ctx.db.get(questionId);
     if (!question) throw new ConvexError("Question not found");
@@ -182,7 +182,7 @@ export const applyReply = internalMutation({
 
 // "Draft dispute" button. Claude writes the wording in the background; nothing is ever sent.
 export const createDraft = mutation({
-  args: { role, caseId: v.id("cases") },
+  args: { role, personId, caseId: v.id("cases") },
   handler: async (ctx, { role: actor, caseId }) => {
     if (actor === "ops_lead") throw new ConvexError("The ops lead cannot draft disputes");
     const c = await ctx.db.get(caseId);

@@ -87,5 +87,7 @@ export function explain(f: Finding, facts: Fact[], context: ExplainContext = {})
         ? `${billed} The ${role(no)} said this was not agreed on ${date(no.effectiveAt)}: ${quoted(no.span.quote)}${over}`
         : `${billed}${over}`;
     }
+    case "R10_LEARNED": // TODO(Dev): R10 template from SPEC.md 6; placeholder added with the 5.5 types so typecheck passes
+      return billed;
   }
 }

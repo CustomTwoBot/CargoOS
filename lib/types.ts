@@ -1,6 +1,6 @@
-// Shared contract (SPEC.md 5.1). Copied verbatim; change only after a team message.
+// Shared contract (SPEC.md 5.1, plus the 5.5 pending changes applied Oct 24 evening). Change only after a team message.
 
-export type Role = "clerk" | "controller" | "ops_lead";
+export type Role = "clerk" | "controller" | "ops_lead" | "uploader";
 export type Party = "supplier" | "forwarder" | "carrier" | "buyer";
 export type DocType = "quote" | "email" | "chat" | "proforma" | "freight_invoice" | "reply" | "other";
 
@@ -17,7 +17,7 @@ export type Status =
 export type RuleId =
   | "R0_MATCH" | "R1_DUPLICATE" | "R2_RATE_MISMATCH" | "R3_MATH_CURRENCY"
   | "R4_PERMITTED_SURCHARGE" | "R5_EXCLUDED_SCOPE" | "R6_NO_EVIDENCE" | "R7_CONFLICT"
-  | "R8_APPROVED" | "R9_REJECTED";
+  | "R8_APPROVED" | "R9_REJECTED" | "R10_LEARNED";
 
 export interface Case {
   _id: string; title: string; shipmentRef: string;
@@ -25,6 +25,7 @@ export interface Case {
   baseCurrency: "USD";
   revision: number;               // latest findings revision
   status: "open" | "awaiting_answer" | "ready_for_approval" | "approved";
+  forwarder?: string;             // e.g. "Pacific Crest Logistics"; learned rules match on it
 }
 
 export interface SourceDoc {
@@ -77,6 +78,7 @@ export interface Finding {
   explanation: string;                 // "why" line, code template
   userVerdict?: "confirmed" | "false_positive";
   userVerdictBy?: Role;
+  learnedRuleId?: string;              // R10 lines: the learned rule that cleared it
 }
 
 export interface FindingChange {
@@ -106,17 +108,37 @@ export interface Draft {
   subject: string; body: string;       // LLM wording; numbers inserted by code
   findingKeys: string[]; totalDisputedCents: number;
   status: "draft" | "pending_approval" | "approved" | "rejected";
-  createdBy: Role; approvedBy?: Role;  // approval allowed for controller only
+  createdBy: Role;
+  requestedBy?: string;                // person id who requested approval
+  approvedBy?: string;                 // person id; must hold controller and not be requestedBy
+  rejectedBy?: string;                 // person id
+  rejectionReason?: string;            // required when rejected
+  editedBody?: string;                 // owner's edited wording; numbers locked to findings
 }
 
 export type EventType =
   | "doc_added" | "charge_edited" | "facts_extracted" | "extraction_failed" | "recomputed"
   | "question_asked" | "reply_received" | "finding_confirmed" | "finding_dismissed"
-  | "draft_created" | "approval_requested" | "approval_blocked" | "approved";
+  | "draft_created" | "approval_requested" | "approval_blocked" | "approved"
+  | "draft_rejected" | "rule_learned" | "rule_undone" | "document_uploaded";
 
 export interface CaseEvent {
   _id: string; caseId: string; at: string;
   actor: Role | "system" | "agent";
   type: EventType;
   payload: Record<string, unknown>;    // e.g. { changes: FindingChange[] } on "recomputed"
+}
+
+// Seeded people (lib/people.ts); each screen is set to one of them. No login.
+export interface Person {
+  id: string; name: string; roles: Role[];
+}
+
+// "Not an issue" remembered per forwarder; reconcile receives these as input (R10).
+export interface LearnedRule {
+  _id: string; forwarder: string; chargeType: ChargeType;
+  maxAmountCents?: number;             // defaults to the dismissed line's billed amount; absent = any amount
+  createdBy: string;                   // person id
+  createdAt: string;                   // ISO
+  sourceCaseId: string; sourceChargeId: string;
 }
