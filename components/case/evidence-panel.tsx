@@ -5,6 +5,7 @@ import { cx } from "./cx";
 import { chainOf, highlight, timelineOf, type ChainStep } from "./evidence";
 import { ChainGlyph, StatusGlyph } from "./glyphs";
 import type { CaseInput, Row } from "./view-model";
+import { chainFor } from "./voice";
 
 type OnQuote = (s: SourceSpan) => void;
 
@@ -25,8 +26,9 @@ const RESULT_TONE = { dispute: "text-dispute", waiting: "text-waiting", cleared:
 const STEP = "relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-4";
 const LINE = "before:absolute before:bottom-1 before:left-[13.5px] before:top-8 before:w-px before:bg-line-strong";
 
-export function Chain({ x, row, onQuote }: { x: CaseInput; row: Row; onQuote: OnQuote }) {
-  const chain = chainOf(x, row);
+/** `answerer` names who answered CargoOS ("Sam") on a screen that doesn't answer itself. */
+export function Chain({ x, row, onQuote, answerer }: { x: CaseInput; row: Row; onQuote: OnQuote; answerer?: string }) {
+  const chain = chainFor(chainOf(x, row), answerer);
   const steps: (ChainStep | "result")[] = [...chain.steps, "result"];
   return (
     <ol>

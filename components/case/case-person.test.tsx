@@ -109,6 +109,46 @@ describe("bookkeeper (Maya)", () => {
   });
 });
 
+describe("design QA round 2: who the case waits on", () => {
+  it("C17: Maya's chain names Sam as the one who answered; Sam's says you", () => {
+    const { rerender } = render(<Case viewer={MAYA} />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Rush handling/ }));
+    const evidence = () => screen.getByRole("region", { name: "Evidence" });
+    expect(evidence()).toHaveTextContent("Sam said it wasn't agreed");
+    expect(evidence()).toHaveTextContent(/Sam's answer/);
+    expect(evidence().textContent).not.toMatch(/You said|Your answer/);
+    rerender(<Case viewer={SAM} />);
+    expect(evidence()).toHaveTextContent("You said it wasn't agreed");
+  });
+
+  it("C18/C19: Maya's pill says who decides or answers, and the button doesn't repeat it", () => {
+    render(<Case viewer={MAYA} />);
+    expect(screen.getByTestId("case-pill")).toHaveTextContent("Waiting for Sam");
+    expect(screen.queryByTestId("draft-blocked")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Request approval" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Request approval" }));
+    expect(screen.getByTestId("case-pill")).toHaveTextContent(/^Waiting for Sam$/);
+  });
+
+  it("C20: after Accept the pill says Dispute accepted, as the cases list does", () => {
+    render(<Case viewer={SAM} />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
+    expect(screen.getByTestId("case-pill")).toHaveTextContent("Ready to approve");
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(screen.getByTestId("case-pill")).toHaveTextContent("Dispute accepted");
+  });
+
+  it("C21: the uploader's demo bar has only Reset demo", () => {
+    render(<Case viewer={LEO} />);
+    const bar = screen.getByRole("group", { name: "Demo controls" });
+    expect(within(bar).queryByRole("button", { name: /answers/ })).not.toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Reset demo" })).toBeInTheDocument();
+  });
+});
+
 describe("uploader (Leo)", () => {
   it("opens on Documents with Add evidence, and sees no money, findings or Review", () => {
     render(<Case viewer={LEO} />);

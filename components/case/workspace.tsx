@@ -31,8 +31,20 @@ export const SAM: Person = personById("sam")!;
 /** "Sam" from "Sam — owner". */
 export const firstName = (p: Person) => p.name.split(" — ")[0];
 
-/** Who CargoOS asks: the seeded person holding ops_lead. */
+/** Who CargoOS asks, and who decides disputes: the seeded people holding ops_lead and controller. */
 const ASKED = PEOPLE.find((p) => p.roles.includes("ops_lead"));
+const DECIDER = PEOPLE.find((p) => p.roles.includes("controller"));
+
+type Pill = { label: string; tone: "waiting" | "neutral" };
+
+/** The case pill in this screen's words (§0.3): it names who the case waits on when that isn't this screen. */
+export function pillFor(pill: Pill, can: { reply: boolean; decide: boolean }): Pill {
+  if (pill.label === "Waiting for your answer" && !can.reply) return { label: `Waiting for ${ASKED ? firstName(ASKED) : "the owner"}`, tone: "waiting" };
+  if (pill.label === "Ready to approve" && !can.decide) return { label: `Waiting for ${DECIDER ? firstName(DECIDER) : "the owner"}`, tone: "waiting" };
+  // Same words as the cases list once the owner accepts.
+  if (pill.label === "Approved") return { label: "Dispute accepted", tone: "neutral" };
+  return pill;
+}
 
 export type WorkspaceProps = {
   demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions;
@@ -73,16 +85,17 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
   const open = openQuestions(x).length;
   const blocked = rechecking ? { why: "CargoOS is rechecking. Wait a moment.", short: "Rechecking…" }
     : totals.atStakeCents === 0 ? { why: "Nothing to dispute. At stake is $0.", short: "Nothing to dispute" }
-    : !ready ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
+    // The pill already says "Waiting for Sam" on a screen that doesn't answer, so the reason stays in the tooltip.
+    : !ready ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? undefined
         : open ? `Answer ${open} ${open === 1 ? "question" : "questions"} first` : "Answer the questions first" }
     : undefined;
   const onDispute = view === "case" && tab === "dispute";
-  const pill = casePill(x);
+  const pill = pillFor(casePill(x), { reply: canAct(roles, "reply"), decide: decides });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <CaseHeader title={x.case.title} facts={headerFacts(x, inbox.forwarder)} replay
-        pill={!reviews ? undefined : pill.label === "Waiting for your answer" && !canAct(roles, "reply") ? { ...pill, label: `Waiting for ${asked}` } : pill}
+        pill={reviews ? pill : undefined}
         actions={reviews ? (
           <>
             {canAct(roles, "draftDispute") && (drafted
@@ -116,7 +129,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
                     onSave={actions.saveLine} />} />
               </>
             ) : current.kind === "line" ? (
-              <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
+              <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")} answerer={canAct(roles, "reply") ? undefined : asked}
                 onConfirm={(k) => actions.verdict(k, "confirmed")}
                 onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
             ) : current.kind === "question" ? (
@@ -145,7 +158,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
         </div>
       )}
 
-      <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
+      <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} stages={reviews} />
     </div>
   );
 }
@@ -187,7 +200,8 @@ function answerBlocked(demo: DemoCase, x: CaseInput, questionId: string): string
 }
 
 /** Presenter controls for the replay (SPEC W3 step 1). Not part of the product UI. */
-function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; onGo: (s: string) => void }) {
+/** `stages={false}` (a screen without findings): only Reset demo, since the answer stages change nothing it shows. */
+function DemoControls({ demo, stage, onGo, stages }: { demo: DemoCase; stage: string; onGo: (s: string) => void; stages: boolean }) {
   const seg = (s: string, label: string) => (
     <button type="button" aria-pressed={stage === s} onClick={() => onGo(s)}
       className={cx("rounded-[6px] px-2 py-0.5", stage === s ? "bg-line-strong text-ink" : "text-ink-3")}>{label}</button>
@@ -196,7 +210,7 @@ function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; on
     <div className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
-      {seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}
+      {stages && <>{seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}</>}
       <button type="button" onClick={() => onGo(demo.start)} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
     </div>
   );

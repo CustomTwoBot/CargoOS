@@ -21,27 +21,31 @@ const PRIMARY = "rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibo
 const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7px] text-[13.5px] font-semibold text-ink hover:bg-sunken";
 
 /** Evidence column: the chain, or the document a quote came from. */
-function Evidence({ x, row }: { x: CaseInput; row: Row }) {
+function Evidence({ x, row, answerer }: { x: CaseInput; row: Row; answerer?: string }) {
   const [open, setOpen] = useState<SourceSpan | null>(null);
   return (
     <section aria-label="Evidence" className={cx(CARD, "px-6 py-5")}>
       {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (
         <>
           <h3 className="mb-4 text-meta font-medium text-ink-3">How CargoOS checked line {row.lineNo}</h3>
-          <Chain x={x} row={row} onQuote={setOpen} />
+          <Chain x={x} row={row} onQuote={setOpen} answerer={answerer} />
         </>
       )}
     </section>
   );
 }
 
-type LineProps = { x: CaseInput; row: Row; canVerdict: boolean; onConfirm: (key: string) => void; onDismiss: (key: string) => void };
+type LineProps = {
+  x: CaseInput; row: Row; canVerdict: boolean; onConfirm: (key: string) => void; onDismiss: (key: string) => void;
+  /** Who answers CargoOS ("Sam") when this screen doesn't; the evidence names them instead of "you". */
+  answerer?: string;
+};
 
-export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: LineProps) {
+export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss, answerer }: LineProps) {
   const confirmed = row.finding.userVerdict === "confirmed";
   return (
     <div data-testid="issue-grid" className={ISSUE_GRID}>
-      <Evidence key={row.key} x={x} row={row} />
+      <Evidence key={row.key} x={x} row={row} answerer={answerer} />
       <aside aria-label="Decision" className={cx(CARD, "order-first flex flex-col gap-3 px-5 py-5 lg:sticky lg:top-0 lg:order-none")}>
         <div className="flex items-center gap-2">
           <span data-testid="decision-status" className={cx("inline-flex items-center gap-1.5 text-meta font-semibold", TONE[row.group])}>

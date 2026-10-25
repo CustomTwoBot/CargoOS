@@ -56,8 +56,8 @@ const SECONDARY = "whitespace-nowrap rounded-md border border-line-strong bg-sur
 
 type DraftProps = {
   label?: "Draft dispute" | "Request approval";
-  /** Why it can't run (tooltip), and the same said short next to it ("Answer 1 question first"). */
-  blocked?: { why: string; short: string };
+  /** Why it can't run (tooltip), and, unless something else on screen says it, the same short next to it ("Answer 1 question first"). */
+  blocked?: { why: string; short?: string };
   onDraft: () => void;
 };
 
@@ -68,7 +68,7 @@ type DraftProps = {
 export function DraftButton({ label = "Draft dispute", blocked, onDraft }: DraftProps) {
   return (
     <span className="flex items-center gap-2.5">
-      {blocked && <span data-testid="draft-blocked" className="hidden text-right text-meta text-ink-3 sm:block">{blocked.short}</span>}
+      {blocked?.short && <span data-testid="draft-blocked" className="hidden text-right text-meta text-ink-3 sm:block">{blocked.short}</span>}
       <button type="button" onClick={blocked ? undefined : onDraft} aria-disabled={!!blocked || undefined} title={blocked?.why}
         className={blocked ? cx(SECONDARY, "cursor-not-allowed text-ink-3") : PRIMARY}>
         {label}
