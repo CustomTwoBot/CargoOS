@@ -44,7 +44,7 @@ const at = (iso: string, now: Date) => (whenAt(iso, now).startsWith("today") ? t
 
 /** "Agreed $4,500 → Billed $4,800 (+$300)", or "No agreement · $400" (SPEC §8 chips). Numbers come from the findings. */
 export const lineChip = (l: InboxLine) =>
-  l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed} (${l.delta})` : `No agreement · ${l.billed}`;
+  l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed} (${l.delta})` : `${l.reason ?? "No agreement"} · ${l.billed}`;
 
 export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageChange, viewer = OPERATOR, now: fixed, print }: Props) {
   const clock = useNow();
@@ -130,7 +130,7 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="truncate text-panel font-[650]">{d.caseTitle}</h2>
+        {onOpen && <h2 className="truncate text-panel font-[650]">{d.caseTitle}</h2>}
         {onOpen && <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] items-start gap-4">

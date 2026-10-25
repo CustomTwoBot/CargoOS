@@ -125,7 +125,7 @@ describe("ApprovalsInbox", () => {
     fireEvent.click(items("Waiting for a decision")[1]);
     const lines = screen.getByRole("region", { name: "Lines to dispute" });
     expect(within(lines).getByText("Agreed $4,500 → Billed $4,800 (+$300)")).toBeInTheDocument();
-    expect(within(lines).getByText("No agreement · $400")).toBeInTheDocument();
+    expect(within(lines).getByText("You said it was never agreed · $400")).toBeInTheDocument();
     const decision = screen.getByRole("complementary", { name: "Decision" });
     expect(within(decision).getByText("$700")).toBeInTheDocument();
     expect(within(decision).getByText("Requested by Maya, 2:07 PM.")).toBeInTheDocument();

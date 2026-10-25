@@ -76,7 +76,8 @@ export function IssueList({ issues, cleared, onOpen, moveMs, movingKey, allCharg
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 text-row font-semibold">
                     <span className="truncate">
-                      {i.kind === "question" ? `${i.title}: ${plural(i.rows.length, "charge needs", "charges need")} your answer` : i.title}
+                      {i.kind === "question"
+                        ? `${i.title === "Your answer" ? "" : `${i.title}: `}${plural(i.rows.length, "charge needs", "charges need")} your answer` : i.title}
                     </span>
                     {i.kind === "line" && i.isNew && <RowTagChip>New</RowTagChip>}
                   </span>

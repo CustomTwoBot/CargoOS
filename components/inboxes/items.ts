@@ -16,6 +16,8 @@ export type InboxLine = {
   key: string; lineNo: number; description: string; group: UiGroup; billed: string; delta: string;
   /** What was agreed for the line, when the engine found an agreement above zero ($0 means nobody agreed to it). */
   agreed?: string;
+  /** The plain reason when nothing was agreed above zero: "Billed twice", "You said it was never agreed". */
+  reason: string;
 };
 
 export type QuestionItem = {
@@ -56,6 +58,7 @@ const line = (r: Row): InboxLine => ({
   key: r.key, lineNo: r.lineNo, description: r.description, group: r.group,
   billed: inCurrency(r.billedCents, r.currency), delta: delta(r.deltaCents),
   agreed: r.finding.expectedCents ? inCurrency(r.finding.expectedCents, r.currency) : undefined,
+  reason: r.reason.plain,
 });
 
 const eventAt = (events: CaseEvent[], type: CaseEvent["type"], match: (p: Record<string, unknown>) => boolean) =>

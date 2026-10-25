@@ -123,15 +123,15 @@ function Collapsed({ view, onView, cases, inbox }: Props) {
   );
   return (
     <nav aria-label="Sections" className="flex w-[60px] flex-none flex-col items-center gap-2 border-r border-line bg-surface py-4">
-      <span className="mb-2.5 text-ink"><Logo /></span>
+      <span className="text-ink"><Logo /></span>
+      <button type="button" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar"
+        className="mb-1.5 grid size-[30px] place-items-center rounded-md text-ink-3 hover:bg-sunken hover:text-ink"><ExpandIcon /></button>
       {cases.length > 1 && item("All cases", <CasesIcon />, view === "cases", () => onView("cases"))}
       {item("Overview", <ListIcon />, view === "case", () => onView("case"))}
       {item("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), inbox.questions > 0)}
       {item("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), inbox.approvals > 0)}
       {item("Documents", <DocumentsIcon />, view === "documents", () => onView("documents"))}
       {item("History", <HistoryIcon />, view === "history", () => onView("history"))}
-      <button type="button" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar"
-        className="mt-auto grid size-[38px] place-items-center rounded-[10px] text-ink-3 hover:text-ink"><ExpandIcon /></button>
     </nav>
   );
 }
