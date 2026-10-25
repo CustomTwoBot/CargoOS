@@ -1,0 +1,15 @@
+{
+  "scenarioId": "A-ambig",
+  "questionId": "q_2",
+  "replyDoc": {
+    "_id": "doc_reply_2",
+    "caseId": "case_A-ambig",
+    "type": "reply",
+    "title": "Reply 2 from ops lead",
+    "sender": "ops_lead",
+    "sentAt": "2026-10-24T14:15:00-07:00",
+    "text": "not sure, maybe? I'd have to check"
+  },
+  "interpretation": "ambiguous",
+  "facts": []
+}
