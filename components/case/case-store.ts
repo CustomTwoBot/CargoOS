@@ -55,6 +55,17 @@ export type CaseActions = {
   saveLine: (key: string, change: LineChange) => void;
 };
 
+const STEP_MS = 60_000;
+
+/**
+ * When something done now happens in the replay's story: a minute after the latest event, recorded
+ * or local. The wall clock would put "Drafted at 11:42 PM" next to "Checked today at 1:55 PM".
+ */
+export function replayTime(demo: DemoCase, l: CaseLocal): string {
+  const times = [...demo.at(l.stage).events, ...l.log].map((e) => Date.parse(e.at)).filter((t) => !Number.isNaN(t));
+  return new Date((times.length ? Math.max(...times) : Date.now()) + STEP_MS).toISOString();
+}
+
 /**
  * Why `viewer` may not accept or reject this draft, or undefined when they may. Mirrors the server
  * rule (CLAUDE.md non-negotiable 8): only a controller decides, and never on their own request.
@@ -80,8 +91,8 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
   );
 
   const patch = (id: string, fn: (l: CaseLocal) => CaseLocal) => setState((s) => ({ ...s, [id]: fn(s[id]) }));
-  const event = (l: CaseLocal, caseId: string, action: Action, type: CaseEvent["type"], payload: Record<string, unknown>): CaseEvent[] =>
-    [...l.log, { _id: `local_${l.log.length + 1}`, caseId, at: new Date().toISOString(), actor: ACTION_ROLE[action], type, payload }];
+  const event = (demo: DemoCase, l: CaseLocal, caseId: string, action: Action, type: CaseEvent["type"], payload: Record<string, unknown>): CaseEvent[] =>
+    [...l.log, { _id: `local_${l.log.length + 1}`, caseId, at: replayTime(demo, l), actor: ACTION_ROLE[action], type, payload }];
   const clear = (id: string) => { (timers.current[id] ?? []).forEach(clearTimeout); timers.current[id] = []; };
 
   const actionsFor = (demo: DemoCase): CaseActions => {
@@ -91,7 +102,7 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
       const d = inputs[id].drafts.find((x) => x._id === draftId);
       const reason = d && decisionBlocked(viewer, d);
       if (!reason) return false;
-      patch(id, (l) => ({ ...l, log: event(l, caseId, "approve", "approval_blocked", { draftId, personId: viewer.id, reason }) }));
+      patch(id, (l) => ({ ...l, log: event(demo, l, caseId, "approve", "approval_blocked", { draftId, personId: viewer.id, reason }) }));
       toast(reason);
       return true;
     };
@@ -115,7 +126,7 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         patch(id, (l) => {
           before = l.verdicts[key];
           return { ...l, verdicts: { ...l.verdicts, [key]: v },
-            log: event(l, caseId, v === "confirmed" ? "confirm" : "dismiss", v === "confirmed" ? "finding_confirmed" : "finding_dismissed", { findingKey: key }) };
+            log: event(demo, l, caseId, v === "confirmed" ? "confirm" : "dismiss", v === "confirmed" ? "finding_confirmed" : "finding_dismissed", { findingKey: key }) };
         });
         toast(v === "confirmed" ? "Kept in dispute. Saved to case history." : "Marked as not an issue. Saved to case history.", () =>
           patch(id, (l) => {
@@ -133,8 +144,8 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         const decides = viewer.roles.includes("controller");
         const draft: Draft = { ...d, status: "pending_approval", ...(!decides && { requestedBy: viewer.id }) };
         patch(id, (l) => {
-          const log1 = event(l, caseId, "draftDispute", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents });
-          const log2 = event({ ...l, log: log1 }, caseId, "requestApproval", "approval_requested", { draftId: d._id, personId: viewer.id });
+          const log1 = event(demo, l, caseId, "draftDispute", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents });
+          const log2 = event(demo, { ...l, log: log1 }, caseId, "requestApproval", "approval_requested", { draftId: d._id, personId: viewer.id });
           return { ...l, drafts: [...l.drafts.filter((x) => x._id !== d._id), draft], log: log2 };
         });
         toast(decides ? "Dispute drafted. Nothing was sent." : `Approval requested from ${firstName(OWNER)}. Nothing was sent.`);
@@ -145,7 +156,7 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         if (blocked(draftId)) return;
         patch(id, (l) => ({ ...l,
           drafts: l.drafts.map((d) => (d._id === draftId ? { ...d, status: "approved", approvedBy: viewer.id, acceptedBy: viewer.id } : d)),
-          log: event(l, caseId, "approve", "approved", { draftId, personId: viewer.id }) }));
+          log: event(demo, l, caseId, "approve", "approved", { draftId, personId: viewer.id }) }));
         toast("Accepted. Nothing was sent.");
       },
 
@@ -153,8 +164,8 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         if (blocked(draftId)) return;
         patch(id, (l) => ({ ...l,
           drafts: l.drafts.map((d) => (d._id === draftId
-            ? { ...d, status: "rejected", rejectedBy: viewer.id, rejectedAt: new Date().toISOString(), rejectionReason: reason } : d)),
-          log: event(l, caseId, "approve", "draft_rejected", { draftId, reason, personId: viewer.id }) }));
+            ? { ...d, status: "rejected", rejectedBy: viewer.id, rejectedAt: replayTime(demo, l), rejectionReason: reason } : d)),
+          log: event(demo, l, caseId, "approve", "draft_rejected", { draftId, reason, personId: viewer.id }) }));
         toast("Rejected. Nothing went to the seller.");
       },
 
@@ -165,15 +176,15 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         patch(id, (l) => {
           const doc: SourceDoc = {
             _id: `local_doc_${l.added.length + 1}`, caseId, type: e.type,
-            title: `${KIND_TITLE[e.type]} you added`, sentAt: new Date().toISOString(), text: e.text,
+            title: `${KIND_TITLE[e.type]} you added`, sentAt: replayTime(demo, l), text: e.text,
           };
-          return { ...l, added: [...l.added, doc], log: event(l, caseId, "addEvidence", "doc_added", { docId: doc._id }) };
+          return { ...l, added: [...l.added, doc], log: event(demo, l, caseId, "addEvidence", "doc_added", { docId: doc._id }) };
         });
         return { kind: "replay" };
       },
 
       saveLine: (key, change) => patch(id, (l) => ({ ...l, edits: { ...l.edits, [key]: change },
-        log: event(l, caseId, "editCharge", "charge_edited", { chargeId: key, description: change.description, amountCents: change.amountCents }) })),
+        log: event(demo, l, caseId, "editCharge", "charge_edited", { chargeId: key, description: change.description, amountCents: change.amountCents }) })),
     };
   };
 
