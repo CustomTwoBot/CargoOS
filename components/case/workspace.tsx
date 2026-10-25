@@ -49,6 +49,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
   const ctx: CaseContext = { demo, x, local, actions, viewer: person, now, forwarder: inbox.forwarder };
   // A link in the thread shows its line or document on the canvas; below 1024 that means switching to it.
   const focusFromThread = (f: Focus) => { setFocus(f); setPane("invoice"); };
+  // Resetting or jumping the replay changes what exists (a message, a line's state): start again on the invoice.
+  const go = (stage: string) => { setFocus(INVOICE); actions.reset(stage); };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-surface">
@@ -61,7 +63,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
           <span title={demo.live ? "Live: read from the backend." : "Replay of a recorded run. Nothing here reaches the backend or Claude."}
             className="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">{demo.live ? "Live" : "Replay"}</span>
           <CaseMenu x={x} onAddEvidence={canAct(person.roles, "addEvidence") ? actions.addEvidence : undefined}
-            onReset={() => actions.reset(demo.start)} />
+            onReset={() => go(demo.start)} />
         </div>
       </header>
 
@@ -77,7 +79,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
       <div className="relative flex min-h-0 flex-1">
         <div className={cx("relative flex min-w-0 flex-1", pane === "thread" && "max-lg:hidden")}>
           <CaseCanvas {...ctx} focus={focus} onFocus={setFocus} />
-          <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
+          <DemoControls demo={demo} stage={local.stage} onGo={go} />
         </div>
         <div className={cx("flex min-h-0 w-[420px] flex-none max-xl:w-[360px] max-lg:w-full", pane === "invoice" && "max-lg:hidden")}>
           <CaseThread {...ctx} onFocus={focusFromThread} />
