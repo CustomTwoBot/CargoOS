@@ -188,6 +188,81 @@ describe("confirmFinding / dismissFinding (SPEC §6 verdicts, §8 Agree / Not an
   });
 });
 
+describe("learned rules in the pipeline (SPEC §4 step 6, §9 W1 step 8)", () => {
+  /** Tab 1 = seeded Scenario A; tab 2 = another Pacific Crest case billing $400 rush handling; tab 3 = another forwarder. */
+  async function tabs() {
+    const { t, caseId: caseA } = await setup();
+    const extra = await t.run(async (ctx) => {
+      const addCase = async (title: string, forwarder: string, status: "open" | "approved" = "open") => {
+        const caseId = await ctx.db.insert("cases", { title, shipmentRef: title, baseCurrency: "USD", revision: 0, status, forwarder });
+        const docId = await ctx.db.insert("documents", { caseId, type: "freight_invoice", title, text: "1  Rush handling   400.00" });
+        await ctx.db.insert("charges", {
+          caseId, docId, lineNo: 1, billedBy: "forwarder", chargeType: "handling", description: "Rush handling",
+          amountCents: 40000, currency: "USD", span: { docId, locator: "line 1", quote: "Rush handling   400.00" },
+        });
+        return caseId;
+      };
+      return {
+        caseB: await addCase("B-repeat", "Pacific Crest Logistics"),
+        caseC: await addCase("C-other", "Harbor Gate Freight"),
+        caseClosed: await addCase("B-closed", "pacific crest logistics", "approved"),
+      };
+    });
+    // The rule Maya's "Not an issue" on Scenario A line 6 saves (Pranav's saveLearnedRule writes it in the app).
+    const ruleId = await t.run(async (ctx) => {
+      const line6 = (await ctx.db.query("charges").withIndex("by_case", (q) => q.eq("caseId", caseA)).collect()).find((c) => c.lineNo === 6)!;
+      return ctx.db.insert("learnedRules", {
+        forwarder: "Pacific Crest Logistics", chargeType: "handling", maxAmountCents: 40000, createdBy: "maya",
+        createdAt: "2026-10-24T21:40:00-07:00", sourceCaseId: caseA, sourceChargeId: line6._id,
+      });
+    });
+    return { t, caseA, ...extra, ruleId };
+  }
+
+  it("processChange passes the forwarder's rules: tab 2 is cleared by R10 with the SPEC why line", async () => {
+    const { t, caseB, ruleId } = await tabs();
+    await t.mutation(internal.pipeline.processChange, { caseId: caseB });
+    expect((await findingsAt(t, caseB, 1))[0]).toMatchObject({
+      status: "supported", ruleId: "R10_LEARNED", learnedRuleId: ruleId,
+      explanation: "You accepted this charge from Pacific Crest Logistics on Oct 24.",
+    });
+  });
+
+  it("the rule never clears its own source line (tab 1 line 6 stays waiting)", async () => {
+    const { t, caseA } = await tabs();
+    await t.mutation(internal.pipeline.processChange, { caseId: caseA });
+    expect((await findingsAt(t, caseA, 1))[5]).toMatchObject({ lineNo: 6, ruleId: "R6_NO_EVIDENCE" });
+  });
+
+  it("recomputeForwarder updates every open case of that forwarder, and nothing else", async () => {
+    const { t, caseA, caseB, caseC, caseClosed } = await tabs();
+    expect(await t.mutation(internal.pipeline.recomputeForwarder, { forwarder: "Pacific Crest Logistics" })).toBe(2);
+    const revisions = await t.run(async (ctx) => Promise.all([caseA, caseB, caseC, caseClosed].map(async (id) => (await ctx.db.get(id))!.revision)));
+    expect(revisions).toEqual([1, 1, 0, 0]);
+  });
+
+  it("another forwarder's case is not cleared by the rule (tab 3 stays waiting)", async () => {
+    const { t, caseC } = await tabs();
+    await t.mutation(internal.pipeline.processChange, { caseId: caseC });
+    expect((await findingsAt(t, caseC, 1))[0].ruleId).toBe("R6_NO_EVIDENCE");
+  });
+
+  it("undo: with the rule deleted, recomputing puts tab 2 back to waiting and logs the change", async () => {
+    const { t, caseB, ruleId } = await tabs();
+    await t.mutation(internal.pipeline.processChange, { caseId: caseB });
+    const undoEvent = await t.run(async (ctx) => {
+      await ctx.db.delete(ruleId);
+      return ctx.db.insert("events", { caseId: caseB, at: "2026-10-24T22:00:00-07:00", actor: "controller", type: "rule_undone", payload: { ruleId } });
+    });
+    await t.mutation(internal.pipeline.recomputeForwarder, { forwarder: "Pacific Crest Logistics", eventId: undoEvent });
+    expect((await findingsAt(t, caseB, 2))[0].ruleId).toBe("R6_NO_EVIDENCE");
+    const last = (await events(t, caseB)).filter((e) => e.type === "recomputed").at(-1)!;
+    expect(last.payload.changes).toEqual([expect.objectContaining({
+      lineNo: 1, from: { status: "supported" }, to: { status: "needs_review" }, causedByEventId: undoEvent,
+    })]);
+  });
+});
+
 describe("editCharge (SPEC §8 line editor)", () => {
   it("edits the line, writes charge_edited, and recomputes with that event as the cause", async () => {
     const { t, caseId } = await setup();

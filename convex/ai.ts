@@ -27,7 +27,7 @@ const now = () => new Date().toISOString();
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 async function logEvent(ctx: MutationCtx, caseId: Id<"cases">, actor: Doc<"events">["actor"], type: Doc<"events">["type"], payload: Record<string, unknown>) {
-  await ctx.db.insert("events", { caseId, at: now(), actor, type, payload });
+  return await ctx.db.insert("events", { caseId, at: now(), actor, type, payload });
 }
 
 // ---- State and failures ----
@@ -109,7 +109,6 @@ export const extractAndStore = internalAction({
         charges: extraction.charges as Infer<typeof newCharge>[],
         dropped: extraction.dropped,
       });
-      // TODO(Dev): schedule internal.pipeline.processChange here once convex/pipeline.ts lands.
     } catch (e) {
       await fail("extract", message(e));
     }
@@ -135,7 +134,12 @@ export const saveDocText = internalMutation({
 export const markNotRead = internalMutation({
   args: { docId: v.id("documents"), error: v.string() },
   handler: async (ctx, { docId, error }) => {
+    const doc = await ctx.db.get(docId);
+    if (!doc) return;
     await ctx.db.patch(docId, { readStatus: "not_read", readError: error });
+    // No new facts, so no recompute; but if this was the last document being read, the question
+    // planQuestion held back can be asked now (it re-checks reading and open questions itself).
+    await ctx.scheduler.runAfter(0, internal.ai.planQuestion, { caseId: doc.caseId });
   },
 });
 
@@ -147,7 +151,10 @@ export const saveExtraction = internalMutation({
     const chargeIds = [];
     for (const charge of charges) chargeIds.push(await ctx.db.insert("charges", { ...charge, caseId }));
     await ctx.db.patch(docId, { readStatus: "read", readError: undefined });
-    await logEvent(ctx, caseId, "agent", "facts_extracted", { docId, factIds, chargeIds, dropped });
+    const eventId = await logEvent(ctx, caseId, "agent", "facts_extracted", { docId, factIds, chargeIds, dropped });
+    // Scheduled in the same transaction, so it runs exactly when the facts are saved. processChange
+    // schedules planQuestion, which waits until no document in the case is still "reading".
+    await ctx.scheduler.runAfter(0, internal.pipeline.processChange, { caseId, eventId });
   },
 });
 
@@ -268,12 +275,13 @@ export const applyReply = internalMutation({
     for (const fact of facts) factIds.push(await ctx.db.insert("facts", { ...fact, caseId }));
     const replyId = await ctx.db.insert("replies", { caseId, questionId, from: question.to, docId, interpretation, factIds });
     await ctx.db.patch(questionId, { status: questionStatus });
-    await logEvent(ctx, caseId, "agent", "facts_extracted", { docId, replyId, questionId, interpretation, factIds, dropped, questionStatus });
+    const eventId = await logEvent(ctx, caseId, "agent", "facts_extracted", { docId, replyId, questionId, interpretation, factIds, dropped, questionStatus });
 
     if (followUp) await insertQuestion(ctx, caseId, followUp);
     else await ctx.db.patch(caseId, { status: "open" });
-    // TODO(Dev): schedule internal.pipeline.processChange here once convex/pipeline.ts lands, so the new
-    // facts recompute the findings.
+    // The reply's facts recompute the findings. A follow-up is saved first, so processChange sees its
+    // lines covered and doesn't plan a second question.
+    await ctx.scheduler.runAfter(0, internal.pipeline.processChange, { caseId, eventId });
     return replyId;
   },
 });

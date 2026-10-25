@@ -1,6 +1,6 @@
-// Rules R0-R9 for one invoice line (SPEC.md §6, §9 W1 step 2).
+// Rules R0-R10 for one invoice line (SPEC.md §6, §9 W1 steps 2 and 8).
 // Pure: no network, no database, no clock. Money in integer cents, dates as ISO strings.
-import type { Charge, ChargeType, Fact, Party, Role, RuleId, SourceSpan, Status } from "../types";
+import type { Charge, ChargeType, Fact, LearnedRule, Party, Role, RuleId, SourceSpan, Status } from "../types";
 import { compareDates, compareInstants, isoDatePart } from "./money";
 
 export interface RuleContext {
@@ -8,6 +8,9 @@ export interface RuleContext {
   facts: Fact[];
   charges: Charge[];     // every line on the case, for the duplicate check
   invoiceDate?: string;  // invoice sentAt; valid-until falls back to it when there is no booking date
+  caseId?: string;       // R10: a rule never applies in its source case
+  forwarder?: string;    // R10: rules match on the case's forwarder
+  learnedRules?: LearnedRule[];
 }
 
 /** What a rule decides. reconcile() adds key, revision, billedCents, evidence spans and the "why" line. */
@@ -20,6 +23,7 @@ export interface RuleResult {
   missing?: string[];
   routeTo?: Party | Role;
   evidence?: SourceSpan[];  // spans that are not facts (R1: the earlier duplicate line)
+  learnedRuleId?: string;   // R10: the learned rule that cleared the line
 }
 
 // §6: approvals and rejections only count when stated by the buyer side.
@@ -159,7 +163,26 @@ export function checkExclusion(c: Charge, ctx: RuleContext): RuleResult | null {
     : null;
 }
 
-/** Step 6, R6: nothing agrees to this charge. */
+const sameForwarder = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Step 6, R10: an earlier "Not an issue" for this forwarder and charge type, from a different case,
+ * with billed <= its cap (or no cap). Only reached when no written evidence decided the line, so a
+ * rule never overrides a rate, approval, rejection, clause, exclusion or duplicate. Newest rule wins.
+ */
+export function checkLearned(c: Charge, ctx: RuleContext): RuleResult | null {
+  const forwarder = ctx.forwarder;
+  if (!forwarder) return null;
+  const rule = (ctx.learnedRules ?? [])
+    .filter((r) => sameForwarder(r.forwarder, forwarder) && r.chargeType === c.chargeType
+      && r.sourceCaseId !== ctx.caseId && (r.maxAmountCents === undefined || c.amountCents <= r.maxAmountCents))
+    .reduce<LearnedRule | undefined>((best, r) => (!best || compareInstants(r.createdAt, best.createdAt) > 0 ? r : best), undefined);
+  return rule
+    ? { status: "supported", ruleId: "R10_LEARNED", expectedCents: c.amountCents, factIds: [], learnedRuleId: rule._id }
+    : null;
+}
+
+/** Step 7, R6: nothing agrees to this charge. */
 export function noEvidence(c: Charge): RuleResult {
   return {
     status: "needs_review", ruleId: "R6_NO_EVIDENCE", factIds: [],
@@ -174,5 +197,6 @@ export function evaluateCharge(c: Charge, ctx: RuleContext): RuleResult {
     ?? checkDecisive(c, ctx)
     ?? checkPermittedSurcharge(c, ctx)
     ?? checkExclusion(c, ctx)
+    ?? checkLearned(c, ctx)
     ?? noEvidence(c);
 }

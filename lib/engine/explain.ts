@@ -1,15 +1,17 @@
 // "Why" line for a finding, from code templates only (SPEC.md §6, §9 W1 step 4; CLAUDE.md rule 5).
 // Pure. Never throws: a missing cited fact falls back to the billed amount.
-import type { Charge, DocType, Fact, Finding, SourceDoc } from "../types";
+import type { Charge, DocType, Fact, Finding, LearnedRule, SourceDoc } from "../types";
 import { formatShortDate, formatUSD } from "./money";
 
 /**
  * Optional extras beyond the SPEC §5.3 `(f, facts)` signature. With documents, sources read
- * "(email, Sep 5)"; without them, "(Sep 5)". The charge gives R3 its currency.
+ * "(email, Sep 5)"; without them, "(Sep 5)". The charge gives R3 its currency; learned rules give R10
+ * its forwarder and date.
  */
 export interface ExplainContext {
   documents?: SourceDoc[];
   charge?: Charge;
+  learnedRules?: LearnedRule[];
 }
 
 // {docTitle} in the §6 templates renders as the document type (see fixtures/scenarioA.ui.json).
@@ -87,7 +89,10 @@ export function explain(f: Finding, facts: Fact[], context: ExplainContext = {})
         ? `${billed} The ${role(no)} said this was not agreed on ${date(no.effectiveAt)}: ${quoted(no.span.quote)}${over}`
         : `${billed}${over}`;
     }
-    case "R10_LEARNED": // TODO(Dev): R10 template from SPEC.md 6; placeholder added with the 5.5 types so typecheck passes
-      return billed;
+    case "R10_LEARNED": {
+      // SPEC §6: "You accepted this charge from {forwarder} on {date}." with the rule's createdAt.
+      const rule = context.learnedRules?.find((r) => r._id === f.learnedRuleId);
+      return rule ? `You accepted this charge from ${rule.forwarder} on ${date(rule.createdAt)}.` : `${billed} You accepted this charge before.`;
+    }
   }
 }
