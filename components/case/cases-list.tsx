@@ -10,7 +10,9 @@ import type { DemoCase } from "./demo-case";
 import { money } from "./format";
 
 export type CaseSummary = {
-  atStakeCents: number; billedCents: number; status: CaseStatus; openQuestions: number; toDecide: number; documents: number;
+  atStakeCents: number; billedCents: number; status: CaseStatus; openQuestions: number; documents: number;
+  /** One quiet line under the status: "2 to decide", "Dispute accepted", or nothing. */
+  note?: string;
 };
 
 type Filter = "all" | CaseTone;
@@ -94,7 +96,7 @@ export function CasesList({ cases, summaries, onOpen, plain = false }: Props) {
                       <span className="text-[13px]">
                         <span className={cx("rounded-full border px-2 text-xs font-semibold leading-5",
                           s?.status.tone === "you" ? "border-waiting-line text-waiting" : "border-line-strong text-ink-2")}>{s?.status.label ?? "Loading…"}</span>
-                        {s && s.toDecide > 0 && <span className="mt-1 block text-xs text-ink-3">{s.toDecide} to decide</span>}
+                        {s?.note && <span className="mt-1 block text-xs text-ink-3">{s.note}</span>}
                       </span>
                       <span className="hidden text-right text-body font-semibold lg:block">{s ? money(s.billedCents) : "—"}</span>
                       <span className={cx("text-right text-[17px] font-[650]", s?.atStakeCents ? "text-dispute" : "text-ink-3")}>

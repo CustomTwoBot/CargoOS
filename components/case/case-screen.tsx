@@ -28,7 +28,7 @@ import { SCENARIO_A } from "./fixture";
 import { issuesOf, openQuestions } from "./issues";
 import { Sidebar, type Place, type View } from "./sidebar";
 import { CaseWorkspace, type WorkspaceProps } from "./workspace";
-import { totalsOf, type CaseInput } from "./view-model";
+import { latestDraft, totalsOf, type CaseInput } from "./view-model";
 
 type ToastItem = { id: number; text: string; undo?: () => void };
 
@@ -102,7 +102,7 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
           <div className="pt-6"><CasesEmpty onNew={() => setView("new")} onLoadExample={() => undefined} examples={[]} /></div>
         ))}
         {view === "new" && (
-          <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
+          <div className="min-h-0 flex-1 overflow-auto">
             <NewCaseFlow onCancel={() => setView(cases.length ? "case" : "cases")}
               onLoadExample={(id) => (cases.some((c) => c.id === id) ? open(id) : undefined)}
               onCreate={() => { toast("In this replay, new cases aren't read. Open a recorded case to try the checks."); setView("cases"); }} />
@@ -146,10 +146,16 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
  */
 const workspaceProps = (p: WorkspaceProps, viewer: Person): WorkspaceProps => ({ ...p, viewer } as WorkspaceProps);
 
+/** Once the dispute is accepted nothing is left to decide, whatever the lines say. */
+function noteOf(x: CaseInput, toDecide: number): string | undefined {
+  if (latestDraft(x)?.status === "approved") return "Dispute accepted";
+  return toDecide > 0 ? `${toDecide} to decide` : undefined;
+}
+
 function summaryOf(x: CaseInput, person: Person): CaseSummary {
   const t = totalsOf(x), issues = issuesOf(x);
   return {
     atStakeCents: t.atStakeCents, billedCents: t.billedCents, status: caseStatus(x, person),
-    openQuestions: openQuestions(x).length, toDecide: issues.filter((i) => i.kind !== "dispute").length, documents: x.documents.length,
+    openQuestions: openQuestions(x).length, documents: x.documents.length, note: noteOf(x, issues.filter((i) => i.kind !== "dispute").length),
   };
 }
