@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cx } from "@/components/case/cx";
 import { displayName } from "@/components/shell/person";
+import { ReceiptText, Settings } from "@/components/app/icons";
 import { useBills } from "./bills-provider";
 import { HOME_FOCUS, Logo, PersonAvatar } from "./ui";
 
@@ -21,9 +22,9 @@ export function AppFrame({ children }: { children: ReactNode }) {
           <Link href="/" aria-label="CargoOS home" className={cx("mr-1", HOME_FOCUS)}><Logo /></Link>
           <nav aria-label="Main" className="hidden items-center gap-1 rounded-full bg-raised p-[3px] sm:flex">
             <Link href="/bills" aria-current={inBills ? "page" : undefined}
-              className={cx(NAV, inBills ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>Bills</Link>
+              className={cx(NAV, inBills ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}><ReceiptText aria-hidden="true" strokeWidth={2} className="mr-1.5 size-[15px]" />Bills</Link>
             <Link href="/settings" aria-current={path === "/settings" ? "page" : undefined}
-              className={cx(NAV, path === "/settings" ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>Settings</Link>
+              className={cx(NAV, path === "/settings" ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}><Settings aria-hidden="true" strokeWidth={2} className="mr-1.5 size-[15px]" />Settings</Link>
           </nav>
           <div className="flex-1" />
           {mode === "replay" && (

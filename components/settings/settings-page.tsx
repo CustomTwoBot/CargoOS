@@ -2,6 +2,7 @@
 // /settings in the app frame (docs/design.md §0.5): who uses this screen, the theme, the workspace
 // and the demo data, one card each. Nothing here sends, charges or invites anyone.
 import { useRouter } from "next/navigation";
+import { Building2, Database, Monitor, Moon, Smartphone, Sun, SunMoon, type LucideIcon } from "@/components/app/icons";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import type { Role } from "@/lib/types";
 import { useBills } from "@/components/app/bills-provider";
@@ -31,13 +32,18 @@ export function SettingsPage() {
   );
 }
 
-function Section({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
+function Section({ title, icon: Icon, lead, children }: { title: string; icon: LucideIcon; lead?: ReactNode; children: ReactNode }) {
   const id = useId();
   return (
     <Card aria-labelledby={id} className="flex flex-col gap-4 p-5 sm:p-6">
-      <div className="flex flex-col gap-0.5">
-        <h2 id={id} className="text-[18px] font-bold leading-[24px] tracking-[-0.01em]">{title}</h2>
-        {lead && <p className="text-[13.5px] text-ink-2">{lead}</p>}
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-sunken text-ink-2">
+          <Icon strokeWidth={1.9} className="size-[18px]" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 id={id} className="text-[18px] font-bold leading-[24px] tracking-[-0.01em]">{title}</h2>
+          {lead && <p className="text-[13.5px] text-ink-2">{lead}</p>}
+        </div>
       </div>
       {children}
     </Card>
@@ -54,7 +60,7 @@ function DeviceSection() {
     if (next) toast(`This screen is now set to ${displayName(next)}`);
   };
   return (
-    <Section title="This device" lead="Each screen is set to one person. What you see and can do follows from who it is.">
+    <Section title="This device" icon={Smartphone} lead="Each screen is set to one person. What you see and can do follows from who it is.">
       <PersonPicker value={person.id} onChange={pick} legend="Who uses this screen" />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-4">
         <Button variant="ghost" onClick={() => { clearSetup(); router.push("/"); }}>Start over</Button>
@@ -74,7 +80,7 @@ function AppearanceSection() {
   // While "System" is chosen, follow the OS switching between light and dark.
   useEffect(() => (choice === "system" ? followSystemTheme() : undefined), [choice]);
   return (
-    <Section title="Appearance" lead="Remembered on this screen only.">
+    <Section title="Appearance" icon={SunMoon} lead="Remembered on this screen only.">
       <fieldset className="min-w-0">
         <legend className="sr-only">Theme</legend>
         <div className="inline-flex flex-wrap gap-1 rounded-full bg-raised p-[3px]">
@@ -85,6 +91,7 @@ function AppearanceSection() {
               choice === t.id ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink",
             )}>
               <input type="radio" name={name} value={t.id} checked={choice === t.id} onChange={() => setThemeChoice(t.id)} className="sr-only" />
+              {(() => { const Icon = t.id === "light" ? Sun : t.id === "dark" ? Moon : Monitor; return <Icon aria-hidden="true" strokeWidth={2} className="mr-1.5 size-[15px]" />; })()}
               {t.label}
             </label>
           ))}
@@ -107,7 +114,7 @@ function WorkspaceSection() {
     toast("Workspace name saved");
   };
   return (
-    <Section title="Workspace" lead="One demo workspace with three seeded people.">
+    <Section title="Workspace" icon={Building2} lead="One demo workspace with three seeded people.">
       <form onSubmit={save} className="flex flex-col gap-2">
         <label htmlFor="settings-workspace" className="text-[14px] font-semibold">Workspace name</label>
         <div className="flex flex-wrap gap-2">
@@ -152,7 +159,7 @@ function WorkspaceSection() {
 function DemoSection() {
   const { mode, resetAll, demoMissing, setupDemo } = useBills();
   return (
-    <Section title="Demo data" lead="Synthetic data. Nothing is sent or paid automatically.">
+    <Section title="Demo data" icon={Database} lead="Synthetic data. Nothing is sent or paid automatically.">
       <div className="flex flex-col gap-1 rounded-[14px] bg-sunken px-4 py-3">
         <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-ink-3">Mode</span>
         {mode === "live" && demoMissing ? (

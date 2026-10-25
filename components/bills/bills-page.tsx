@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { money } from "@/components/case/format";
-import { groupOf, nextStep, statusOf, type BillGroup, type Tone } from "@/components/app/next-step";
+import { groupOf, nextStep, statusOf, type BillGroup, type Step, type Tone } from "@/components/app/next-step";
 import { useBills, type Bill } from "@/components/app/bills-provider";
+import { Ban, BadgeCheck, CircleAlert, CircleCheck, CircleCheckBig, CircleHelp, CircleX, Clock, Files, Hourglass, Inbox, LoaderCircle, Scale, SearchX, Stamp, type LucideIcon, type LucideProps } from "@/components/app/icons";
 import { BUTTON, Card, Kicker, LinkButton, SplitBar } from "@/components/app/ui";
 import { greeting, splitOf } from "@/components/bill/models";
 import { firstName, isUploaderOnly } from "@/components/shell/person";
@@ -20,6 +21,26 @@ const TABS: { id: BillGroup; label: string }[] = [
 ];
 
 const PRIMARY_SMALL = "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-[10px] bg-brand px-3 text-[13px] font-semibold text-brand-ink hover:opacity-90";
+
+// One icon per next step, next to the status words (never instead of them).
+const STEP_ICON: Record<Step["kind"], LucideIcon> = {
+  answer: CircleHelp, waitAnswer: Hourglass, request: Scale, waitRequest: Hourglass, decide: Stamp, waitDecision: Clock,
+  selfBlocked: Ban, accepted: BadgeCheck, rejected: CircleX, clear: CircleCheck, reading: LoaderCircle, rechecking: LoaderCircle,
+  documents: Files,
+};
+
+function StepIcon({ kind }: { kind: Step["kind"] }) {
+  const Icon = STEP_ICON[kind];
+  const spin = kind === "reading" || kind === "rechecking";
+  return <Icon aria-hidden="true" strokeWidth={2} className={cx("size-[15px] shrink-0", spin && "motion-safe:animate-spin")} />;
+}
+
+const TAB_ICON: Record<BillGroup, LucideIcon> = { check: Inbox, waiting: Clock, done: CircleCheckBig };
+
+function TabIcon({ tab, ...rest }: LucideProps & { tab: BillGroup }) {
+  const Icon = TAB_ICON[tab];
+  return <Icon aria-hidden="true" {...rest} />;
+}
 
 const TONE: Record<Tone, string> = { ask: "text-ask", hold: "text-hold", pay: "text-pay", muted: "text-ink-3" };
 
@@ -58,17 +79,17 @@ export function BillsPage() {
       {!uploader && (
         <section aria-label="Across all bills" className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <Card className="flex flex-col gap-1 px-5 py-[18px]">
-            <Kicker tone="pay">Safe to pay</Kicker>
+            <Kicker tone="pay" icon={CircleCheck}>Safe to pay</Kicker>
             <span className="text-[28px] font-bold leading-[34px] tracking-[-0.02em]"><span className="rounded-[8px] bg-lime px-1.5 text-lime-ink">{money(sum("pay"))}</span></span>
             <span className="text-[13px] text-ink-3">matches what was agreed, across {rows.length} bills</span>
           </Card>
           <Card className="flex flex-col gap-1 px-5 py-[18px]">
-            <Kicker tone="hold">On hold</Kicker>
+            <Kicker tone="hold" icon={CircleAlert}>On hold</Kicker>
             <span className="text-[28px] font-bold leading-[34px] tracking-[-0.02em] text-hold">{money(sum("hold"))}</span>
             <span className="text-[13px] text-ink-3">more than agreed</span>
           </Card>
           <Card className="flex flex-col gap-1 px-5 py-[18px]">
-            <Kicker tone="ask">Waiting for answers</Kicker>
+            <Kicker tone="ask" icon={CircleHelp}>Waiting for answers</Kicker>
             <span className={cx("text-[28px] font-bold leading-[34px] tracking-[-0.02em]", sum("ask") ? "text-ask" : "text-ink-4")}>{money(sum("ask"))}</span>
             <span className="text-[13px] text-ink-3">{askCount === 1 ? "1 question from CargoOS" : `${askCount} questions from CargoOS`}</span>
           </Card>
@@ -81,6 +102,7 @@ export function BillsPage() {
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
               className={cx("inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13.5px] font-semibold",
                 tab === t.id ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>
+              <TabIcon aria-hidden="true" strokeWidth={2} className="size-[15px] shrink-0" tab={t.id} />
               {t.label}
               <span className={cx("rounded-full px-1.5 text-[12px] tabular-nums", tab === t.id && t.id === "check" && count("check") ? "bg-brand text-brand-ink" : "text-ink-3")}>{count(t.id)}</span>
             </button>
@@ -92,12 +114,18 @@ export function BillsPage() {
       <Card className="overflow-hidden" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)!.label}>
         {shown.length === 0 && searching ? (
           <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <span aria-hidden="true" className="inline-flex size-12 items-center justify-center rounded-full bg-sunken text-ink-3">
+              <SearchX strokeWidth={1.8} className="size-6" />
+            </span>
             <span className="text-[17px] font-semibold">No bills match “{query.trim()}”</span>
             <span className="text-ink-3">Search looks at the forwarder, the invoice number and the bill’s name.</span>
             <button type="button" className={BUTTON.secondary} onClick={() => setQuery("")}>Clear search</button>
           </div>
         ) : shown.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <span aria-hidden="true" className="inline-flex size-12 items-center justify-center rounded-full bg-sunken text-ink-3">
+              <TabIcon tab={tab} strokeWidth={1.8} className="size-6" />
+            </span>
             <span className="text-[17px] font-semibold">{tab === "check" ? "Nothing to check." : tab === "waiting" ? "Nobody else has anything open." : "No finished bills yet."}</span>
             <span className="text-ink-3">{tab === "check" ? "Drop a new bill and what was agreed; CargoOS checks every line." : "Bills show up here as people answer and decide."}</span>
             {tab === "check" && <LinkButton href="/bills/new">New bill</LinkButton>}
@@ -105,7 +133,7 @@ export function BillsPage() {
         ) : (
           <ul className="divide-y divide-line">
             {shown.map(({ b, step, status, split }) => (
-              <BillRow key={b.id} bill={b} status={status} split={split} uploader={uploader} replayTag={mode === "live" && !b.live}
+              <BillRow key={b.id} bill={b} kind={step.kind} status={status} split={split} uploader={uploader} replayTag={mode === "live" && !b.live}
                 writeHref={step.kind === "accepted" && person.roles.includes("controller")}
                 primary={["answer", "decide", "request", "accepted", "rejected"].includes(step.kind)} />
             ))}
@@ -148,8 +176,8 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-function BillRow({ bill, status, split, uploader, writeHref, replayTag, primary }: {
-  bill: Bill; status: ReturnType<typeof statusOf>; split: ReturnType<typeof splitOf>; uploader: boolean; writeHref: boolean; replayTag: boolean; primary: boolean;
+function BillRow({ bill, kind, status, split, uploader, writeHref, replayTag, primary }: {
+  bill: Bill; kind: Step["kind"]; status: ReturnType<typeof statusOf>; split: ReturnType<typeof splitOf>; uploader: boolean; writeHref: boolean; replayTag: boolean; primary: boolean;
 }) {
   const invoice = bill.x.documents.find((d) => d.type === "freight_invoice");
   const ref = [bill.invoiceRef ?? bill.x.case.title, invoice?.sentAt ? pacificDate(invoice.sentAt) : undefined].filter(Boolean).join(" · ");
@@ -173,7 +201,10 @@ function BillRow({ bill, status, split, uploader, writeHref, replayTag, primary 
         </div>
       ) : null}
       <div className="order-4 col-span-2 flex min-w-0 flex-col md:order-none md:col-span-1">
-        <span className={cx("font-semibold", TONE[status.tone])}>{status.label}</span>
+        <span className={cx("inline-flex min-w-0 items-center gap-1.5 font-semibold", TONE[status.tone])}>
+          <StepIcon kind={kind} />
+          <span className="truncate">{status.label}</span>
+        </span>
         <span className="truncate text-[12.5px] text-ink-3">{status.sub}</span>
       </div>
       {!uploader && <span className="hidden min-w-[72px] text-right font-semibold tabular-nums md:block">{money(split.billed)}</span>}
