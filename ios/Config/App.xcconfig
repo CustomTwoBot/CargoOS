@@ -1,0 +1,4 @@
+// The Convex deployment the app talks to. Empty = replay of the recorded Scenario A.
+// Don't edit: run ios/scripts/convex-env.sh, which writes Local.xcconfig from ../.env.local.
+CONVEX_URL =
+#include? "Local.xcconfig"

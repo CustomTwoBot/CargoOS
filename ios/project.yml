@@ -1,0 +1,95 @@
+name: CargoOS
+options:
+  bundleIdPrefix: app.cargoos
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  CargoOS:
+    type: application
+    platform: iOS
+    sources:
+      - CargoOS
+      - Shared
+      - path: ../fixtures/scenarioA.ui.json
+        buildPhase: resources
+    dependencies:
+      - target: CargoOSShare
+    configFiles:
+      Debug: Config/App.xcconfig
+      Release: Config/App.xcconfig
+    entitlements:
+      path: CargoOS/CargoOS.entitlements
+      properties:
+        com.apple.security.application-groups: [group.app.cargoos.ops]
+    info:
+      path: CargoOS/Info.plist
+      properties:
+        CFBundleDisplayName: CargoOS
+        ConvexURL: $(CONVEX_URL)
+        NSCameraUsageDescription: Scan the QR code on a bill's page to open it on this phone.
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cargoos.ops
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  CargoOSShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShareExtension
+      - Shared
+      - path: ../fixtures/scenarioA.ui.json
+        buildPhase: resources
+    entitlements:
+      path: ShareExtension/CargoOSShare.entitlements
+      properties:
+        com.apple.security.application-groups: [group.app.cargoos.ops]
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: CargoOS
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsFileWithMaxCount: 5
+              NSExtensionActivationSupportsImageWithMaxCount: 5
+              NSExtensionActivationSupportsAttachmentsWithMaxCount: 5
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cargoos.ops.share
+        TARGETED_DEVICE_FAMILY: "1"
+  CargoOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - CargoOSTests
+    dependencies:
+      - target: CargoOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.cargoos.ops.tests
+schemes:
+  CargoOS:
+    build:
+      targets:
+        CargoOS: all
+        CargoOSTests: [test]
+    test:
+      targets: [CargoOSTests]

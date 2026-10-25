@@ -1,0 +1,965 @@
+{
+ "status": "success",
+ "value": {
+  "case": {
+   "_creationTime": 1792910107533.5403,
+   "_id": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+   "baseCurrency": "USD",
+   "forwarder": "Pacific Crest Logistics",
+   "incoterm": "FOB Ningbo",
+   "revision": 2.0,
+   "shipmentRef": "PCL-INV-1012",
+   "status": "open",
+   "title": "Bayline 40HC Ningbo-LB"
+  },
+  "changes": [
+   {
+    "causedByEventId": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+    "causedByFactIds": [
+     "jn75axwq5d6n1txwfk8xsgdec58gy3j8"
+    ],
+    "from": {
+     "status": "needs_review"
+    },
+    "key": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+    "lineNo": 4.0,
+    "to": {
+     "status": "supported"
+    }
+   },
+   {
+    "causedByEventId": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+    "causedByFactIds": [
+     "jn73e6kb1m11ej5eny4sa2jrkn8gzszk"
+    ],
+    "from": {
+     "status": "needs_review"
+    },
+    "key": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+    "lineNo": 6.0,
+    "to": {
+     "deltaCents": 40000.0,
+     "status": "potential_discrepancy"
+    }
+   }
+  ],
+  "charges": [
+   {
+    "_creationTime": 1792910107533.5447,
+    "_id": "j573n2ycyzzjeghsdj262x3h1x8gzb9p",
+    "amountCents": 480000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "ocean_freight",
+    "currency": "USD",
+    "description": "Ocean freight 40HC Ningbo-Long Beach",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 1.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 1",
+     "quote": "Ocean freight 40HC Ningbo-Long Beach      4,800.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.545,
+    "_id": "j578bxstfhpgqcgbwdswdtyacx8gzqgk",
+    "amountCents": 40000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "pss",
+    "currency": "USD",
+    "description": "PSS peak season surcharge",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 2.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 2",
+     "quote": "PSS peak season surcharge                   400.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.5452,
+    "_id": "j57bh0pdc9r6229vzncb9ctn458gzvzn",
+    "amountCents": 65000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "destination_thc",
+    "currency": "USD",
+    "description": "Destination THC",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 3.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 3",
+     "quote": "Destination THC                             650.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.5454,
+    "_id": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+    "amountCents": 20000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "congestion",
+    "currency": "USD",
+    "description": "Port congestion fee",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 4.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 4",
+     "quote": "Port congestion fee                         200.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.5457,
+    "_id": "j57e1qcv1vgjc5299afvhm29858gy15b",
+    "amountCents": 85000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "drayage",
+    "currency": "USD",
+    "description": "Drayage Long Beach -> Ontario CA",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 5.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 5",
+     "quote": "Drayage Long Beach -> Ontario CA            850.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.546,
+    "_id": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+    "amountCents": 40000.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "handling",
+    "currency": "USD",
+    "description": "Rush handling",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 6.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 6",
+     "quote": "Rush handling                               400.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.5461,
+    "_id": "j57efq0j0sz7tejaqby7spvah18gz67q",
+    "amountCents": 12500.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "customs_entry",
+    "currency": "USD",
+    "description": "Customs entry",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 7.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 7",
+     "quote": "Customs entry                               125.00"
+    }
+   },
+   {
+    "_creationTime": 1792910107533.5464,
+    "_id": "j57d05hy8cgvq850zz5f8ab6y98gy00c",
+    "amountCents": 7500.0,
+    "billedBy": "forwarder",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "doc_fee",
+    "currency": "USD",
+    "description": "Documentation fee",
+    "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "lineNo": 8.0,
+    "span": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+     "locator": "line 8",
+     "quote": "Documentation fee                            75.00"
+    }
+   }
+  ],
+  "documents": [
+   {
+    "_creationTime": 1792910107533.5405,
+    "_id": "j971wrj12d85z115447x0f60k98gy0pv",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "readStatus": "read",
+    "sender": "forwarder",
+    "sentAt": "2026-09-02T10:00:00-07:00",
+    "text": "PACIFIC CREST LOGISTICS - QUOTATION Q-PCL-0902\nDate: 2026-09-02   To: Bayline Home Goods   Valid until: 2026-09-30\n1x40HC FOB Ningbo -> Ontario, CA warehouse\nOcean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00\nDestination THC                                    USD   650.00\nCustoms entry                                      USD   125.00\nDrayage Long Beach -> Ontario CA                   USD   850.00\nDocumentation fee                                  USD    75.00\nTOTAL                                              USD 6,500.00\nTerms: PSS/GRI as filed by carrier at time of shipment apply.",
+    "title": "Quote Q-PCL-0902",
+    "type": "quote"
+   },
+   {
+    "_creationTime": 1792910107533.541,
+    "_id": "j979f7fdq8pst632vf36vct6058gysyn",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "readStatus": "read",
+    "sender": "forwarder",
+    "sentAt": "2026-09-05T14:21:00-07:00",
+    "text": "Subject: RE: Q-PCL-0902 revised\nHi Maya, we can do better on ocean. Ocean freight reduced to $4,500 if booked by Sep 10. Everything else unchanged. - Derek",
+    "title": "Email: RE: Q-PCL-0902 revised",
+    "type": "email"
+   },
+   {
+    "_creationTime": 1792910107533.5415,
+    "_id": "j97356hswzfvcfspa2zdsza66h8gz5t3",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "readStatus": "read",
+    "sentAt": "2026-09-28T10:30:00-07:00",
+    "text": "9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\n9/8/26, 9:15 AM - Sam Bayline: great thanks\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\n9/28/26, 10:30 AM - Sam Bayline: ok keep me posted",
+    "title": "WhatsApp: Derek PCL / Sam Bayline",
+    "type": "chat"
+   },
+   {
+    "_creationTime": 1792910107533.542,
+    "_id": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "readStatus": "read",
+    "sender": "forwarder",
+    "sentAt": "2026-10-12T09:00:00-07:00",
+    "text": "PACIFIC CREST LOGISTICS - INVOICE PCL-INV-1012   Date: 2026-10-12   Ref: Q-PCL-0902\n1  Ocean freight 40HC Ningbo-Long Beach      4,800.00\n2  PSS peak season surcharge                   400.00\n3  Destination THC                             650.00\n4  Port congestion fee                         200.00\n5  Drayage Long Beach -> Ontario CA            850.00\n6  Rush handling                               400.00\n7  Customs entry                               125.00\n8  Documentation fee                            75.00\n   TOTAL DUE USD                             7,500.00",
+    "title": "Invoice PCL-INV-1012",
+    "type": "freight_invoice"
+   },
+   {
+    "_creationTime": 1792920856623.5354,
+    "_id": "j973qw1npqa67s82jprf2v3j218gz5v1",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "readStatus": "read",
+    "text": "Note from Sam: forwarded invoice PCL-INV-1012 to Maya for checking.",
+    "textFrom": "paste",
+    "title": "Note from Sam: forwarded invoice PCL-INV-1012 to Maya for ch",
+    "type": "other"
+   },
+   {
+    "_creationTime": 1792920945621.973,
+    "_id": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "sender": "ops_lead",
+    "sentAt": "2026-10-25T09:35:45.621Z",
+    "text": "approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling",
+    "title": "Reply from ops lead",
+    "type": "reply"
+   }
+  ],
+  "draft": null,
+  "events": [
+   {
+    "_creationTime": 1792910107533.5408,
+    "_id": "jh70aavpjx76qb3jjsmje7tgf98gysfr",
+    "actor": "system",
+    "at": "2026-09-02T10:00:00-07:00",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv"
+    },
+    "type": "doc_added"
+   },
+   {
+    "_creationTime": 1792910107533.5413,
+    "_id": "jh79snzecrdyy9r1hasxetn59n8gzaxp",
+    "actor": "system",
+    "at": "2026-09-05T14:21:00-07:00",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j979f7fdq8pst632vf36vct6058gysyn"
+    },
+    "type": "doc_added"
+   },
+   {
+    "_creationTime": 1792910107533.5417,
+    "_id": "jh713ap40gc769cfxse13xjs7s8gzv09",
+    "actor": "system",
+    "at": "2026-09-28T10:30:00-07:00",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j97356hswzfvcfspa2zdsza66h8gz5t3"
+    },
+    "type": "doc_added"
+   },
+   {
+    "_creationTime": 1792910107533.5422,
+    "_id": "jh77d68wfsf7t8ne90n4g7kkad8gyd1p",
+    "actor": "system",
+    "at": "2026-10-12T09:00:00-07:00",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05"
+    },
+    "type": "doc_added"
+   },
+   {
+    "_creationTime": 1792920856623.5356,
+    "_id": "jh7221e73t78va73ajjzy974bn8gym64",
+    "actor": "uploader",
+    "at": "2026-10-25T09:34:16.623Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j973qw1npqa67s82jprf2v3j218gz5v1",
+     "docType": "other",
+     "personId": "sam",
+     "textFrom": "paste",
+     "title": "Note from Sam: forwarded invoice PCL-INV-1012 to Maya for ch"
+    },
+    "type": "document_uploaded"
+   },
+   {
+    "_creationTime": 1792920858114.1306,
+    "_id": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+    "actor": "agent",
+    "at": "2026-10-25T09:34:18.114Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "chargeIds": [],
+     "docId": "j973qw1npqa67s82jprf2v3j218gz5v1",
+     "dropped": [],
+     "factIds": []
+    },
+    "type": "facts_extracted"
+   },
+   {
+    "_creationTime": 1792920858146.6545,
+    "_id": "jh73j2ya855d5bf6jgshjzz9x58gywd0",
+    "actor": "system",
+    "at": "2026-10-25T09:34:18.146Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+     "changes": [
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn7c5tkv4wwr0cpn3hq8hemzsh8gz20n",
+        "jn7dn9txw1g73ewma76dke4h0h8gys1f"
+       ],
+       "key": "j573n2ycyzzjeghsdj262x3h1x8gzb9p",
+       "lineNo": 1.0,
+       "to": {
+        "deltaCents": 30000.0,
+        "status": "potential_discrepancy"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn7etbvypaa030ny2t070mvk6d8gyrv9"
+       ],
+       "key": "j578bxstfhpgqcgbwdswdtyacx8gzqgk",
+       "lineNo": 2.0,
+       "to": {
+        "status": "supported"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn7epp3h060175qj2vrxxzt76s8gyx6f"
+       ],
+       "key": "j57bh0pdc9r6229vzncb9ctn458gzvzn",
+       "lineNo": 3.0,
+       "to": {
+        "status": "supported"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [],
+       "key": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+       "lineNo": 4.0,
+       "to": {
+        "status": "needs_review"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn74f43ecgmf73gkq8k5ka2ybn8gyh50"
+       ],
+       "key": "j57e1qcv1vgjc5299afvhm29858gy15b",
+       "lineNo": 5.0,
+       "to": {
+        "status": "supported"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [],
+       "key": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+       "lineNo": 6.0,
+       "to": {
+        "status": "needs_review"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn76cfgefjfxhmkd4q9aqcrp958gzpya"
+       ],
+       "key": "j57efq0j0sz7tejaqby7spvah18gz67q",
+       "lineNo": 7.0,
+       "to": {
+        "status": "supported"
+       }
+      },
+      {
+       "causedByEventId": "jh7apmf0e8b6kt4eadbmtqbekd8gzrkt",
+       "causedByFactIds": [
+        "jn700pcjbamtkjtgcw2n23pvgs8gy8cg"
+       ],
+       "key": "j57d05hy8cgvq850zz5f8ab6y98gy00c",
+       "lineNo": 8.0,
+       "to": {
+        "status": "supported"
+       }
+      }
+     ],
+     "revision": 1.0
+    },
+    "type": "recomputed"
+   },
+   {
+    "_creationTime": 1792920862155.276,
+    "_id": "jh75syrn263txyfepe2dyx3sr18gz7kv",
+    "actor": "agent",
+    "at": "2026-10-25T09:34:22.155Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "findingKeys": [
+      "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+      "j57es22231f7k1a9s8txnze0qx8gy1r8"
+     ],
+     "questionId": "jx720a2snqryt5gjbb6d48mzdx8gzg9r",
+     "to": "ops_lead"
+    },
+    "type": "question_asked"
+   },
+   {
+    "_creationTime": 1792920945621.9731,
+    "_id": "jh74s5syb9rpd3z2gk775wbfpn8gzqga",
+    "actor": "ops_lead",
+    "at": "2026-10-25T09:35:45.621Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+     "personId": "sam",
+     "questionId": "jx720a2snqryt5gjbb6d48mzdx8gzg9r"
+    },
+    "type": "reply_received"
+   },
+   {
+    "_creationTime": 1792920947569.4873,
+    "_id": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+    "actor": "agent",
+    "at": "2026-10-25T09:35:47.569Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+     "dropped": [],
+     "factIds": [
+      "jn75axwq5d6n1txwfk8xsgdec58gy3j8",
+      "jn73e6kb1m11ej5eny4sa2jrkn8gzszk"
+     ],
+     "interpretation": "partial",
+     "questionId": "jx720a2snqryt5gjbb6d48mzdx8gzg9r",
+     "questionStatus": "answered",
+     "replyId": "k178654sqa9ytrhsgbj5ygw0fd8gykq9"
+    },
+    "type": "facts_extracted"
+   },
+   {
+    "_creationTime": 1792920947625.245,
+    "_id": "jh74q8wap8rgv21nnajn26psph8gzbpx",
+    "actor": "system",
+    "at": "2026-10-25T09:35:47.625Z",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "payload": {
+     "causedByEventId": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+     "changes": [
+      {
+       "causedByEventId": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+       "causedByFactIds": [
+        "jn75axwq5d6n1txwfk8xsgdec58gy3j8"
+       ],
+       "from": {
+        "status": "needs_review"
+       },
+       "key": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+       "lineNo": 4.0,
+       "to": {
+        "status": "supported"
+       }
+      },
+      {
+       "causedByEventId": "jh71kyqyshbd3d4hgpa9xntrg98gzwz2",
+       "causedByFactIds": [
+        "jn73e6kb1m11ej5eny4sa2jrkn8gzszk"
+       ],
+       "from": {
+        "status": "needs_review"
+       },
+       "key": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+       "lineNo": 6.0,
+       "to": {
+        "deltaCents": 40000.0,
+        "status": "potential_discrepancy"
+       }
+      }
+     ],
+     "revision": 2.0
+    },
+    "type": "recomputed"
+   }
+  ],
+  "facts": [
+   {
+    "_creationTime": 1792910107533.5425,
+    "_id": "jn73sfbmd9hmrzvc1eprg8ywy58gzs65",
+    "amountCents": 480000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "ocean_freight",
+    "currency": "USD",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Ocean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00"
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.5427,
+    "_id": "jn7epp3h060175qj2vrxxzt76s8gyx6f",
+    "amountCents": 65000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "destination_thc",
+    "currency": "USD",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Destination THC                                    USD   650.00"
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.543,
+    "_id": "jn76cfgefjfxhmkd4q9aqcrp958gzpya",
+    "amountCents": 12500.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "customs_entry",
+    "currency": "USD",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Customs entry                                      USD   125.00"
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.5432,
+    "_id": "jn74f43ecgmf73gkq8k5ka2ybn8gyh50",
+    "amountCents": 85000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "drayage",
+    "currency": "USD",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Drayage Long Beach -> Ontario CA                   USD   850.00"
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.5435,
+    "_id": "jn700pcjbamtkjtgcw2n23pvgs8gy8cg",
+    "amountCents": 7500.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "doc_fee",
+    "currency": "USD",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Documentation fee                                  USD    75.00"
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.5437,
+    "_id": "jn7etbvypaa030ny2t070mvk6d8gyrv9",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "pss",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "permitted_surcharge",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "Terms: PSS/GRI as filed by carrier at time of shipment apply."
+    },
+    "statedBy": "forwarder",
+    "validUntil": "2026-09-30"
+   },
+   {
+    "_creationTime": 1792910107533.544,
+    "_id": "jn7d767t37rswr6p5zp3s2dpg98gz7gx",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "effectiveAt": "2026-09-02T10:00:00-07:00",
+    "kind": "incoterm",
+    "origin": "extraction",
+    "span": {
+     "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+     "locator": "page 1",
+     "quote": "FOB Ningbo"
+    },
+    "statedBy": "forwarder"
+   },
+   {
+    "_creationTime": 1792910107533.5442,
+    "_id": "jn7c5tkv4wwr0cpn3hq8hemzsh8gz20n",
+    "amountCents": 450000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "ocean_freight",
+    "condition": {
+     "bookedBy": "2026-09-10"
+    },
+    "currency": "USD",
+    "effectiveAt": "2026-09-05T14:21:00-07:00",
+    "kind": "agreed_rate",
+    "origin": "extraction",
+    "span": {
+     "docId": "j979f7fdq8pst632vf36vct6058gysyn",
+     "locator": "email body",
+     "quote": "Ocean freight reduced to $4,500 if booked by Sep 10"
+    },
+    "statedBy": "forwarder"
+   },
+   {
+    "_creationTime": 1792910107533.5444,
+    "_id": "jn7dn9txw1g73ewma76dke4h0h8gys1f",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "effectiveAt": "2026-09-08T09:12:00-07:00",
+    "kind": "booking_date",
+    "origin": "extraction",
+    "span": {
+     "docId": "j97356hswzfvcfspa2zdsza66h8gz5t3",
+     "locator": "msg 2026-09-08 09:12",
+     "quote": "Booking confirmed for your 40HC, booked today Sep 8"
+    },
+    "statedBy": "forwarder"
+   },
+   {
+    "_creationTime": 1792920947569.4866,
+    "_id": "jn75axwq5d6n1txwfk8xsgdec58gy3j8",
+    "amountCents": 20000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "congestion",
+    "currency": "USD",
+    "effectiveAt": "2026-10-25T09:35:45.621Z",
+    "kind": "approval",
+    "origin": "reply",
+    "span": {
+     "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+     "locator": "reply",
+     "quote": "approved the $200 congestion fee on WhatsApp"
+    },
+    "statedBy": "ops_lead"
+   },
+   {
+    "_creationTime": 1792920947569.4868,
+    "_id": "jn73e6kb1m11ej5eny4sa2jrkn8gzszk",
+    "amountCents": 40000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeType": "handling",
+    "currency": "USD",
+    "effectiveAt": "2026-10-25T09:35:45.621Z",
+    "kind": "rejection",
+    "origin": "reply",
+    "span": {
+     "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+     "locator": "reply",
+     "quote": "nobody agreed to $400 rush handling"
+    },
+    "statedBy": "ops_lead"
+   }
+  ],
+  "findings": [
+   {
+    "_creationTime": 1792920947625.2432,
+    "_id": "js7ergxwz5cchffem4y6ke6byn8gzca2",
+    "billedCents": 480000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j573n2ycyzzjeghsdj262x3h1x8gzb9p",
+    "deltaCents": 30000.0,
+    "evidence": [
+     {
+      "docId": "j979f7fdq8pst632vf36vct6058gysyn",
+      "locator": "email body",
+      "quote": "Ocean freight reduced to $4,500 if booked by Sep 10"
+     },
+     {
+      "docId": "j97356hswzfvcfspa2zdsza66h8gz5t3",
+      "locator": "msg 2026-09-08 09:12",
+      "quote": "Booking confirmed for your 40HC, booked today Sep 8"
+     }
+    ],
+    "expectedCents": 450000.0,
+    "explanation": "Billed $4,800. Agreed $4,500 (email, Sep 5, if booked by Sep 10; booked Sep 8). Over by $300.",
+    "factIds": [
+     "jn7c5tkv4wwr0cpn3hq8hemzsh8gz20n",
+     "jn7dn9txw1g73ewma76dke4h0h8gys1f"
+    ],
+    "key": "j573n2ycyzzjeghsdj262x3h1x8gzb9p",
+    "lineNo": 1.0,
+    "revision": 2.0,
+    "routeTo": "forwarder",
+    "ruleId": "R2_RATE_MISMATCH",
+    "status": "potential_discrepancy"
+   },
+   {
+    "_creationTime": 1792920947625.2434,
+    "_id": "js75psvqmephdk9kb0dj34d27h8gzsgw",
+    "billedCents": 40000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j578bxstfhpgqcgbwdswdtyacx8gzqgk",
+    "evidence": [
+     {
+      "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+      "locator": "page 1",
+      "quote": "Terms: PSS/GRI as filed by carrier at time of shipment apply."
+     }
+    ],
+    "explanation": "Billed $400. Allowed by the quote: \"Terms: PSS/GRI as filed by carrier at time of shipment apply.\"",
+    "factIds": [
+     "jn7etbvypaa030ny2t070mvk6d8gyrv9"
+    ],
+    "key": "j578bxstfhpgqcgbwdswdtyacx8gzqgk",
+    "lineNo": 2.0,
+    "revision": 2.0,
+    "ruleId": "R4_PERMITTED_SURCHARGE",
+    "status": "supported"
+   },
+   {
+    "_creationTime": 1792920947625.2437,
+    "_id": "js728wh0wfretgy4xfch6zs0798gywfk",
+    "billedCents": 65000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57bh0pdc9r6229vzncb9ctn458gzvzn",
+    "evidence": [
+     {
+      "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+      "locator": "page 1",
+      "quote": "Destination THC                                    USD   650.00"
+     }
+    ],
+    "expectedCents": 65000.0,
+    "explanation": "Billed $650. Matches the agreed rate of $650 (quote, Sep 2).",
+    "factIds": [
+     "jn7epp3h060175qj2vrxxzt76s8gyx6f"
+    ],
+    "key": "j57bh0pdc9r6229vzncb9ctn458gzvzn",
+    "lineNo": 3.0,
+    "revision": 2.0,
+    "ruleId": "R0_MATCH",
+    "status": "supported"
+   },
+   {
+    "_creationTime": 1792920947625.244,
+    "_id": "js7505wdd0xxpbym6pkjnx29dx8gytx3",
+    "billedCents": 20000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+    "evidence": [
+     {
+      "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+      "locator": "reply",
+      "quote": "approved the $200 congestion fee on WhatsApp"
+     }
+    ],
+    "expectedCents": 20000.0,
+    "explanation": "Billed $200. Approved by the ops lead on Oct 25: \"approved the $200 congestion fee on WhatsApp\".",
+    "factIds": [
+     "jn75axwq5d6n1txwfk8xsgdec58gy3j8"
+    ],
+    "key": "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+    "lineNo": 4.0,
+    "revision": 2.0,
+    "ruleId": "R8_APPROVED",
+    "status": "supported"
+   },
+   {
+    "_creationTime": 1792920947625.2441,
+    "_id": "js72c7z6dagmyxkhek9zvg3van8gz10p",
+    "billedCents": 85000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57e1qcv1vgjc5299afvhm29858gy15b",
+    "evidence": [
+     {
+      "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+      "locator": "page 1",
+      "quote": "Drayage Long Beach -> Ontario CA                   USD   850.00"
+     }
+    ],
+    "expectedCents": 85000.0,
+    "explanation": "Billed $850. Matches the agreed rate of $850 (quote, Sep 2).",
+    "factIds": [
+     "jn74f43ecgmf73gkq8k5ka2ybn8gyh50"
+    ],
+    "key": "j57e1qcv1vgjc5299afvhm29858gy15b",
+    "lineNo": 5.0,
+    "revision": 2.0,
+    "ruleId": "R0_MATCH",
+    "status": "supported"
+   },
+   {
+    "_creationTime": 1792920947625.2444,
+    "_id": "js78vvsyee3aex80mjrjmf5btn8gykp8",
+    "billedCents": 40000.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+    "deltaCents": 40000.0,
+    "evidence": [
+     {
+      "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+      "locator": "reply",
+      "quote": "nobody agreed to $400 rush handling"
+     }
+    ],
+    "expectedCents": 0.0,
+    "explanation": "Billed $400. The ops lead said this was not agreed on Oct 25: \"nobody agreed to $400 rush handling\". Over by $400.",
+    "factIds": [
+     "jn73e6kb1m11ej5eny4sa2jrkn8gzszk"
+    ],
+    "key": "j57es22231f7k1a9s8txnze0qx8gy1r8",
+    "lineNo": 6.0,
+    "revision": 2.0,
+    "routeTo": "forwarder",
+    "ruleId": "R9_REJECTED",
+    "status": "potential_discrepancy"
+   },
+   {
+    "_creationTime": 1792920947625.2446,
+    "_id": "js7dxd1521cr6vwwp61sedxccs8gy1q8",
+    "billedCents": 12500.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57efq0j0sz7tejaqby7spvah18gz67q",
+    "evidence": [
+     {
+      "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+      "locator": "page 1",
+      "quote": "Customs entry                                      USD   125.00"
+     }
+    ],
+    "expectedCents": 12500.0,
+    "explanation": "Billed $125. Matches the agreed rate of $125 (quote, Sep 2).",
+    "factIds": [
+     "jn76cfgefjfxhmkd4q9aqcrp958gzpya"
+    ],
+    "key": "j57efq0j0sz7tejaqby7spvah18gz67q",
+    "lineNo": 7.0,
+    "revision": 2.0,
+    "ruleId": "R0_MATCH",
+    "status": "supported"
+   },
+   {
+    "_creationTime": 1792920947625.2449,
+    "_id": "js771f2ej1waxt2ck9bx3pjqes8gy4fg",
+    "billedCents": 7500.0,
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "chargeId": "j57d05hy8cgvq850zz5f8ab6y98gy00c",
+    "evidence": [
+     {
+      "docId": "j971wrj12d85z115447x0f60k98gy0pv",
+      "locator": "page 1",
+      "quote": "Documentation fee                                  USD    75.00"
+     }
+    ],
+    "expectedCents": 7500.0,
+    "explanation": "Billed $75. Matches the agreed rate of $75 (quote, Sep 2).",
+    "factIds": [
+     "jn700pcjbamtkjtgcw2n23pvgs8gy8cg"
+    ],
+    "key": "j57d05hy8cgvq850zz5f8ab6y98gy00c",
+    "lineNo": 8.0,
+    "revision": 2.0,
+    "ruleId": "R0_MATCH",
+    "status": "supported"
+   }
+  ],
+  "questions": [
+   {
+    "_creationTime": 1792920862155.2756,
+    "_id": "jx720a2snqryt5gjbb6d48mzdx8gzg9r",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "citations": [
+     {
+      "docId": "j97356hswzfvcfspa2zdsza66h8gz5t3",
+      "locator": "9/28/26, 10:02 AM message",
+      "quote": "heads up, possible congestion at LB terminal, may be extra"
+     },
+     {
+      "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+      "locator": "line 4",
+      "quote": "4  Port congestion fee                         200.00"
+     },
+     {
+      "docId": "j972xjxycgpjxtpts1t8qt2ee58gzt05",
+      "locator": "line 6",
+      "quote": "6  Rush handling                               400.00"
+     }
+    ],
+    "createdAt": "2026-10-25T09:34:22.155Z",
+    "findingKeys": [
+     "j57cb2nnyhfn1bdxp4jbmtantx8gyx6j",
+     "j57es22231f7k1a9s8txnze0qx8gy1r8"
+    ],
+    "status": "answered",
+    "text": "For invoice PCL-INV-1012, can you confirm whether Bayline agreed to, or authorized, these two charges that have no support in the quote, email or chat: Line 4 \"Port congestion fee\" ($200) and Line 6 \"Rush handling\" ($400)? The 9/28 chat only warned of possible congestion that \"may be extra\" with no amount or agreement, and nothing mentions rush handling at all. If you approved either one, please point us to the written approval or agreed amount.",
+    "to": "ops_lead"
+   }
+  ],
+  "replies": [
+   {
+    "_creationTime": 1792920947569.487,
+    "_id": "k178654sqa9ytrhsgbj5ygw0fd8gykq9",
+    "caseId": "k57bbew538b6pjg5hjxdx2c4qh8gy4yb",
+    "docId": "j9759d8d2cf21w6vmtnajeb94x8gyd48",
+    "factIds": [
+     "jn75axwq5d6n1txwfk8xsgdec58gy3j8",
+     "jn73e6kb1m11ej5eny4sa2jrkn8gzszk"
+    ],
+    "from": "ops_lead",
+    "interpretation": "partial",
+    "questionId": "jx720a2snqryt5gjbb6d48mzdx8gzg9r"
+   }
+  ],
+  "totals": {
+   "agreed": 680000.0,
+   "atStake": 70000.0,
+   "billed": 750000.0,
+   "waiting": 0.0,
+   "waived": 0.0
+  }
+ }
+}

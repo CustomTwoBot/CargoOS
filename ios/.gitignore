@@ -1,0 +1,4 @@
+build/
+CargoOS.xcodeproj/xcuserdata/
+CargoOS.xcodeproj/project.xcworkspace/xcuserdata/
+Config/Local.xcconfig
