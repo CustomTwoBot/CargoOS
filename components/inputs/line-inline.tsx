@@ -1,4 +1,4 @@
-// Line editor A: inline in the row (docs/design.md §7.5). "Edit" on the selected row turns the
+// Line editor: inline in the row (docs/design.md §7.5). "Edit" on the selected row turns the
 // row into a description field and an amount field, with Save / Cancel under them.
 import { useState } from "react";
 import type { Row } from "@/components/case/view-model";

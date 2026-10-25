@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scenarioAAt } from "@/components/case/fixture";
 import type { CaseEvent } from "@/lib/types";
-import { docRows, itemsOf, segmentsOf, statusOf, trackOf, usedFor } from "./documents";
+import { docRows, itemsOf, segmentsOf, statusOf, usedFor } from "./documents";
 
 const x = scenarioAAt("after");
 const doc = (id: string) => x.documents.find((d) => d._id === id)!;
@@ -107,23 +107,5 @@ describe("usedFor", () => {
     expect(usedFor([])).toBeUndefined();
     expect(usedFor([3])).toBe("Used for line 3");
     expect(usedFor([2, 4, 6])).toBe("Used for lines 2, 4 and 6");
-  });
-});
-
-describe("trackOf", () => {
-  it("counts received, read and used in the current checks", () => {
-    expect(trackOf(x, doc("doc_quote")).used).toEqual({ n: 5, of: 7 });
-    expect(trackOf(x, doc("doc_invoice")).used).toEqual({ n: 8, of: 8 });
-    expect(trackOf(x, doc("doc_reply_1"))).toMatchObject({ received: "Oct 24", read: { read: "2 facts" }, used: { n: 2, of: 2 } });
-  });
-
-  it("before the answer, the quote still has 5 of 7 facts in use", () => {
-    const before = scenarioAAt("before");
-    expect(trackOf(before, before.documents.find((d) => d._id === "doc_quote")!).used).toEqual({ n: 5, of: 7 });
-  });
-
-  it("has no used count when the document couldn't be read", () => {
-    const events = [...x.events, evt("extraction_failed", "2026-10-24T13:51:00-07:00", { docId: "doc_chat" })];
-    expect(trackOf({ ...x, events }, doc("doc_chat"))).toEqual({ received: "Oct 24", read: { state: "failed", label: "Couldn't read" } });
   });
 });

@@ -1,23 +1,5 @@
 import { describe, expect, it } from "vitest";
-import ui from "@/fixtures/scenarioA.ui.json";
-import { guessType, outcomeText } from "./evidence-input";
-
-const doc = (type: string) => ui.documents.find((d) => d.type === type)!.text;
-
-describe("guessType", () => {
-  it("reads Scenario A's email and WhatsApp export", () => {
-    expect(guessType(doc("email"))).toBe("email");
-    expect(guessType(doc("chat"))).toBe("chat");
-  });
-  it("spots email headers and Name: lines", () => {
-    expect(guessType("From: derek@pcl.example\nCongestion is $200.")).toBe("email");
-    expect(guessType("Derek: congestion is $200\nSam: ok approved")).toBe("chat");
-  });
-  it("falls back to a note", () => {
-    expect(guessType("Called Derek, he agreed $200 congestion.")).toBe("other");
-    expect(guessType("")).toBe("other");
-  });
-});
+import { outcomeText } from "./evidence-input";
 
 describe("outcomeText", () => {
   it("is honest in replay and uses the design copy live", () => {

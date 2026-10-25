@@ -5,7 +5,7 @@ import { FindingChangeSchema } from "@/lib/schemas";
 import type {
   Case, CaseEvent, Charge, Draft, Fact, Finding, FindingChange, Question, Reply, RuleId, SourceDoc,
 } from "@/lib/types";
-import { capitalize, money, timeOf, whenAt } from "./format";
+import { money, timeOf, whenAt } from "./format";
 import { caseTotals, DISCREPANCY, groupTotals, type CaseTotals } from "./totals";
 
 /** The case as the screen receives it: SPEC 5.3 CaseState plus replies, drafts and events. */
@@ -181,31 +181,4 @@ export function checkedAgainst(x: CaseInput): string {
     .map((d) => (d.type === "quote" ? d.title : SOURCE_LABEL[d.type] ?? d.title));
   const head = invoice?.title ?? "Invoice";
   return sources.length ? `${head}, checked against ${sources.join(", ")}.` : `${head}.`;
-}
-
-export type Step = { state: "done" | "current" | "todo"; title: string; sub: string };
-
-/** The four step cards: checked, answer, draft, approve (docs/design.md §0, §7.4). */
-export function stepsOf(x: CaseInput, now: Date): Step[] {
-  const rows = toRows(x), t = totalsOf(x), q = latestQuestion(x), d = latestDraft(x);
-  const docsRead = x.documents.filter((doc) => doc.type !== "reply").length;
-  const disputeLines = rows.filter((r) => r.group === "dispute").length;
-  const lines = (n: number) => `${n} ${n === 1 ? "line" : "lines"}`;
-  const waitingOnYou = q?.status === "open";
-
-  const answer: Step = !q ? { state: "done", title: "No questions needed", sub: "Every charge has evidence" }
-    : waitingOnYou ? { state: "current", title: "Waiting for your answer", sub: `1 question, ${q.findingKeys.length} charges` }
-    : q.status === "answered" ? { state: "done", title: "You answered", sub: capitalize(whenAt(answeredAt(x) ?? q.createdAt, now)) }
-    : { state: "done", title: "Question closed", sub: "Lines stay waiting" };
-
-  const draft: Step = d ? { state: "done", title: "Dispute drafted", sub: `${money(d.totalDisputedCents)}, ${lines(d.findingKeys.length)}` }
-    : { state: !waitingOnYou && t.atStakeCents > 0 ? "current" : "todo", title: "Draft dispute", sub: `${money(t.atStakeCents)}, ${lines(disputeLines)}` };
-
-  const approve: Step = d?.status === "approved" ? { state: "done", title: "Approved", sub: "Not sent" }
-    : { state: d ? "current" : "todo", title: "Approve", sub: "Nothing is sent" };
-
-  return [
-    { state: "done", title: `Checked ${x.charges.length} charges`, sub: `${docsRead} documents read` },
-    answer, draft, approve,
-  ];
 }

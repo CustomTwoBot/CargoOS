@@ -1,4 +1,4 @@
-// Line editor: what every variation shares (SPEC.md §8 item 9, docs/design.md §7.5).
+// Line editor: parsing and editing state (SPEC.md §8 item 9, docs/design.md §7.5).
 // Amounts are typed as text and parsed to integer cents; the UI never does other money math.
 import { useState } from "react";
 import { formatUSD, parseMoneyToCents } from "@/lib/engine/money";
@@ -35,8 +35,8 @@ export type SavedEdit = { fromCents: number; toCents: number; fromDescription: s
  * Editing state for one line. Save with nothing changed just closes: no event, no recheck.
  * `onSave` is where the live app calls `editCharge` (role "clerk"), which writes `charge_edited`.
  */
-export function useLineEditor(line: EditableLine, onSave: (key: string, change: LineChange) => void, opts?: { open?: boolean }) {
-  const [open, setOpen] = useState(opts?.open ?? false);
+export function useLineEditor(line: EditableLine, onSave: (key: string, change: LineChange) => void) {
+  const [open, setOpen] = useState(false);
   const [description, setDescription] = useState(line.description);
   const [amount, setAmount] = useState(amountText(line.amountCents));
   const [errors, setErrors] = useState<LineErrors>({});

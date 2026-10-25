@@ -17,10 +17,10 @@ Users are AP clerks, controllers and ops leads, not engineers: order every scree
 - Status by shape, not only color: To dispute = solid red tag with ⊗; Waiting = dashed amber tag with dashed ?; Cleared = no fill, green ✓. Use the SVG glyphs from docs/design.md §5.
 
 ## Layout (1280 wide)
-- 60px icon rail | header (title + case status pill, sub line with the trust line, theme toggle, Add evidence, Draft dispute) | At stake hero card with stacked bar | four step cards | list (minmax(0,1fr)) + right panel (404px).
-- List grid for header and rows: 22px minmax(0,1fr) 168px 90px 84px. Group bars with subtotals. Rows have two lines: description + engine why-line (Finding.explanation, verbatim) + row buttons; status tag + plain reason + muted rule code; billed; over by.
-- Right panel tabs: Evidence (evidence chain in plain questions, or agreement timeline when no line is selected), What changed, Dispute, History. Clicking a quote opens the full document with the quote highlighted.
-- "?" tooltips on At stake and on each group (texts in docs/design.md §7.13).
+- Tabs per issue (docs/design.md §0.1): 60px icon rail (Case, Questions, Documents, History; views switch in place) | header (title + case status pill + Replay, sub line with what was checked and the trust line, theme toggle, Add evidence, Draft dispute) | tab bar: Overview + one tab per issue from `components/case/issues.ts`.
+- Overview: At stake card with stacked bar; after an answer a "Your answer changed N charges" strip; "To decide" list (minmax(0,1fr)) + agreement timeline (404px). Cleared lines fold into one row that expands to all invoice lines with the inline editor.
+- Issue tab: evidence on the left (chain; a quote opens the full document highlighted), the decision on the right (360px). No buttons in lists; actions live in the issue tab.
+- "?" tooltip only on At stake.
 
 ## Copy
 - Keep spec strings exactly: To dispute, Waiting on answers, Cleared, the count line, Agree, Not an issue, Draft dispute, Request approval, Approve, "Synthetic data. Nothing is sent or paid automatically.", the extraction-failed sentence, Dismissed by clerk.
@@ -29,7 +29,7 @@ Users are AP clerks, controllers and ops leads, not engineers: order every scree
 
 ## Behavior
 - Totals only from the engine (caseTotals); never compute money in the UI. Why-lines only from the engine.
-- One motion: the revision player moves changed rows one at a time (560ms, cubic-bezier(0.2,0,0,1), no spring), then updates totals, then opens What changed. The operator's own action: one 280ms move. Flat motion.li list, layout="position", stable keys. MotionConfig reducedMotion="user". No other animation.
+- One motion: after an answer the replay moves items in the To decide list one at a time (560ms, cubic-bezier(0.2,0,0,1), no spring, FLIP in `components/case/row-moves.ts`), then shows the change strip. The operator's own action: one 280ms move. Respect prefers-reduced-motion. No other animation.
 - Agree / Not an issue on To dispute and Waiting rows. Disabled = aria-disabled + visible reason.
 - No modals for normal work: panels and inline editors. Toasts bottom-right for human actions only.
 

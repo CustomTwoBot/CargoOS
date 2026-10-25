@@ -1,4 +1,4 @@
-// Copy and prop types shared by every state variation (SPEC.md §8 "States to handle",
+// Copy and prop types for the screen states (SPEC.md §8 "States to handle",
 // docs/design.md §7.14). Spec strings are verbatim; do not reword them.
 
 /** SPEC.md §8, verbatim (with the full stop from docs/design.md §7.14). */

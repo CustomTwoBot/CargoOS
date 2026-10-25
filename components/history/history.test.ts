@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CaseEvent } from "@/lib/types";
-import { byPhase, clockPT, historyEntries, linesPhrase, scenarioAHistory, storySteps, whoLabel } from "./history";
+import { dayPT, historyEntries, linesPhrase, scenarioAHistory, secondsPT, whoLabel } from "./history";
 
 const x = scenarioAHistory();
 const entries = historyEntries(x);
@@ -35,9 +35,10 @@ describe("historyEntries", () => {
   });
 
   it("shows times in Pacific time", () => {
-    expect(clockPT(entries[0].at)).toBe("1:50 PM");
-    expect(clockPT(entries.at(-1)!.at)).toBe("2:09 PM");
-    expect(clockPT("2026-10-24T21:05:00Z")).toBe("2:05 PM");
+    expect(secondsPT(entries[0].at)).toBe("1:50:00 PM");
+    expect(secondsPT(entries.at(-1)!.at)).toBe("2:09:01 PM");
+    expect(secondsPT("2026-10-24T21:05:00Z")).toBe("2:05:00 PM");
+    expect(dayPT("2026-10-25T06:30:00Z")).toBe("Oct 24");
   });
 
   it("keeps the words that caused a step, verbatim", () => {
@@ -48,12 +49,6 @@ describe("historyEntries", () => {
     expect(byCode(11)).toEqual(["approved the $200 congestion fee on WhatsApp", "nobody agreed to $400 rush handling"]);
   });
 
-  it("groups into the four phases", () => {
-    expect(byPhase(entries).map((g) => [g.phase, g.entries.length])).toEqual([
-      ["documents", 8], ["checked", 1], ["question", 3], ["dispute", 3],
-    ]);
-  });
-
   it("marks approval_blocked and names the line of a verdict", () => {
     const extra: CaseEvent[] = [
       { _id: "b1", caseId: "case_A", at: "2026-10-24T14:10:00-07:00", actor: "clerk", type: "finding_dismissed", payload: { findingKey: "chg_1" } },
@@ -62,24 +57,6 @@ describe("historyEntries", () => {
     const [dismissed, blocked] = historyEntries({ ...x, events: extra });
     expect(dismissed.what).toBe("Marked line 1 as not an issue");
     expect(blocked).toMatchObject({ blocked: true, what: "Approval blocked: only the controller can approve", role: "clerk" });
-  });
-});
-
-describe("storySteps", () => {
-  it("folds repeated document events into one step and keeps every event under it", () => {
-    const steps = storySteps(entries);
-    expect(steps.map((s) => s.what)).toEqual([
-      "Added 4 documents",
-      "Read Quote Q-PCL-0902, the Sep 5 email, the WhatsApp chat and Invoice PCL-INV-1012",
-      ...EXPECTED.slice(8).map(([, what]) => what),
-    ]);
-    expect(steps.flatMap((s) => s.entries.map((e) => e.id))).toEqual(entries.map((e) => e.id));
-  });
-
-  it("says a quote once when the step above already shows it", () => {
-    const steps = storySteps(entries);
-    expect(steps[4].quotes).toEqual(["approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling"]);
-    expect(steps[5].quotes).toEqual([]);
   });
 });
 

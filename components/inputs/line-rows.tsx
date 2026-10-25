@@ -1,5 +1,5 @@
-// A plain invoice-line row in the case list's grid (docs/design.md §7.5), with slots so each
-// line-editor variation can put its control where its idea says. Read-only use of case/*.
+// A plain invoice-line row in the case list's grid (docs/design.md §7.5), with slots for the
+// inline line editor. Read-only use of case/*.
 import type { ReactNode } from "react";
 import { RowTagChip, StatusTag } from "@/components/case/bits";
 import { cx } from "@/components/case/cx";
@@ -15,11 +15,9 @@ type Props = {
   replace?: ReactNode;
   /** Under the why-line: an Edit link, a saved note. */
   below?: ReactNode;
-  /** Replaces the billed amount (a clickable amount). */
-  billed?: ReactNode;
 };
 
-export function LineRow({ r, line, edited, selected, onSelect, replace, below, billed }: Props) {
+export function LineRow({ r, line, edited, selected, onSelect, replace, below }: Props) {
   return (
     <li data-testid={`row-${r.lineNo}`} aria-current={selected || undefined}
       onClick={onSelect} onKeyDown={onSelect && ((e) => { if (e.key === "Enter" && e.target === e.currentTarget) onSelect(); })}
@@ -40,7 +38,7 @@ export function LineRow({ r, line, edited, selected, onSelect, replace, below, b
             <StatusTag group={r.group} />
             <div className="mt-[5px] text-xs leading-[17px] text-ink-2">{r.reason.plain}</div>
           </div>
-          <span className="text-right text-body font-semibold leading-[21px]">{billed ?? money(line.amountCents)}</span>
+          <span className="text-right text-body font-semibold leading-[21px]">{money(line.amountCents)}</span>
           <span className="text-right text-[13px] leading-[21px]">
             {r.group === "dispute" ? <span className="font-semibold text-dispute">{delta(r.deltaCents)}</span>
               : r.group === "waiting" ? <span className="text-meta font-medium text-waiting">unconfirmed</span>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { scenarioA, scenarioAAt, scenarioADraft } from "./fixture";
 import { ACTION_ROLE, ALL_ROLES, canAct } from "./roles";
 import {
-  casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestQuestion, groupsOf, stepsOf, toRows, totalsOf, type CaseInput,
+  casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestQuestion, groupsOf, toRows, totalsOf, type CaseInput,
 } from "./view-model";
 import { delta, money } from "./format";
 
@@ -39,12 +39,6 @@ describe("Scenario A, before the answer (revision 1)", () => {
   it("is waiting for the operator's answer", () => {
     expect(casePill(x)).toEqual({ label: "Waiting for your answer", tone: "waiting" });
     expect(checkedLine(x, NOW)).toBe("Checked today at 1:50 PM");
-    expect(stepsOf(x, NOW).map((s) => [s.state, s.title, s.sub])).toEqual([
-      ["done", "Checked 8 charges", "4 documents read"],
-      ["current", "Waiting for your answer", "1 question, 2 charges"],
-      ["todo", "Draft dispute", "$300, 1 line"],
-      ["todo", "Approve", "Nothing is sent"],
-    ]);
   });
 
   it("names what the invoice was checked against, in date order", () => {
@@ -78,21 +72,12 @@ describe("Scenario A, after the answer (revision 2)", () => {
   it("says the answer came from the operator", () => {
     expect(checkedLine(x, NOW)).toBe("Updated at 2:05 PM after your answer");
     expect(toRows(x).find((r) => r.lineNo === 4)?.reason.plain).toBe("Approved by you");
-    expect(stepsOf(x, NOW).slice(1).map((s) => [s.state, s.title, s.sub])).toEqual([
-      ["done", "You answered", "Today at 2:05 PM"],
-      ["current", "Draft dispute", "$700, 2 lines"],
-      ["todo", "Approve", "Nothing is sent"],
-    ]);
     expect(casePill(x).label).toBe("Ready to dispute");
   });
 
-  it("after drafting, approval is the current step", () => {
+  it("after drafting, the case is ready to approve", () => {
     const withDraft = { ...x, drafts: [scenarioADraft()] };
     expect(casePill(withDraft).label).toBe("Ready to approve");
-    expect(stepsOf(withDraft, NOW).slice(2).map((s) => [s.state, s.title, s.sub])).toEqual([
-      ["done", "Dispute drafted", "$700, 2 lines"],
-      ["current", "Approve", "Nothing is sent"],
-    ]);
   });
 });
 

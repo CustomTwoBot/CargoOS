@@ -145,19 +145,3 @@ export function usedFor(lines: number[] | undefined): string | undefined {
   if (lines.length === 1) return `Used for line ${lines[0]}`;
   return `Used for lines ${lines.slice(0, -1).join(", ")} and ${lines.at(-1)}`;
 }
-
-export type Track = { received?: string; read: DocStatus; used?: { n: number; of: number } };
-
-/** Received, read and used in the current checks: the three steps of a document (tracker view). */
-export function trackOf(x: CaseInput, doc: SourceDoc): Track {
-  const arrived = x.events.filter((e) => docIdOf(e) === doc._id && (e.type === "doc_added" || e.type === "reply_received"))
-    .sort((a, b) => instant(a.at) - instant(b.at))[0];
-  const received = arrived && pacificDate(arrived.at);
-  const read = statusOf(doc, x.events);
-  if (read.state !== "read") return { received, read };
-  const findings = currentFindings(x);
-  const checked = doc.type === "freight_invoice"
-    ? x.charges.filter((c) => c.docId === doc._id).map((c) => findings.some((g) => g.chargeId === c._id))
-    : x.facts.filter((f) => f.span.docId === doc._id).map((f) => findings.some((g) => g.factIds.includes(f._id)));
-  return { received, read, used: { n: checked.filter(Boolean).length, of: checked.length } };
-}

@@ -1,4 +1,4 @@
-// Pieces every variation uses: a spinner that always carries its label (docs/design.md §11),
+// Pieces the quiet states use: a spinner that always carries its label (docs/design.md §11),
 // the bottom-right toast region (§7.14) and the row-button look (radius 7).
 import type { ReactNode } from "react";
 import { cx } from "@/components/case/cx";
@@ -13,11 +13,10 @@ export function Busy({ label, className }: { label: string; className?: string }
   );
 }
 
-/** Bottom-right stack for toasts. `contained` pins it inside the nearest positioned box (the lab frames). */
-export function ToastRegion({ children, contained }: { children: ReactNode; contained?: boolean }) {
+/** Bottom-right stack for toasts (QuietToast). */
+export function ToastRegion({ children }: { children: ReactNode }) {
   return (
-    <div aria-live="polite" aria-label="Notifications" role="region"
-      className={cx("z-50 flex flex-col items-end gap-2", contained ? "absolute bottom-4 right-4" : "fixed bottom-5 right-5")}>
+    <div aria-live="polite" aria-label="Notifications" role="region" className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
       {children}
     </div>
   );

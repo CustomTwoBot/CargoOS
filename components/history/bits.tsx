@@ -1,4 +1,4 @@
-// Pieces every History variation shares: who did it, and the append-only footer (docs/design.md §7.10).
+// Pieces of the History table: who did it, and the append-only footer (docs/design.md §7.10).
 import { cx } from "@/components/case/cx";
 import { WHO_NAME, type Entry } from "./history";
 

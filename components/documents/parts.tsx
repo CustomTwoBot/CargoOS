@@ -1,36 +1,9 @@
-// Pieces every Documents variation shares: the page shell, the status text and the document
-// with its quotes highlighted next to what each one became.
-import { useState, type ReactNode } from "react";
-import { Rail } from "@/components/case/chrome";
+// Pieces of the Documents view: the status text and the document with its quotes highlighted
+// next to what each one became.
+import { useState } from "react";
 import { cx } from "@/components/case/cx";
-import { ThemeToggle } from "@/components/case/theme-toggle";
-import { latestQuestion, type CaseInput } from "@/components/case/view-model";
+import type { CaseInput } from "@/components/case/view-model";
 import { itemsOf, segmentsOf, usedFor, type DocRow, type DocStatus, type Item } from "./documents";
-
-export function Shell({ x, count, children }: { x: CaseInput; count: number; children: ReactNode }) {
-  return (
-    <div className="flex h-dvh min-w-[1280px] overflow-hidden bg-bg text-ink">
-      <Rail openQuestion={latestQuestion(x)?.status === "open"} active="documents" />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 px-6 pb-3 pt-3.5">
-          <div className="min-w-0">
-            <h1 className="flex items-center gap-2.5 text-title font-[650] tracking-[-0.012em]">
-              Documents
-              <span title="Replay of a recorded run. Nothing here reaches the backend or Claude."
-                className="rounded-full border border-line-strong px-2 text-xs font-semibold leading-5 text-ink-2">Replay</span>
-            </h1>
-            <p className="mt-0.5 text-[13px] text-ink-2">
-              {x.case.title}. {count} documents, oldest first.{" "}
-              <span className="text-ink-3">Synthetic data. Nothing is sent or paid automatically.</span>
-            </p>
-          </div>
-          <ThemeToggle />
-        </header>
-        {children}
-      </main>
-    </div>
-  );
-}
 
 export const meta = (r: DocRow) => [r.kind, r.sender, r.date].filter(Boolean).join(" · ");
 

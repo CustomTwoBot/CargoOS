@@ -1,4 +1,4 @@
-// Variation A: document list on the left, the selected document with its quotes on the right.
+// The case's Documents: document list on the left, the selected document with its quotes on the right.
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { ChainGlyph } from "@/components/case/glyphs";

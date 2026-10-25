@@ -1,4 +1,4 @@
-// Small pieces the input variations share: type picker, buttons, result lines, line fields.
+// Small pieces of the Add evidence drawer and the line editor: type picker, buttons, result lines, line fields.
 import { useId } from "react";
 import { cx } from "@/components/case/cx";
 import { money } from "@/components/case/format";
@@ -7,13 +7,12 @@ import { LINE_COPY, type LineEditor, type SavedEdit } from "./line-edit";
 
 export const INPUT = "w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-body text-ink placeholder:text-ink-3 aria-invalid:border-dispute";
 
-export function TypePicker({ value, onChange, size = "md" }: { value: EvidenceType; onChange: (t: EvidenceType) => void; size?: "sm" | "md" }) {
+export function TypePicker({ value, onChange }: { value: EvidenceType; onChange: (t: EvidenceType) => void }) {
   return (
     <div role="radiogroup" aria-label="Type" className="inline-flex rounded-[9px] border border-line bg-sunken p-[3px]">
       {EVIDENCE_TYPES.map(({ type, label }) => (
         <button key={type} type="button" role="radio" aria-checked={value === type} onClick={() => onChange(type)}
-          className={cx("rounded-[6px] font-semibold text-ink-3",
-            size === "sm" ? "px-2 text-xs leading-[22px]" : "px-3 text-[13px] leading-[26px]",
+          className={cx("rounded-[6px] px-3 text-[13px] font-semibold leading-[26px] text-ink-3",
             value === type && "bg-surface text-ink shadow-[0_0_0_1px_var(--line-strong)]")}>
           {label}
         </button>
@@ -42,11 +41,11 @@ export function SecondaryButton({ children, onClick, ...rest }: { children: stri
   );
 }
 
-export const LinkButton = ({ children, onClick }: { children: string; onClick: () => void }) => (
+const LinkButton = ({ children, onClick }: { children: string; onClick: () => void }) => (
   <button type="button" onClick={onClick} className="text-meta font-medium text-link underline underline-offset-[3px]">{children}</button>
 );
 
-export const Spinner = () => (
+const Spinner = () => (
   <span aria-hidden="true" className="inline-block size-[11px] flex-none animate-spin rounded-full border-[1.5px] border-line-strong border-t-ink" />
 );
 
@@ -77,8 +76,8 @@ export function EvidenceText({ form, rows = 6, autoFocus }: { form: EvidenceForm
 }
 
 /** Description and amount, each with its own error under it. */
-export function LineFields({ ed, layout = "stack", autoFocus = true, amountRef }: {
-  ed: LineEditor; layout?: "stack" | "row"; autoFocus?: boolean; amountRef?: React.Ref<HTMLInputElement>;
+export function LineFields({ ed, layout = "stack", autoFocus = true }: {
+  ed: LineEditor; layout?: "stack" | "row"; autoFocus?: boolean;
 }) {
   const id = useId();
   const onKey = (e: React.KeyboardEvent) => {
@@ -103,7 +102,7 @@ export function LineFields({ ed, layout = "stack", autoFocus = true, amountRef }
       {field("amount", LINE_COPY.amount,
         <div className="relative">
           <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-body text-ink-3">$</span>
-          <input id={`${id}-amount`} ref={amountRef} inputMode="decimal" onFocus={(e) => e.currentTarget.select()} value={ed.amount} onChange={(e) => ed.setAmount(e.target.value)} onKeyDown={onKey}
+          <input id={`${id}-amount`} inputMode="decimal" onFocus={(e) => e.currentTarget.select()} value={ed.amount} onChange={(e) => ed.setAmount(e.target.value)} onKeyDown={onKey}
             aria-invalid={!!ed.errors.amount || undefined} aria-describedby={ed.errors.amount ? `${id}-amount-err` : undefined}
             className={cx(INPUT, "pl-5 text-right font-semibold")} />
         </div>)}

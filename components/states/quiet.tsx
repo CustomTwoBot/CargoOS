@@ -1,4 +1,4 @@
-// Variation A, "Quiet, in place": every state lives inside the card it affects. The screen keeps
+// Screen states, quiet and in place: every state lives inside the card it affects. The screen keeps
 // its geometry; only the affected card changes (docs/design.md §7.14 as written).
 import { cx } from "@/components/case/cx";
 import { StatusGlyph } from "@/components/case/glyphs";

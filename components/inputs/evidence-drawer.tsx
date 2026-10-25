@@ -1,4 +1,4 @@
-// Add evidence A: a header button opens a panel over the right column (404px, same as the
+// Add evidence: a header button opens a panel over the right column (404px, same as the
 // side panel). Not modal: the list stays usable, Escape or Close puts it away.
 import { useEffect, useState } from "react";
 import { EVIDENCE_COPY, useEvidenceForm, type AddEvidence } from "./evidence-input";

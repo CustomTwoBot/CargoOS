@@ -1,16 +1,15 @@
-// At stake card with the stacked bar, and the four step cards (docs/design.md §7.3, §7.4, §0).
+// At stake card with the stacked bar (docs/design.md §7.3). Rechecking uses the quiet state (§7.14).
 import { cx } from "./cx";
 import { Hint, HINTS } from "./bits";
 import { money } from "./format";
-import { StatusGlyph } from "./glyphs";
+import { QuietRecheckLine, QUIET_DIM } from "@/components/states/quiet";
 import type { CaseTotals } from "./totals";
-import type { Step } from "./view-model";
 
-type AtStakeProps = { totals: CaseTotals; countLine: string; checked: string; rechecking: boolean };
+type AtStakeProps = { totals: CaseTotals; countLine: string; checked: string; rechecking: boolean; chargeCount: number };
 
-export function AtStakeCard({ totals: t, countLine, checked, rechecking }: AtStakeProps) {
+export function AtStakeCard({ totals: t, countLine, checked, rechecking, chargeCount }: AtStakeProps) {
   const pct = (cents: number) => (t.billedCents ? `${(cents / t.billedCents) * 100}%` : "0%");
-  const dim = rechecking ? "opacity-45 transition-opacity" : "";
+  const dim = rechecking ? QUIET_DIM : "";
   const legend: { label: string; cents: number; swatch: string; amount?: string }[] = [
     { label: "Matches the agreement", cents: t.agreedCents, swatch: "bg-line-strong" },
     { label: "At stake", cents: t.atStakeCents, swatch: "bg-dispute", amount: "text-dispute" },
@@ -30,10 +29,7 @@ export function AtStakeCard({ totals: t, countLine, checked, rechecking }: AtSta
       </div>
       <div>
         <div className="mb-2 flex justify-between text-meta">
-          <span className="text-ink-3" aria-live="polite">
-            {rechecking && <span className="mr-1.5 inline-block size-[11px] animate-spin rounded-full border-[1.5px] border-line-strong border-t-ink align-[-1px]" />}
-            {rechecking ? "Rechecking charges with your answer…" : checked}
-          </span>
+          {rechecking ? <QuietRecheckLine count={chargeCount} /> : <span className="text-ink-3">{checked}</span>}
           <span className="font-medium text-ink-2">Invoice total <b className={cx("text-ink", dim)}>{money(t.billedCents)}</b></span>
         </div>
         <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] bg-sunken" aria-hidden="true">
@@ -51,25 +47,5 @@ export function AtStakeCard({ totals: t, countLine, checked, rechecking }: AtSta
         </dl>
       </div>
     </section>
-  );
-}
-
-export function StepCards({ steps }: { steps: Step[] }) {
-  return (
-    <ol aria-label="Next steps" className="grid grid-cols-4 gap-2">
-      {steps.map((s, i) => (
-        <li key={i} aria-current={s.state === "current" ? "step" : undefined}
-          className={cx("flex items-center gap-[9px] rounded-lg border border-line bg-surface px-3 py-[9px] text-[13px] leading-[18px] text-ink-3 shadow-card",
-            s.state === "done" && "text-ink-2",
-            s.state === "current" && "border-primary-ring font-semibold text-ink")}>
-          <span className={cx("grid size-[22px] flex-none place-items-center rounded-full border-[1.5px] border-line-strong text-[11.5px] font-bold",
-            s.state === "done" && "border-cleared bg-cleared text-cleared-ink",
-            s.state === "current" && "border-ink text-ink")}>
-            {s.state === "done" ? <StatusGlyph group="cleared" /> : i + 1}
-          </span>
-          <span>{s.title}<small className="block text-[11.5px] font-normal text-ink-3">{s.sub}</small></span>
-        </li>
-      ))}
-    </ol>
   );
 }

@@ -13,26 +13,15 @@ export const WHO_NAME: Record<Who, string> = { you: "You", rules: "CargoOS rules
 
 const ROLE_NAME = { clerk: "clerk", controller: "controller", ops_lead: "ops lead" } as const;
 
-export type Phase = "documents" | "checked" | "question" | "dispute";
-export const PHASES: Phase[] = ["documents", "checked", "question", "dispute"];
-export const PHASE_NAME: Record<Phase, string> = {
-  documents: "Documents read", checked: "Checked", question: "Question and answer", dispute: "Dispute",
-};
-
 export type Entry = {
   id: string; at: string; code: CaseEvent["type"];
   who: Who; role?: string;       // role is set for "you" only, shown muted: "You · controller"
   what: string;                  // one plain sentence
   quotes: string[];              // the words that caused this step, verbatim from the documents
-  phase: Phase;
   blocked: boolean;              // approval_blocked: shown in red
 };
 
 const TZ = "America/Los_Angeles";
-
-/** "1:50 PM" in Pacific time. */
-export const clockPT = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
 
 /** "1:50:03 PM" in Pacific time, for the dense table. */
 export const secondsPT = (iso: string) =>
@@ -77,20 +66,19 @@ export function historyEntries(x: CaseInput): Entry[] {
   const linesOf = (keys: string[]) => linesPhrase(keys.flatMap((k) => lineOf.get(k) ?? []));
 
   const sorted = [...x.events].sort((a, b) => instant(a.at) - instant(b.at));
-  let answered = false, drafted = false;
 
   return sorted.map((e): Entry => {
     const p = e.payload;
     const doc = docs.get(str(p.docId) ?? "");
-    let what: string, quotes: string[] = [], phase: Phase = "checked";
+    let what: string, quotes: string[] = [];
 
     switch (e.type) {
       case "doc_added":
-        what = `Added ${docName(doc)}`; phase = "documents"; break;
+        what = `Added ${docName(doc)}`; break;
       case "facts_extracted": {
         const terms = strs(p.factIds).length, charges = strs(p.chargeIds).length;
         const found = charges ? `${charges} ${charges === 1 ? "charge" : "charges"}` : `${terms} ${terms === 1 ? "term" : "terms"}`;
-        what = `Read ${docName(doc)}: ${found}`; phase = answered ? "question" : "documents"; break;
+        what = `Read ${docName(doc)}: ${found}`; break;
       }
       case "extraction_failed":
         what = `Couldn't read part of ${docName(doc)}`; break;
@@ -108,21 +96,19 @@ export function historyEntries(x: CaseInput): Entry[] {
             ? `Rechecked: ${moved.map((c) => `line ${c.lineNo} ${GROUP_WORD[uiGroup(c.to)]}`).join(", ")}`
             : "Rechecked: nothing moved";
           quotes = quotesOf(moved.flatMap((c) => c.causedByFactIds));
-          if (answered) phase = "question";
         }
-        if (drafted) phase = "dispute";
         break;
       }
       case "question_asked": {
         const q = x.questions.find((q) => q._id === p.questionId);
         what = `Asked you about ${linesOf(strs(p.findingKeys))}`;
         quotes = q?.citations.map((c) => c.quote) ?? [];
-        phase = "question"; break;
+        break;
       }
       case "reply_received":
         what = "Answered the question";
         quotes = doc ? [doc.text] : quotesOf(strs(p.factIds));
-        phase = "question"; answered = true; break;
+        break;
       case "finding_confirmed":
         what = `Agreed ${linesOf(strs([p.findingKey]))} is to dispute`; break;
       case "finding_dismissed":
@@ -130,59 +116,22 @@ export function historyEntries(x: CaseInput): Entry[] {
       case "draft_created": {
         const total = typeof p.totalDisputedCents === "number" ? `${money(p.totalDisputedCents)} ` : "";
         what = `Drafted a ${total}dispute for ${linesOf(strs(p.findingKeys))}`;
-        phase = "dispute"; drafted = true; break;
+        break;
       }
       case "approval_requested":
-        what = "Asked for approval"; phase = "dispute"; break;
+        what = "Asked for approval"; break;
       case "approval_blocked":
-        what = "Approval blocked: only the controller can approve"; phase = "dispute"; break;
+        what = "Approval blocked: only the controller can approve"; break;
       case "approved":
-        what = "Approved the dispute. Nothing was sent."; phase = "dispute"; break;
+        what = "Approved the dispute. Nothing was sent."; break;
     }
 
     const who: Who = e.actor === "system" ? "rules" : e.actor === "agent" ? "agent" : "you";
     return {
       id: e._id, at: e.at, code: e.type, who, role: who === "you" ? ROLE_NAME[e.actor as keyof typeof ROLE_NAME] : undefined,
-      what, quotes, phase, blocked: e.type === "approval_blocked",
+      what, quotes, blocked: e.type === "approval_blocked",
     };
   });
-}
-
-/** Entries in a phase, in the order they happened. Empty phases are left out. */
-export const byPhase = (entries: Entry[]) =>
-  PHASES.map((phase) => ({ phase, entries: entries.filter((e) => e.phase === phase) })).filter((g) => g.entries.length);
-
-export type Step = { id: string; at: string; who: Who; role?: string; what: string; quotes: string[]; entries: Entry[] };
-
-/**
- * The story view: consecutive entries by the same actor doing the same thing become one step
- * ("Added 4 documents"). Every entry stays reachable under its step.
- */
-export function storySteps(entries: Entry[]): Step[] {
-  const steps: Step[] = [];
-  for (const e of entries) {
-    const last = steps.at(-1);
-    if (last && last.entries[0].code === e.code && last.who === e.who && last.role === e.role
-      && (e.code === "doc_added" || e.code === "facts_extracted")) {
-      last.entries.push(e);
-      last.quotes.push(...e.quotes);
-    } else {
-      steps.push({ id: e.id, at: e.at, who: e.who, role: e.role, what: e.what, quotes: [...e.quotes], entries: [e] });
-    }
-  }
-  // A quote the step right above already shows in full (your answer, then the recheck it caused) is said once.
-  return steps.map((s, i) => ({
-    ...s,
-    what: s.entries.length > 1 ? mergedSentence(s.entries) : s.what,
-    quotes: s.quotes.filter((q) => !steps[i - 1]?.quotes.some((prev) => prev.includes(q))),
-  }));
-}
-
-function mergedSentence(entries: Entry[]): string {
-  const n = entries.length;
-  if (entries[0].code === "doc_added") return `Added ${n} documents`;
-  const names = entries.map((e) => e.what.replace(/^Read (.*?):.*$/, "$1"));
-  return `Read ${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 /**

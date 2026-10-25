@@ -1,5 +1,5 @@
 "use client";
-// Variation B: a dense table for accountants, newest first (docs/design.md §7.10), filtered by who.
+// The case History: a dense table for accountants, newest first (docs/design.md §7.10), filtered by who.
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { dayPT, secondsPT, WHO_NAME, type Entry, type Who as WhoKind } from "./history";
