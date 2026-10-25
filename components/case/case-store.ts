@@ -54,6 +54,8 @@ export type CaseActions = {
   editMessage: (draftId: string, text: { subject: string; body: string }) => void;
   addEvidence: (e: NewEvidence) => { kind: "replay" } | { kind: "live" };
   saveLine: (key: string, change: LineChange) => void;
+  /** Undo a learned rule (R10). Live only; a replay has no stored rules. */
+  undoRule?: (ruleId: string) => void;
 };
 
 const STEP_MS = 60_000;

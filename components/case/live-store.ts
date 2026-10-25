@@ -5,7 +5,7 @@
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Person } from "@/lib/types";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -67,6 +67,11 @@ export type LiveCase = { demo: DemoCase; x: CaseInput; local: CaseLocal; actions
 /** The live Scenario A case, or undefined while loading and when the backend has none. */
 export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined {
   const caseId = useQuery(api.cases.getDemoCase);
+  return useLiveCaseById(caseId ?? undefined, person, toast);
+}
+
+/** Any live case by its Convex id (a case created on /bills/new), or undefined while loading or missing. */
+export function useLiveCaseById(caseId: Id<"cases"> | undefined, person: Person, toast: Toast): LiveCase | undefined {
   const view = useQuery(api.cases.getCaseView, caseId ? { caseId } : "skip");
   const submitReply = useMutation(api.ai.submitReply);
   const confirmFinding = useMutation(api.pipeline.confirmFinding);
@@ -77,82 +82,90 @@ export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined 
   const editCharge = useMutation(api.pipeline.editCharge);
   const addPastedText = useMutation(api.uploads.addPastedText);
   const resetLiveDemo = useMutation(api.seed.resetLiveDemo);
+  const undoLearnedRule = useMutation(api.learnedRules.undoLearnedRule);
   const [waiting, setWaiting] = useState<Waiting>();
   // No backend stores the owner's edited wording yet, so the edits stay on this screen until a reset.
   const [messages, setMessages] = useState<Record<string, Message>>({});
-  if (!caseId || !view) return undefined;
+  // One object per change of the case or this screen's waits, so pages and effects can compare it.
+  return useMemo(() => {
+    if (!caseId || !view) return undefined;
 
-  const base = caseInputOf(view);
-  const x: CaseInput = {
-    ...base,
-    drafts: base.drafts.map((d) => (messages[d._id] ? { ...d, subject: messages[d._id].subject, editedBody: messages[d._id].body } : d)),
-  };
-  const id = view.case._id, personId = person.id;
+    const base = caseInputOf(view);
+    const x: CaseInput = {
+      ...base,
+      drafts: base.drafts.map((d) => (messages[d._id] ? { ...d, subject: messages[d._id].subject, editedBody: messages[d._id].body } : d)),
+    };
+    const id = view.case._id, personId = person.id;
 
-  /** Runs a mutation and what follows it; any error is toasted, never thrown or left unhandled. */
-  const run = <T>(start: () => Promise<T>, done?: (r: T) => void, failed?: () => void) => {
-    void (async () => {
-      try {
-        // Not `done?.(await start())`: with no `done`, optional chaining would skip the mutation too.
-        const result = await start();
-        done?.(result);
-      } catch (e) {
-        failed?.();
-        toast(errorText(e));
-      }
-    })();
-  };
-  const decided = (ok: string) => (r: Decision | undefined) => {
-    if (!r) return;
-    toast(r.ok ? ok : r.reason);
-  };
+    /** Runs a mutation and what follows it; any error is toasted, never thrown or left unhandled. */
+    const run = <T>(start: () => Promise<T>, done?: (r: T) => void, failed?: () => void) => {
+      void (async () => {
+        try {
+          // Not `done?.(await start())`: with no `done`, optional chaining would skip the mutation too.
+          const result = await start();
+          done?.(result);
+        } catch (e) {
+          failed?.();
+          toast(errorText(e));
+        }
+      })();
+    };
+    const decided = (ok: string) => (r: Decision | undefined) => {
+      if (!r) return;
+      toast(r.ok ? ok : r.reason);
+    };
 
-  const actions: CaseActions = {
-    reset: () => {
-      setWaiting(undefined);
-      setMessages({});
-      run(() => resetLiveDemo({ personId }));
-    },
+    const actions: CaseActions = {
+      reset: () => {
+        setWaiting(undefined);
+        setMessages({});
+        run(() => resetLiveDemo({ personId }));
+      },
 
-    reply: (questionId, text) => {
-      setWaiting({ kind: "revision", from: x.case.revision, failures: failures(x) });
-      run(() => submitReply({ role: "ops_lead", personId, questionId: questionId as Id<"questions">, text }), undefined, () => setWaiting(undefined));
-    },
+      reply: (questionId, text) => {
+        setWaiting({ kind: "revision", from: x.case.revision, failures: failures(x) });
+        run(() => submitReply({ role: "ops_lead", personId, questionId: questionId as Id<"questions">, text }), undefined, () => setWaiting(undefined));
+      },
 
-    verdict: (key, v) => {
-      const args = { role: "clerk" as const, personId, caseId: id, key };
-      run(() => (v === "confirmed" ? confirmFinding(args) : dismissFinding(args)),
-        () => toast(v === "confirmed" ? "Kept in dispute. Saved to case history." : "Marked as not an issue. Saved to case history."));
-    },
+      verdict: (key, v) => {
+        const args = { role: "clerk" as const, personId, caseId: id, key };
+        run(() => (v === "confirmed" ? confirmFinding(args) : dismissFinding(args)),
+          () => toast(v === "confirmed" ? "Kept in dispute. Saved to case history." : "Marked as not an issue. Saved to case history."));
+      },
 
-    // The draft arrives through getCaseView; the owner decides it (CLAUDE.md rule 8).
-    draftDispute: () => {
-      run(() => requestApproval({ caseId: id, personId }), () => toast(`Approval requested from ${firstName(OWNER)}. Nothing was sent.`));
-      return undefined;
-    },
+      // The draft arrives through getCaseView; the owner decides it (CLAUDE.md rule 8).
+      draftDispute: () => {
+        run(() => requestApproval({ caseId: id, personId }), () => toast(`Approval requested from ${firstName(OWNER)}. Nothing was sent.`));
+        return undefined;
+      },
 
-    accept: (draftId) => run(() => approveDraft({ draftId: draftId as Id<"drafts">, personId }), decided("Accepted. Nothing was sent.")),
+      accept: (draftId) => run(() => approveDraft({ draftId: draftId as Id<"drafts">, personId }), decided("Accepted. Nothing was sent.")),
 
-    reject: (draftId, reason) =>
-      run(() => rejectDraft({ draftId: draftId as Id<"drafts">, personId, reason }), decided("Rejected. Nothing went to the seller.")),
+      reject: (draftId, reason) =>
+        run(() => rejectDraft({ draftId: draftId as Id<"drafts">, personId, reason }), decided("Rejected. Nothing went to the seller.")),
 
-    editMessage: (draftId, text) => setMessages((m) => ({ ...m, [draftId]: text })),
+      editMessage: (draftId, text) => setMessages((m) => ({ ...m, [draftId]: text })),
 
-    addEvidence: (e) => {
-      const before = failures(x);
-      run(() => addPastedText({ caseId: id, personId, text: e.text, docType: e.type, title: `${KIND_TITLE[e.type]} you added` }),
-        (docId) => setWaiting({ kind: "document", docId, failures: before }));
-      return { kind: "live" };
-    },
+      addEvidence: (e) => {
+        const before = failures(x);
+        run(() => addPastedText({ caseId: id, personId, text: e.text, docType: e.type, title: `${KIND_TITLE[e.type]} you added` }),
+          (docId) => setWaiting({ kind: "document", docId, failures: before }));
+        return { kind: "live" };
+      },
 
-    saveLine: (key, change) => {
-      const chargeId = (x.findings.find((f) => f.key === key)?.chargeId ?? key) as Id<"charges">;
-      run(() => editCharge({ role: "clerk", personId, caseId: id, chargeId, amountCents: change.amountCents, description: change.description }));
-    },
-  };
+      saveLine: (key, change) => {
+        const chargeId = (x.findings.find((f) => f.key === key)?.chargeId ?? key) as Id<"charges">;
+        run(() => editCharge({ role: "clerk", personId, caseId: id, chargeId, amountCents: change.amountCents, description: change.description }));
+      },
 
-  const local: CaseLocal = {
-    stage: "live", replaying: !!waiting && stillWaiting(x, waiting), verdicts: {}, drafts: [], added: [], edits: {}, log: [],
-  };
-  return { demo: liveDemoCase(x), x, local, actions };
+      undoRule: (ruleId) => run(() => undoLearnedRule({ ruleId: ruleId as Id<"learnedRules">, personId }),
+        () => toast("Rule undone. The line is checked again without it.")),
+    };
+
+    const local: CaseLocal = {
+      stage: "live", replaying: !!waiting && stillWaiting(x, waiting), verdicts: {}, drafts: [], added: [], edits: {}, log: [],
+    };
+    return { demo: liveDemoCase(x), x, local, actions };
+  }, [caseId, view, waiting, messages, person.id, toast, submitReply, confirmFinding, dismissFinding,
+    requestApproval, approveDraft, rejectDraft, editCharge, addPastedText, resetLiveDemo, undoLearnedRule]);
 }
