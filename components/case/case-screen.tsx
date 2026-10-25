@@ -12,7 +12,6 @@ import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { ApprovalsInbox } from "@/components/inboxes/approvals-inbox";
 import { approvalItems, questionItems, type InboxCase } from "@/components/inboxes/items";
 import { QuestionsInbox } from "@/components/inboxes/questions-inbox";
-import type { Person as InboxPerson } from "@/components/inboxes/people";
 import { CasesEmpty } from "@/components/new-case/cases-empty";
 import { NewCaseFlow } from "@/components/new-case/new-case-flow";
 import { SettingsView } from "@/components/settings/settings-view";
@@ -20,7 +19,7 @@ import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
 import { AppShell } from "@/components/shell/app-shell";
 import { caseStatus, waitingOn } from "@/components/shell/case-status";
-import { firstName, isUploaderOnly, titleOf, useDevicePerson } from "@/components/shell/person";
+import { isUploaderOnly, titleOf, useDevicePerson } from "@/components/shell/person";
 import { useCaseStore } from "./case-store";
 import { CasesList, type CaseSummary } from "./cases-list";
 import type { DemoCase } from "./demo-case";
@@ -81,9 +80,10 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
   const sidebarCases = cases.map((c) => ({ id: c.id, title: c.title, atStakeCents: summaries[c.id].atStakeCents, status: summaries[c.id].status }));
   const title = view === "questions" ? "Questions" : view === "approvals" ? "Approvals" : view === "new" ? "New case"
     : view === "settings" ? "Settings" : view === "cases" || !demo ? "Cases" : demo.title;
-  // The inboxes still type the viewer with their own temporary Person (components/inboxes/people.ts);
-  // this object fits both it and lib/types Person until they switch.
-  const viewer: InboxPerson & typeof person = { ...person, name: firstName(person), title: titleOf(person).toLowerCase() };
+  // The device's person, plus the `title` the inboxes' old temporary Person wanted. Not a fresh
+  // literal at the call, so it also passes as lib/types Person once the inboxes switch (d6a0b4f).
+  // TODO(merge): pass `person` once the inbox branch is merged.
+  const viewer = { ...person, title: titleOf(person).toLowerCase() };
   const resetAll = () => {
     cases.forEach((c) => actions(c.id).reset(c.start));
     toast("Demo reset. Every case is back to before the answers.");
