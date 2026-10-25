@@ -21,7 +21,7 @@ describe("DocumentsView on a large case", () => {
     expect(rows).toHaveLength(12);
     expect(rows[0]).toBe("Quote Q-PCL-1103Quote · Forwarder · Sep 3Read, 11 facts· line 4");
     expect(rows[1]).toBe("Email: RE: Q-PCL-1103 ocean rateEmail · Forwarder · Sep 6Read, 1 fact· lines 1–3");
-    expect(rows[5]).toBe("WhatsApp: Derek PCL / Sam BaylineChat · Oct 3Read, 7 facts· lines 1–5, 13 and 16");
+    expect(rows[5]).toBe("WhatsApp: Derek PCL / Sam BaylineChat · Oct 3Read, 8 facts· lines 1–5, 13, 16 and 17");
     expect(rows[6]).toBe("WhatsApp: Lin Trucking / Sam BaylineChat · Carrier · Oct 6Partly read, 4 facts· lines 8–10, 13 and 15");
     // Three answers on one day: the time tells them apart.
     expect(rows.slice(8, 11)).toEqual([
@@ -73,11 +73,11 @@ describe("DocumentsView on a large case", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("marks a 16-line invoice lightly, and only the selected line in full", () => {
+  it("marks a 17-line invoice lightly, and only the selected line in full", () => {
     render(<DocumentsView x={x} />);
     open(/Invoice PCL-INV-2207/);
-    expect(marks()).toHaveLength(16);
-    expect(marks().filter((m) => m.classList.contains("bg-highlight/30"))).toHaveLength(16);
+    expect(marks()).toHaveLength(17);
+    expect(marks().filter((m) => m.classList.contains("bg-highlight/30"))).toHaveLength(17);
     fireEvent.click(screen.getByRole("button", { name: /Line 15: Detention 3 hrs CAIU5551234, \$285/ }));
     expect(marks().filter((m) => !m.classList.contains("bg-highlight/30")).map((m) => m.dataset.quote)).toEqual(["lc_15"]);
   });

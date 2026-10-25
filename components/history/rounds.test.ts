@@ -69,7 +69,7 @@ describe("historyEntries on a large case", () => {
 
   it("joins lines that land in the same group into one phrase", () => {
     expect(what("recomputed")).toEqual([
-      "Checked 16 lines: 5 to dispute, 4 waiting, 7 cleared",
+      "Checked 17 lines: 5 to dispute, 4 waiting, 8 cleared",
       "Rechecked: line 12 cleared, line 14 to dispute",
       "Rechecked: line 11 cleared",
       "Rechecked: line 15 to dispute",

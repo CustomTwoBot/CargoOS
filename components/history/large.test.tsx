@@ -107,7 +107,7 @@ describe("HistoryView on a large case", () => {
     render(<HistoryView x={big} />);
     const failed = screen.getByText("Couldn't read part of the WhatsApp chat Lin Trucking / Sam Bayline: messages 18–22");
     expect(failed.closest('[role="cell"]')).toHaveClass("min-w-0", "break-words");
-    fireEvent.click(screen.getByRole("button", { name: "Checked 16 lines: 5 to dispute, 4 waiting, 7 cleared" }));
+    fireEvent.click(screen.getByRole("button", { name: "Checked 17 lines: 5 to dispute, 4 waiting, 8 cleared" }));
     expect(within(screen.getByRole("list", { name: "Quoted words" })).getAllByRole("listitem")[0]).toHaveClass("break-words");
   });
 });

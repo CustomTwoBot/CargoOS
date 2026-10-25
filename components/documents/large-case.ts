@@ -7,6 +7,7 @@ import type {
   CaseEvent, Charge, ChargeType, Fact, Finding, FindingChange, Question, Reply, RuleId, SourceDoc, SourceSpan, Status,
 } from "@/lib/types";
 import { money } from "@/components/case/format";
+import { amountIn } from "./documents";
 import type { CaseInput } from "@/components/case/view-model";
 
 const CASE = "case_L";
@@ -89,6 +90,7 @@ const CHAT_DEREK = chat([
   ["9/30", "8:15 AM", "D", "CBP picked MSKU7654321 for an exam"],
   ["9/30", "8:20 AM", "S", "how long will that take?"],
   ["9/30", "8:40 AM", "D", "usually 3 to 5 days, the other two boxes are released"],
+  ["9/30", "9:10 AM", "D", "origin THC at Shanghai is CNY 1,370 per shipment, billed as is"],
   ["10/1", "9:00 AM", "D", "third box needs a rush truck to make the Oct 2 delivery slot, $250"],
   ["10/1", "9:12 AM", "S", "ok go ahead with the $250 rush on the third box"],
   ["10/1", "9:13 AM", "D", "booked"],
@@ -160,7 +162,8 @@ ARR: l1:5O   DEP: 2:5?
 REC'D BY: ~~~ ~~~~~
 [stamp illegible]`;
 
-type Line = [ChargeType, string, number];
+// The origin THC line is billed in CNY: the engine keeps it in its own currency, never converted.
+type Line = [ChargeType, string, number, string?];
 const LINES: Line[] = [
   ["ocean_freight", "Ocean freight 40HC Shanghai-LA TGHU1234567", 390000],
   ["ocean_freight", "Ocean freight 40HC Shanghai-LA MSKU7654321", 390000],
@@ -178,13 +181,15 @@ const LINES: Line[] = [
   ["congestion", "Port congestion fee", 30000],
   ["detention", "Detention 3 hrs CAIU5551234", 28500],
   ["doc_fee", "Documentation fee", 7500],
+  ["origin_thc", "Origin THC Shanghai", 137000, "CNY"],
 ];
 const amount = (cents: number) => (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
-const lineText = ([, d, c]: Line) => `${d.padEnd(44)}${amount(c).padStart(10)}`;
+const lineText = ([, d, c, cur]: Line) => `${d.padEnd(44)}${(cur ? `${cur} ${amount(c)}` : amount(c)).padStart(10)}`;
 const INVOICE = [
   "PACIFIC CREST LOGISTICS - INVOICE PCL-INV-2207   Date: 2026-10-14   Ref: Q-PCL-1103",
   ...LINES.map((l, i) => `${String(i + 1).padEnd(4)}${lineText(l)}`),
-  `    ${"TOTAL DUE USD".padEnd(44)}${amount(LINES.reduce((s, l) => s + l[2], 0)).padStart(10)}`,
+  `    ${"TOTAL DUE USD".padEnd(44)}${amount(LINES.filter((l) => !l[3]).reduce((s, l) => s + l[2], 0)).padStart(10)}`,
+  ...LINES.filter((l) => l[3]).map((l) => `    ${`TOTAL DUE ${l[3]}`.padEnd(44)}${amount(l[2]).padStart(10)}`),
 ].join("\n");
 
 const REPLY_1 = "the exam was CBP's call, we pay that at cost. nobody agreed to a $300 congestion fee";
@@ -249,6 +254,7 @@ const FACTS: Fact[] = [
   fact("lf_cd_drayage", "ld_chat_derek", "drayage stays $780 per box like the quote", rate("drayage", 78000, at("09-22", "15:12"))),
   fact("lf_cd_chassis", "ld_chat_derek", "chassis is $45 a day, first 2 days free", rate("chassis", 4500, at("09-22", "15:16"))),
   fact("lf_cd_rush", "ld_chat_derek", "ok go ahead with the $250 rush on the third box", { kind: "approval", chargeType: "trucking", amountCents: 25000, currency: "USD", effectiveAt: at("10-01", "09:12"), statedBy: "ops_lead" }),
+  fact("lf_cd_othc", "ld_chat_derek", "origin THC at Shanghai is CNY 1,370 per shipment", { ...rate("origin_thc", 137000, at("09-30", "09:10")), currency: "CNY" }),
   fact("lf_cd_docfee", "ld_chat_derek", "doc fee is the usual $75", rate("doc_fee", 7500, at("10-03", "10:05"))),
 
   fact("lf_p_customs", "ld_proforma", "Customs entry                                       145.00", rate("customs_entry", 14500, at("09-15", "10:00"))),
@@ -271,7 +277,7 @@ const FACTS: Fact[] = [
 
 const CHARGES: Charge[] = LINES.map((l, i) => ({
   _id: `lc_${i + 1}`, caseId: CASE, docId: "ld_invoice", lineNo: i + 1, billedBy: "forwarder", chargeType: l[0],
-  description: l[1], amountCents: l[2], currency: "USD", span: span("ld_invoice", lineText(l).trim(), `line ${i + 1}`),
+  description: l[1], amountCents: l[2], currency: l[3] ?? "USD", span: span("ld_invoice", lineText(l).trim(), `line ${i + 1}`),
 }));
 
 // ---------- Findings, four checks ----------
@@ -294,6 +300,7 @@ const FIRST: Verdict[] = [
   waiting("Congestion was mentioned as maybe extra, never agreed."),
   waiting("Detention rate agreed, but part of the chat couldn't be read.", ["lf_cl_det"]),
   ok(["lf_cd_docfee"]),
+  ok(["lf_cd_othc"], "Matches the chat, in CNY as billed."),
 ];
 // What each answer changed: revision -> line -> verdict.
 const LATER: Record<number, Record<number, Verdict>> = {
@@ -317,7 +324,7 @@ function finding(rev: number, c: Charge): Finding {
     key: c._id, caseId: CASE, chargeId: c._id, lineNo: c.lineNo, revision: rev, status: v.status, ruleId: v.ruleId,
     billedCents: c.amountCents, expectedCents: v.expected, deltaCents, factIds: v.facts,
     evidence: [c.span, ...v.facts.flatMap((id) => factsById.get(id)?.span ?? [])],
-    explanation: `Billed ${money(c.amountCents)}. ${v.why}${deltaCents ? ` Over by ${money(deltaCents)}.` : ""}`,
+    explanation: `Billed ${amountIn(c.amountCents, c.currency)}. ${v.why}${deltaCents ? ` Over by ${money(deltaCents)}.` : ""}`,
   };
 }
 const REVISIONS = [1, 2, 3, 4];

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { scenarioAAt } from "@/components/case/fixture";
 import type { CaseEvent } from "@/lib/types";
 import { largeCase } from "./large-case";
-import { docRows, itemsOf, linesText, segmentsOf, statusOf, usedFor } from "./documents";
+import { amountIn, docRows, itemsOf, linesText, segmentsOf, statusOf, usedFor } from "./documents";
 
 const x = scenarioAAt("after");
 const doc = (id: string) => x.documents.find((d) => d._id === id)!;
@@ -143,6 +143,14 @@ describe("itemsOf on a large case", () => {
     expect(texts("ld_quote")).toContain("Not included: customs exams, storage, demurrage and detention");
     expect(texts("ld_email_free")).toContain("Allowed: Exams are ordered by CBP and billed at cost if they happen");
     expect(big.documents.flatMap((d) => itemsOf(big, d)).filter((i) => i.text.includes("Other charge"))).toEqual([]);
+  });
+
+  it("shows an amount in its own currency when it isn't USD, never converted", () => {
+    expect(texts("ld_chat_derek")).toContain("Origin THC agreed at CNY 1,370");
+    expect(texts("ld_invoice").at(-1)).toBe("Line 17: Origin THC Shanghai, CNY 1,370");
+    expect(texts("ld_invoice")[0]).toBe("Line 1: Ocean freight 40HC Shanghai-LA TGHU1234567, $3,900");
+    expect([amountIn(137000, "CNY"), amountIn(480000, "USD"), amountIn(480000), amountIn(-30000, "EUR")])
+      .toEqual(["CNY 1,370", "$4,800", "$4,800", "EUR −300"]);
   });
 
   it("words an answer with the invoice line it was checked against, even when lines share a charge type", () => {

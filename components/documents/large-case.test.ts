@@ -7,7 +7,9 @@ const x = largeCase();
 describe("largeCase", () => {
   it("is as big and messy as the views must handle", () => {
     expect(x.documents).toHaveLength(12);
-    expect(x.charges).toHaveLength(16);
+    expect(x.charges).toHaveLength(17);
+    expect(x.charges.filter((c) => c.currency !== "USD").map((c) => c.currency)).toEqual(["CNY"]);
+    expect(x.facts.filter((f) => f.currency && f.currency !== "USD").map((f) => f.currency)).toEqual(["CNY"]);
     expect(x.facts.length).toBeGreaterThanOrEqual(30);
     expect(x.questions.filter((q) => q.followupOf)).toHaveLength(1);
     expect(x.events.filter((e) => e.type === "recomputed")).toHaveLength(4);
@@ -32,9 +34,11 @@ describe("largeCase", () => {
     for (const s of [...x.facts, ...x.charges].map((f) => f.span)) expect(text.get(s.docId)).toContain(s.quote);
   });
 
-  it("has an invoice whose lines add up to its printed total", () => {
+  it("has an invoice whose lines add up to its printed totals, one per currency, never converted", () => {
     const invoice = x.documents.find((d) => d.type === "freight_invoice")!.text;
     expect(invoice).toMatch(/TOTAL DUE USD\s+19,550\.00/);
-    expect(x.charges.reduce((s, c) => s + c.amountCents, 0)).toBe(1955000);
+    expect(invoice).toMatch(/TOTAL DUE CNY\s+1,370\.00/);
+    const sum = (cur: string) => x.charges.filter((c) => c.currency === cur).reduce((s, c) => s + c.amountCents, 0);
+    expect([sum("USD"), sum("CNY")]).toEqual([1955000, 137000]);
   });
 });

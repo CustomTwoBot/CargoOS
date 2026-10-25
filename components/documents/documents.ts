@@ -97,6 +97,11 @@ export function docRows(x: CaseInput): DocRow[] {
 
 export type Item = { id: string; quote: string; text: string; note?: string; lines?: number[] };
 
+// TODO(merge): swap for inCurrency(cents, currency) from components/case/format.ts once it lands.
+/** "$4,800" in USD; any other currency is named and never converted: "CNY 1,370". */
+export const amountIn = (cents: number, currency?: string) =>
+  !currency || currency === "USD" ? money(cents) : `${currency} ${money(cents).replace("$", "")}`;
+
 /** A charge typed "other" is named in its own words: "ISF filing, per shipment   USD 35.00" -> "ISF filing". */
 const ownName = (quote: string) => {
   const head = quote.trim().split(/,|\s{2,}|\s+(?:USD|\$)/)[0].trim();
@@ -113,7 +118,7 @@ function factText(f: Fact, x: CaseInput, billed?: string): string {
   const quote = f.span.quote.trim().replace(/\.$/, "");
   // Approvals and rejections read better with the invoice's own wording for the charge.
   const invoiced = billed ?? (other ? undefined : x.charges.find((c) => c.chargeType === f.chargeType)?.description) ?? name;
-  const amount = f.amountCents !== undefined ? ` at ${money(f.amountCents)}` : "";
+  const amount = f.amountCents !== undefined ? ` at ${amountIn(f.amountCents, f.currency)}` : "";
   switch (f.kind) {
     case "agreed_rate": return `${name} agreed${amount}${f.condition?.bookedBy ? ` if booked by ${formatShortDate(f.condition.bookedBy)}` : ""}`;
     case "permitted_surcharge": return other ? `Allowed: ${quote}` : `Allowed: ${name} as filed`;
@@ -144,7 +149,7 @@ export function itemsOf(x: CaseInput, doc: SourceDoc): Item[] {
     };
   });
   const lines: Item[] = x.charges.filter((c) => c.docId === doc._id).sort((a, b) => a.lineNo - b.lineNo)
-    .map((c) => ({ id: c._id, quote: c.span.quote, text: `Line ${c.lineNo}: ${c.description}, ${money(c.amountCents)}` }));
+    .map((c) => ({ id: c._id, quote: c.span.quote, text: `Line ${c.lineNo}: ${c.description}, ${amountIn(c.amountCents, c.currency)}` }));
   const at = (q: string) => { const h = highlight(doc.text, q); return h ? h.before.length : Infinity; };
   return [...facts, ...lines].sort((a, b) => at(a.quote) - at(b.quote));
 }
