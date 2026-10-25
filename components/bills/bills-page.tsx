@@ -30,13 +30,17 @@ export function BillsPage() {
   const workspace = useWorkspaceName();
   const uploader = isUploaderOnly(person);
   const [tab, setTab] = useState<BillGroup>("check");
+  const [query, setQuery] = useState("");
 
   const rows = bills.map((b) => {
     const step = nextStep(b.x, person);
     return { b, step, group: groupOf(step, person), status: statusOf(b.x, step), split: splitOf(b.x) };
   });
-  const count = (g: BillGroup) => rows.filter((r) => r.group === g).length;
-  const shown = rows.filter((r) => r.group === tab);
+  // The search filters the list and its tab counts; the totals above stay for every bill.
+  const found = rows.filter((r) => matchesBill(r.b, query));
+  const count = (g: BillGroup) => found.filter((r) => r.group === g).length;
+  const shown = found.filter((r) => r.group === tab);
+  const searching = query.trim() !== "";
   const needYou = rows.filter((r) => r.group === "check" && ["answer", "decide", "request", "rejected", "accepted"].includes(r.step.kind)).length;
   const sum = (k: "pay" | "hold" | "ask") => rows.filter((r) => r.step.kind !== "reading").reduce((n, r) => n + r.split[k], 0);
   const askCount = rows.reduce((n, r) => n + r.b.x.questions.filter((q) => q.status === "open").length, 0);
@@ -71,19 +75,28 @@ export function BillsPage() {
         </section>
       )}
 
-      <div role="tablist" aria-label="Bills" className="flex w-fit flex-wrap gap-1 rounded-full bg-raised p-[3px]">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={cx("inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13.5px] font-semibold",
-              tab === t.id ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>
-            {t.label}
-            <span className={cx("rounded-full px-1.5 text-[12px] tabular-nums", tab === t.id && t.id === "check" && count("check") ? "bg-brand text-brand-ink" : "text-ink-3")}>{count(t.id)}</span>
-          </button>
-        ))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div role="tablist" aria-label="Bills" className="flex w-fit flex-wrap gap-1 rounded-full bg-raised p-[3px]">
+          {TABS.map((t) => (
+            <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              className={cx("inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13.5px] font-semibold",
+                tab === t.id ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>
+              {t.label}
+              <span className={cx("rounded-full px-1.5 text-[12px] tabular-nums", tab === t.id && t.id === "check" && count("check") ? "bg-brand text-brand-ink" : "text-ink-3")}>{count(t.id)}</span>
+            </button>
+          ))}
+        </div>
+        <SearchBox value={query} onChange={setQuery} />
       </div>
 
       <Card className="overflow-hidden" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)!.label}>
-        {shown.length === 0 ? (
+        {shown.length === 0 && searching ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <span className="text-[17px] font-semibold">No bills match “{query.trim()}”</span>
+            <span className="text-ink-3">Search looks at the forwarder, the invoice number and the bill’s name.</span>
+            <button type="button" className={BUTTON.secondary} onClick={() => setQuery("")}>Clear search</button>
+          </div>
+        ) : shown.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
             <span className="text-[17px] font-semibold">{tab === "check" ? "Nothing to check." : tab === "waiting" ? "Nobody else has anything open." : "No finished bills yet."}</span>
             <span className="text-ink-3">{tab === "check" ? "Drop a new bill and what was agreed; CargoOS checks every line." : "Bills show up here as people answer and decide."}</span>
@@ -101,6 +114,37 @@ export function BillsPage() {
       </Card>
       {!uploader && <p className="text-center text-[13px] text-ink-3">Leo can add documents from a phone: open a bill and scan its QR code.</p>}
     </div>
+  );
+}
+
+/**
+ * Forwarder, invoice ref ("PCL-INV-1012") or the bill's name contains the query, ignoring case. Names only,
+ * never amounts, so the same search is safe on an uploader's screen.
+ */
+export const matchesBill = (b: Bill, query: string) => {
+  const q = query.trim().toLowerCase();
+  return !q || [b.forwarder, b.invoiceRef, b.x.case.title].some((v) => v?.toLowerCase().includes(q));
+};
+
+/** The search pill: the tabs' height, shape, fill and type, with a search icon and a clear button. */
+function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="relative block w-full sm:w-[280px]">
+      <span className="sr-only">Search bills</span>
+      <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3">
+        <circle cx="8.8" cy="8.8" r="5.8" /><path d="M13 13l4 4" />
+      </svg>
+      <input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Search bills"
+        onKeyDown={(e) => { if (e.key === "Escape" && value) { e.preventDefault(); onChange(""); } }}
+        className="h-[42px] w-full rounded-full border border-transparent bg-raised pl-9 pr-10 text-[13.5px] font-semibold text-ink placeholder:font-medium placeholder:text-ink-3 focus:border-line-strong focus:bg-surface [&::-webkit-search-cancel-button]:appearance-none" />
+      {value && (
+        <button type="button" aria-label="Clear" onClick={() => onChange("")}
+          className="absolute right-1.5 top-1/2 inline-flex size-[30px] -translate-y-1/2 items-center justify-center rounded-full text-ink-3 hover:bg-surface hover:text-ink">
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+        </button>
+      )}
+    </label>
   );
 }
 
