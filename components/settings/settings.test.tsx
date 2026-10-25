@@ -42,6 +42,27 @@ describe("Settings", () => {
     expect(screen.getByText("Can't accept a dispute they requested")).toBeInTheDocument();
   });
 
+  it("marks only the account block as where you are, coming from Approvals, in the sidebar and the rail", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const solid = (el: HTMLElement) => el.className.split(" ").includes("bg-sunken");
+    const check = () => {
+      const current = within(nav()).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page");
+      expect(current).toEqual([settings()]);
+      for (const name of [/^Approvals/, /^Questions/]) {
+        const item = within(nav()).getByRole("button", { name });
+        expect(item).not.toHaveAttribute("aria-current");
+        expect(solid(item)).toBe(false);
+      }
+      expect(solid(settings())).toBe(true);
+    };
+    fireEvent.click(within(nav()).getByRole("button", { name: /^Approvals/ }));
+    fireEvent.click(settings());
+    check();
+    fireEvent.click(within(nav()).getByRole("button", { name: "Collapse sidebar" }));
+    check();
+    localStorage.removeItem("cargoos.sidebar");
+  });
+
   it("switching to Maya changes the sidebar: the case waits for Sam and nothing waits on the bookkeeper", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(settings());
