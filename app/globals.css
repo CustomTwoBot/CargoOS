@@ -32,7 +32,7 @@
 .dark {
   --bg: #0D0E10; --surface: #15171A; --sunken: #1D2024; --line: #272B30; --line-strong: #363B42;
   --ink: #EDEEF0; --ink-2: #A4AAB2; --ink-3: #7A818A;
-  --primary: #F2F3F5; --primary-ink: #0D0E10; --primary-ring: rgba(242,243,245,.35); --link: #D3DAE3;
+  --primary: #F2F3F5; --primary-ink: #0D0E10; --primary-ring: rgba(242,243,245,.35); --link: #9DB8E8;
   --dispute: #FF6B5E; --dispute-ink: #1E0906; --dispute-tint: rgba(255,107,94,.13);
   --waiting: #F2B84B; --waiting-fill: #F2B84B; --waiting-tint: rgba(242,184,75,.12); --waiting-line: rgba(242,184,75,.50); --waiting-row: rgba(242,184,75,.05);
   --cleared: #5BC48E; --cleared-ink: #06140C;
