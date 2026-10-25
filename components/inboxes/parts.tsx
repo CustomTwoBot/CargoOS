@@ -37,9 +37,9 @@ export function InboxFrame({ title, count, sub, list, detail, reading, backLabel
       {showList && (
         <header className="px-4 pb-3 pt-3.5 md:px-6">
           <h1 className="flex items-baseline gap-2.5 text-title font-[650] tracking-[-0.012em]">
-            {title}<span className="text-[13px] font-medium tracking-normal text-ink-2">{count}</span>
+            {title}{count && <span className="text-[13px] font-medium tracking-normal text-ink-2">{count}</span>}
           </h1>
-          <p className="mt-0.5 text-[13px] text-ink-2">{sub}</p>
+          {sub && <p className="mt-0.5 text-[13px] text-ink-2">{sub}</p>}
         </header>
       )}
       <div className={cx("px-4 pb-4 md:px-6", wide ? "grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] gap-6" : "flex flex-col")}>
@@ -70,7 +70,7 @@ export const Chevron = ({ dir }: { dir: "left" | "right" | "down" }) => (
 /** One quiet card saying why the list is empty and what would fill it. */
 export function InboxEmpty({ title, text }: { title: string; text: string }) {
   return (
-    <div className={cx(CARD, "px-5 py-5")}>
+    <div className={cx(CARD, "max-w-[560px] px-5 py-5")}>
       <p className="text-row font-semibold">{title}</p>
       <p className="mt-1 text-why text-ink-2">{text}</p>
     </div>
@@ -94,18 +94,21 @@ type ItemProps = {
   dot?: string;
 };
 
-/** A selectable row: title and one line of meta. The row only selects; actions live in the detail. */
+/** A selectable row: title (two lines at most) and one line of meta. The row only selects; actions live in the detail. */
 export function Item({ selected, onSelect, title, meta, dot }: ItemProps) {
   return (
     <li className="border-b border-line last:border-0">
       <button type="button" aria-current={selected || undefined} onClick={onSelect}
-        className={cx("block w-full px-4 py-3 text-left outline-offset-[-2px]", selected ? "bg-sunken shadow-[inset_0_0_0_1px_var(--primary-ring)]" : "hover:bg-sunken")}>
-        <span className="flex items-center gap-2">
-          <span aria-hidden="true" className={cx("size-2 flex-none rounded-full", dot && "bg-waiting-fill")} />
+        aria-label={`${dot ? `${dot}: ` : ""}${title}, ${meta}`}
+        className={cx("block w-full px-4 py-3 text-left outline-offset-[-2px]",
+          // The selected row: sunken fill and a 2px primary bar on the left (docs/design.md §3.1 --primary).
+          selected ? "bg-sunken shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-sunken")}>
+        <span className="flex items-start gap-2">
+          <span aria-hidden="true" className={cx("mt-[7px] size-2 flex-none rounded-full", dot && "bg-waiting-fill")} />
           {dot && <span className="sr-only">{dot}: </span>}
-          <span className={cx("truncate text-row font-semibold", !dot && "text-ink-2")}>{title}</span>
+          <span className={cx("line-clamp-2 text-row font-semibold", !dot && "text-ink-2")} title={title}>{title}</span>
         </span>
-        <span className="mt-0.5 block truncate pl-4 text-meta text-ink-2">{meta}</span>
+        <span className="mt-0.5 block pl-4 text-meta text-ink-2">{meta}</span>
       </button>
     </li>
   );
@@ -128,12 +131,12 @@ export function Fold({ label, count, open, onToggle, children }: FoldProps) {
 
 type HeadProps = { title: string; meta?: string; onOpen?: () => void };
 
-/** Top of a detail: the case, one muted line, and the way into the case. */
+/** Top of a detail: the case (wraps, never cut), one muted line, and the way into the case. */
 export function DetailHead({ title, meta, onOpen }: HeadProps) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <h2 className="truncate text-panel font-[650]">{title}</h2>
+        <h2 className="text-panel font-[650] [overflow-wrap:anywhere]">{title}</h2>
         {meta && <p className="mt-0.5 text-meta text-ink-3">{meta}</p>}
       </div>
       {onOpen && <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>}
@@ -141,18 +144,24 @@ export function DetailHead({ title, meta, onOpen }: HeadProps) {
   );
 }
 
-export type LineRow = { key: string; lineNo: number; description: string; chip: ReactNode; amount?: string };
+export type LineRow = { key: string; lineNo: number; description: string; chip?: ReactNode; amount?: string };
 
-/** Invoice lines as compact rows: line number, name, one chip, amount. The chip wraps under the name when narrow. */
+/**
+ * Invoice lines as compact rows: line number, name, one chip, amount. One grid for all rows (subgrid),
+ * so chips start on one edge and amounts end on one edge whatever their widths; long names wrap.
+ */
 export function LineRows({ label, rows }: { label: string; rows: LineRow[] }) {
+  const amounts = rows.some((r) => r.amount);
+  const chips = rows.some((r) => r.chip);
+  const cols = ["1.5rem", "minmax(0,1fr)", ...(chips ? ["max-content"] : []), ...(amounts ? ["max-content"] : [])];
   return (
-    <ul aria-label={label}>
+    <ul aria-label={label} className="grid items-center gap-x-3" style={{ gridTemplateColumns: cols.join(" ") }}>
       {rows.map((r) => (
-        <li key={r.key} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-2 last:border-0">
-          <span className="w-5 flex-none text-xs text-ink-3">{r.lineNo}</span>
-          <span className="min-w-[9rem] flex-1 text-[14px] font-semibold">{r.description}</span>
-          <span className="inline-flex items-center gap-1 rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{r.chip}</span>
-          {r.amount && <b className="min-w-[4.5rem] flex-none text-right text-[14px] font-semibold">{r.amount}</b>}
+        <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center border-b border-line py-2 last:border-0">
+          <span className="text-xs text-ink-3">{r.lineNo}</span>
+          <span className="text-[14px] font-semibold">{r.description}</span>
+          {chips && <span className="inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{r.chip}</span>}
+          {amounts && <b className="text-right text-[14px] font-semibold">{r.amount}</b>}
         </li>
       ))}
     </ul>

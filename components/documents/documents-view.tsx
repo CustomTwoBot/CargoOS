@@ -5,7 +5,10 @@ import type { CaseInput } from "@/components/case/view-model";
 import { docRows } from "./documents";
 import { ListView } from "./list-view";
 
-/** Every document, oldest first, with the first one open. */
-export function DocumentsView({ x }: { x: CaseInput }) {
-  return <ListView x={x} rows={docRows(x)} />;
+/**
+ * Every document, oldest first, with the first one open. `facts={false}` leaves out what CargoOS read
+ * from each (amounts and the lines they were used for), for a screen that sees no findings (§0.3).
+ */
+export function DocumentsView({ x, facts = true }: { x: CaseInput; facts?: boolean }) {
+  return <ListView x={x} rows={docRows(x)} facts={facts} />;
 }

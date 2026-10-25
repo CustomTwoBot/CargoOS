@@ -19,6 +19,51 @@ export function splitLocked(text: string): Part[] {
   return parts;
 }
 
+// What may follow a locked value without a space ("$400." "$700)") or come right before it ("($700", "“$5,550").
+const AFTER = /^[.,;:!?)\]"”’]+/;
+const BEFORE = /[(\["“‘]+$/;
+
+/**
+ * The parts grouped so punctuation stays on the line of the value it touches: each group is the
+ * opening punctuation before a value, the value, and the punctuation after it. Text between stays loose.
+ */
+export function lockedGroups(text: string): (Part | Part[])[] {
+  const parts = splitLocked(text);
+  const out: (Part | Part[])[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.kind !== "locked") { out.push(p); continue; }
+    const group: Part[] = [];
+    const prev = out.at(-1);
+    const open = prev && !Array.isArray(prev) ? prev.text.match(BEFORE)?.[0] : undefined;
+    if (open && prev && !Array.isArray(prev)) {
+      const rest = prev.text.slice(0, -open.length);
+      if (rest) out[out.length - 1] = { kind: "text", text: rest }; else out.pop();
+      group.push({ kind: "text", text: open });
+    }
+    group.push(p);
+    const next = parts[i + 1];
+    const close = next?.kind === "text" ? next.text.match(AFTER)?.[0] : undefined;
+    if (close && next) {
+      group.push({ kind: "text", text: close });
+      parts[i + 1] = { kind: "text", text: next.text.slice(close.length) };
+    }
+    out.push(group);
+  }
+  return out.filter((p) => Array.isArray(p) || p.text);
+}
+
+const SIGN_OFF = /^(thanks|thank you|best|regards|kind regards|best regards|cheers)[,.!]?$/i;
+
+/** The draft signed by `name`: the line after the sign-off ("Thanks,") becomes the name. Unchanged without a sign-off. */
+export function signedBy(body: string, name: string): string {
+  const lines = body.split("\n");
+  const at = lines.findLastIndex((l) => SIGN_OFF.test(l.trim()));
+  if (at < 0 || at + 1 >= lines.length || !lines[at + 1].trim()) return body;
+  lines[at + 1] = name;
+  return lines.join("\n");
+}
+
 /** The locked values in order; an edit must leave this list unchanged. */
 export const lockedValues = (text: string) => splitLocked(text).filter((p) => p.kind === "locked").map((p) => p.text);
 

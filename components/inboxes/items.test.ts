@@ -45,6 +45,13 @@ describe("questionItems", () => {
     expect(drayage.mentions.map((m) => m.docType)).toEqual(["email", "proforma"]);
   });
 
+  it("labels questions when a case has more than one: Question 1, Question 2, Follow-up", () => {
+    expect(questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("before"))]).map((q) => q.label)).toEqual(["Question 1", "Question 2"]);
+    expect(questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("after-q2"))]).map((q) => [q.questionId, q.label]))
+      .toEqual([["b_q_3", "Follow-up"], ["b_q_2", "Question 2"], ["b_q_1", "Question 1"]]);
+    expect(questionItems([inboxCase(SCENARIO_A, scenarioAAt("before"))])[0].label).toBeUndefined();
+  });
+
   it("a follow-up carries the earlier answer word for word", () => {
     const q = questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("after-q2"))]).find((i) => i.status === "open")!;
     expect(q.questionId).toBe("b_q_3");
@@ -76,6 +83,13 @@ describe("approvalItems", () => {
       [1, "Ocean freight 40HC Ningbo-Long Beach", "$4,500", "$4,800", "+$300"],
       [6, "Rush handling", undefined, "$400", "+$400"],
     ]);
+  });
+
+  it("still reads drafts the replay store wrote before lib/types Draft had the decision fields", () => {
+    const x = scenarioAWithDraft("rejected");
+    const legacy = { ...x, events: x.events.filter((e) => e.type !== "draft_rejected"),
+      drafts: x.drafts.map((d) => ({ ...d, rejectedBy: "you", rejectedAt: "2026-10-24T14:12:00-07:00" })) };
+    expect(approvalItems([inboxCase(SCENARIO_A, legacy)])[0]).toMatchObject({ decidedBy: "you", decidedAt: "2026-10-24T14:12:00-07:00" });
   });
 
   it("decided ones follow, latest decision first: accepted with the message, rejected with the reason", () => {

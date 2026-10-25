@@ -1,0 +1,114 @@
+<!doctype html><html><head><meta charset="utf-8"><title>D · Invoice + CargoOS thread</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.top { height: 60px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.top h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.top p { font-size: 12.5px; color: var(--ink-3); }
+.pill { font-size: 12px; font-weight: 600; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 9px; color: var(--ink-2); }
+.split { flex: 1; min-height: 0; display: flex; }
+.canvas { flex: 1; min-width: 0; overflow: auto; padding: 24px 28px 40px; background: var(--bg); }
+.paper { max-width: 760px; margin: 0 auto; }
+.verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+.verdict .big { display: flex; align-items: baseline; gap: 12px; }
+.verdict .big b { font-size: 44px; line-height: 48px; letter-spacing: -.02em; font-weight: 650; color: var(--dispute); }
+.verdict .big span { font-size: 18px; font-weight: 600; }
+.verdict p.sent { margin-top: 8px; font-size: 15px; line-height: 23px; color: var(--ink-2); max-width: 600px; }
+.bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; margin-top: 16px; gap: 2px; }
+.bar i { display: block; }
+.src { display: flex; gap: 8px; align-items: center; margin-top: 16px; flex-wrap: wrap; font-size: 12.5px; }
+.src a { border: 1px solid var(--line); background: var(--sunken); border-radius: 7px; padding: 3px 9px; color: var(--ink-2); text-decoration: none; font-weight: 500; }
+.lines { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.lh { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.lh h2 { font-size: 14.5px; font-weight: 650; }
+.seg { display: flex; gap: 2px; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 2px; font-size: 12.5px; font-weight: 600; }
+.seg span { padding: 3px 9px; border-radius: 6px; color: var(--ink-2); }
+.seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+table { width: 100%; border-collapse: collapse; }
+th { font-size: 12px; font-weight: 600; color: var(--ink-3); text-align: left; padding: 8px 18px; border-bottom: 1px solid var(--line); }
+td { padding: 11px 18px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.n { width: 28px; color: var(--ink-3); font-size: 12.5px; padding-right: 0; }
+td.r, th.r { text-align: right; }
+td.res { font-weight: 600; white-space: nowrap; }
+tr.hot td { background: var(--dispute-tint); }
+tr.ask td { background: rgba(239,179,63,.08); }
+.proof td { padding-top: 0; }
+.proofbox { border-left: 2px solid var(--dispute); margin: 0 0 4px 0; padding: 4px 0 4px 12px; font-size: 13.5px; line-height: 21px; color: var(--ink-2); }
+.proofbox .acts { margin-top: 10px; display: flex; gap: 8px; }
+/* thread */
+.thread { width: 420px; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--surface); }
+.th { padding: 14px 18px 12px; border-bottom: 1px solid var(--line); }
+.th b { font-size: 14.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.th b i { width: 18px; height: 18px; border-radius: 5px; background: var(--ink); display: inline-block; }
+.th span { font-size: 12.5px; color: var(--ink-3); }
+.msgs { flex: 1; overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.sys { align-self: center; font-size: 12px; color: var(--ink-3); }
+.bot { max-width: 100%; font-size: 14px; line-height: 21px; }
+.bot .who { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-bottom: 3px; }
+.bot a { color: var(--link); text-decoration: none; font-weight: 500; }
+.ask { border: 1px solid rgba(176,118,0,.45); background: var(--waiting-tint); border-radius: 12px; padding: 12px 14px; }
+.ask .who { color: var(--waiting); }
+.ask .cite { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+.ask .foot { margin-top: 8px; font-size: 12.5px; color: var(--waiting); font-weight: 600; }
+.composer { padding: 12px 14px 14px; border-top: 1px solid var(--line); }
+.box { border: 1px solid var(--line-strong); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-end; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.box div { flex: 1; color: var(--ink-3); font-size: 14px; min-height: 40px; }
+.send { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; border: 0; font-size: 15px; }
+.hint { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; text-align: center; }
+</style></head><body><div class="app">
+<aside class="side">
+  <div class="brand"><i></i>CargoOS</div>
+  <button class="newcase">＋ New case</button>
+  <div class="grp">Needs you</div>
+  <a class="case on"><b>Pacific Crest · PCL-INV-1012</b><span class="amber">Answer 1 question</span></a>
+  <a class="case"><b>Kestrel Bay · KBL-INV-2291</b><span class="amber">Answer 2 questions</span></a>
+  <div class="grp">Earlier</div>
+  <a class="case"><b>Harbor Line · HL-88120</b><span class="muted">Paid · nothing disputed</span></a>
+  <a class="case"><b>Pacific Crest · PCL-INV-0977</b><span class="muted">Disputed $1,150 · accepted</span></a>
+  <div class="me"><div class="av">S</div><div><b>Sam · Owner</b><span>Bayline Trading</span></div></div>
+</aside>
+<main class="main">
+  <div class="top">
+    <div><h1>Invoice PCL-INV-1012 from Pacific Crest Logistics</h1><p>40HC Ningbo → Long Beach · Oct 12 · Synthetic data. Nothing is sent or paid automatically.</p></div>
+    <div style="display:flex;gap:8px;align-items:center"><span class="pill">Replay</span><button class="btn ghost">⋯</button></div>
+  </div>
+  <div class="split">
+    <section class="canvas"><div class="paper">
+      <div class="verdict">
+        <div class="big"><b class="num">$300</b><span>may not be owed</span></div>
+        <p class="sent">Pacific Crest billed <b class="num" style="color:var(--ink)">$7,500</b>. <span class="num">$6,600</span> matches what was agreed, <span class="red num" style="font-weight:600">$300</span> is more than agreed, and <span class="amber num" style="font-weight:600">$600</span> waits for your answer.</p>
+        <div class="bar"><i style="flex:66;background:#C9CED6"></i><i style="flex:3;background:var(--dispute)"></i><i style="flex:6;background:var(--waiting-fill)"></i></div>
+        <div class="src"><span class="muted">Checked against</span><a>Quote · Sep 2</a><a>Email from Derek · Sep 5</a><a>WhatsApp · Sep 8–28</a><a>Invoice · Oct 12</a></div>
+      </div>
+      <div class="lines">
+        <div class="lh"><h2>Invoice lines</h2><div class="seg"><span class="on">All 8</span><span>To dispute 1</span><span>Waiting 2</span><span>Cleared 5</span></div></div>
+        <table class="num">
+          <tr><th></th><th>Charge</th><th class="r">Billed</th><th class="r">Agreed</th><th class="r">Result</th></tr>
+          <tr class="hot"><td class="n">1</td><td><b style="font-weight:600">Ocean freight 40HC Ningbo–Long Beach</b></td><td class="r">$4,800</td><td class="r">$4,500</td><td class="r res red">$300 over</td></tr>
+          <tr class="proof hot"><td></td><td colspan="4"><div class="proofbox">Derek’s email, Sep 5: <mark>Ocean freight reduced to $4,500 if booked by Sep 10</mark><br>WhatsApp, Sep 8: <mark>Booking confirmed for your 40HC, booked today Sep 8</mark><br>Booked before Sep 10, so the lower price applies.
+            <div class="acts"><button class="btn primary">Keep in dispute</button><button class="btn">Not an issue</button></div></div></td></tr>
+          <tr><td class="n">2</td><td>PSS peak season surcharge</td><td class="r">$400</td><td class="r muted">per quote terms</td><td class="r res green">Matches</td></tr>
+          <tr><td class="n">3</td><td>Destination THC</td><td class="r">$650</td><td class="r">$650</td><td class="r res green">Matches</td></tr>
+          <tr class="ask"><td class="n">4</td><td>Port congestion fee</td><td class="r">$200</td><td class="r muted">not agreed yet</td><td class="r res amber">Asked you</td></tr>
+          <tr><td class="n">5</td><td>Drayage Long Beach → Ontario CA</td><td class="r">$850</td><td class="r">$850</td><td class="r res green">Matches</td></tr>
+          <tr class="ask"><td class="n">6</td><td>Rush handling</td><td class="r">$400</td><td class="r muted">not agreed yet</td><td class="r res amber">Asked you</td></tr>
+          <tr><td class="n">7</td><td>Customs entry</td><td class="r">$125</td><td class="r">$125</td><td class="r res green">Matches</td></tr>
+          <tr><td class="n">8</td><td>Documentation fee</td><td class="r">$75</td><td class="r">$75</td><td class="r res green">Matches</td></tr>
+        </table>
+      </div>
+    </div></section>
+    <aside class="thread">
+      <div class="th"><b><i></i>CargoOS</b><span>Checks every line. Asks when it can’t tell. Never pays or sends.</span></div>
+      <div class="msgs">
+        <div class="sys">Maya added 4 documents · Oct 24, 1:40 PM</div>
+        <div class="bot"><div class="who">CargoOS</div>I read the quote, Derek’s email, the WhatsApp chat and the invoice, and checked all 8 charges.</div>
+        <div class="bot"><div class="who">CargoOS</div>5 charges match what was agreed. <a>Line 1</a>, ocean freight, is <b class="red">$300 over</b>: Derek lowered it to $4,500 on Sep 5 if booked by Sep 10, and you booked Sep 8.</div>
+        <div class="bot ask"><div class="who">Question for you</div>Invoice line 4 bills a $200 congestion fee and line 6 bills $400 rush handling. Neither is in the quote or emails; the WhatsApp chat only says congestion ‘may be extra’. Did anyone agree to either charge?
+          <div class="cite">WhatsApp, Sep 28: <mark>possible congestion at LB terminal, may be extra</mark></div>
+          <div class="foot">Lines 4 and 6 · $600 wait for your answer</div></div>
+      </div>
+      <div class="composer"><div class="box"><div>Answer CargoOS… e.g. “approved on WhatsApp”</div><button class="send">↑</button></div><div class="hint">Your answer becomes evidence. CargoOS rechecks the lines; nothing is sent.</div></div>
+    </aside>
+  </div>
+</main></div></body></html>

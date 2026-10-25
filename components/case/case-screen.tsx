@@ -19,14 +19,14 @@ import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
 import { AppShell } from "@/components/shell/app-shell";
 import { caseStatus, waitingOn } from "@/components/shell/case-status";
-import { isUploaderOnly, titleOf, useDevicePerson } from "@/components/shell/person";
+import { isUploaderOnly, useDevicePerson } from "@/components/shell/person";
 import { useCaseStore } from "./case-store";
 import { CasesList, type CaseSummary } from "./cases-list";
 import type { DemoCase } from "./demo-case";
 import { SCENARIO_A } from "./fixture";
 import { issuesOf, openQuestions } from "./issues";
 import { Sidebar, type Place, type View } from "./sidebar";
-import { CaseWorkspace, type WorkspaceProps } from "./workspace";
+import { CaseWorkspace } from "./workspace";
 import { latestDraft, totalsOf, type CaseInput } from "./view-model";
 
 type ToastItem = { id: number; text: string; undo?: () => void };
@@ -49,7 +49,6 @@ type Props = {
 
 export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) {
   const person = useDevicePerson();
-  const roles = rolesOverride ?? person.roles;
   const uploader = isUploaderOnly(person);
   const [activeId, setActiveId] = useState(cases[0]?.id ?? "");
   const [chosen, setView] = useState<View>(cases.length ? "case" : "cases");
@@ -80,10 +79,8 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
   const sidebarCases = cases.map((c) => ({ id: c.id, title: c.title, atStakeCents: summaries[c.id].atStakeCents, status: summaries[c.id].status }));
   const title = view === "questions" ? "Questions" : view === "approvals" ? "Approvals" : view === "new" ? "New case"
     : view === "settings" ? "Settings" : view === "cases" || !demo ? "Cases" : demo.title;
-  // The device's person, plus the `title` the inboxes' old temporary Person wanted. Not a fresh
-  // literal at the call, so it also passes as lib/types Person once the inboxes switch (d6a0b4f).
-  // TODO(merge): pass `person` once the inbox branch is merged.
-  const viewer = { ...person, title: titleOf(person).toLowerCase() };
+  // The device's person; a `roles` override (tests of one role) narrows what they can do.
+  const viewer: Person = rolesOverride ? { ...person, roles: [...rolesOverride] } : person;
   const resetAll = () => {
     cases.forEach((c) => actions(c.id).reset(c.start));
     toast("Demo reset. Every case is back to before the answers.");
@@ -122,11 +119,9 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
         )}
         {view === "settings" && <SettingsView person={person} caseCount={cases.length} onReset={resetAll} />}
         {demo && (view === "case" || view === "documents" || view === "history") && (
-          <CaseWorkspace key={demo.id} {...workspaceProps({
-            demo, x: store.inputs[demo.id], local: store.state[demo.id], actions: actions(demo.id), roles, view, now: clock,
-            tab: tabOf(demo.id), onTab: (t) => setTab(demo.id, t), onView: setView,
-            inbox: { demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] },
-          }, viewer)} />
+          <CaseWorkspace key={demo.id} demo={demo} x={store.inputs[demo.id]} local={store.state[demo.id]}
+            actions={actions(demo.id)} viewer={viewer} now={clock}
+            inbox={{ demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] }} />
         )}
         <ToastRegion>
           {toasts.map((t) => (
@@ -139,12 +134,6 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
     </Tooltip.Provider>
   );
 }
-
-/**
- * `viewer` is part of the workspace contract (docs/design.md §0.3); the case session adds it to
- * `WorkspaceProps`. Passed through a spread so this compiles before and after that lands.
- */
-const workspaceProps = (p: WorkspaceProps, viewer: Person): WorkspaceProps => ({ ...p, viewer } as WorkspaceProps);
 
 /** Once the dispute is accepted nothing is left to decide, whatever the lines say. */
 function noteOf(x: CaseInput, toDecide: number): string | undefined {

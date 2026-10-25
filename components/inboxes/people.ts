@@ -1,28 +1,46 @@
-// TEMPORARY local model of SPEC §5.5 (pending type changes, not in lib/types.ts yet): the seeded
-// people and the draft fields the approval flow needs. Replace with lib/people.ts and the real
-// Draft fields once that PR merges. "uploader" is left out: Role doesn't have it yet.
-import type { Draft, Role } from "@/lib/types";
-import { ALL_ROLES } from "@/components/case/roles";
+// The inboxes' view of the seeded people (lib/people.ts, SPEC §5.5): who a person id is, how to call
+// them on screen, and who CargoOS asks. Each screen is set to one Person (docs/design.md §0.3).
+import { PEOPLE, personById } from "@/lib/people";
+import type { Person } from "@/lib/types";
 
-export type Person = { id: string; name: string; title: string; roles: readonly Role[] };
+export type { Person };
 
-export const SAM: Person = { id: "sam", name: "Sam", title: "owner", roles: ["clerk", "ops_lead", "controller"] };
-export const MAYA: Person = { id: "maya", name: "Maya", title: "bookkeeper", roles: ["clerk"] };
-export const LEO: Person = { id: "leo", name: "Leo", title: "uploader", roles: [] };
-export const PEOPLE: readonly Person[] = [SAM, MAYA, LEO];
+export const SAM: Person = personById("sam")!;
+export const MAYA: Person = personById("maya")!;
+export const LEO: Person = personById("leo")!;
 
-/** The product default: one person holding every role (docs/design.md §0). */
-export const OPERATOR: Person = { id: "you", name: "You", title: "", roles: ALL_ROLES };
+/** "Sam" from "Sam — owner". */
+export const firstName = (p: Person) => p.name.split(" — ")[0];
 
-export const personName = (id?: string) => PEOPLE.find((p) => p.id === id)?.name ?? (id === OPERATOR.id ? "you" : id);
+/** Old one-operator id; case-store wrote it before drafts carried the viewer's id. Read as the viewer. */
+const LEGACY_SELF = "you";
 
-/** Who CargoOS asks: the seeded person holding ops_lead. */
-export const ASKED = PEOPLE.find((p) => p.roles.includes("ops_lead"))!;
-
-/** Fields SPEC §5.5 adds to Draft (person ids). Read off a Draft that may carry them. */
-export type DraftDecision = {
-  requestedBy?: string; acceptedBy?: string; rejectedBy?: string; rejectedAt?: string;
-  rejectionReason?: string; editedBody?: string;
+/** "you" for the viewer, else the person's first name ("someone" when unknown). */
+export const who = (id: string | undefined, viewer: Person) => {
+  if (id && (id === viewer.id || id === LEGACY_SELF)) return "you";
+  const p = id ? personById(id) : undefined;
+  return p ? firstName(p) : "someone";
 };
 
-export const decisionOf = (d: Draft): DraftDecision => d as Draft & DraftDecision;
+/** The seeded person with this id; the old one-operator id reads as Sam (who held every role). */
+export const personOf = (id: string | undefined): Person | undefined =>
+  id === LEGACY_SELF ? SAM : id ? personById(id) : undefined;
+
+/** Who CargoOS asks: the seeded person holding ops_lead (Sam). */
+export const ASKED: Person = PEOPLE.find((p) => p.roles.includes("ops_lead"))!;
+
+/** Who decides approvals: the seeded person holding controller (Sam). */
+export const DECIDER: Person = PEOPLE.find((p) => p.roles.includes("controller"))!;
+
+/**
+ * @deprecated The screen's person comes from Settings now; pass `viewer` instead. Kept as Sam (the
+ * default person, every role) so callers that haven't switched yet still compile.
+ */
+export const OPERATOR: Person = SAM;
+
+/**
+ * @deprecated Fields the replay store wrote before lib/types Draft had requestedBy / approvedBy /
+ * rejectedBy / rejectionReason / editedBody. `acceptedBy` reads as `approvedBy`; `rejectedAt` as the
+ * draft_rejected event's time.
+ */
+export type DraftDecision = { acceptedBy?: string; rejectedAt?: string };
