@@ -76,3 +76,7 @@ New this round: Settings, the person on the device (Sam, Maya, Leo), and the Rev
 | C21 | nit | Leo, demo bar · all · both | Leo gets "Before answers / After answers", which change nothing he can see. | Noise for an uploader. | For a screen without findings show only "Reset demo" (or hide the bar). | case | open |
 | S7 | nit | Settings · all · both | The page subtitle repeats the trust line, and Demo data says it again in its "Data" row. | Says it twice. | Subtitle: "This screen is set to Sam · Owner." only. | shell | fixed r3 |
 | S8 | nit | Settings › Billing · all · both | "Invoices checked this month" wraps in the label column. | Ragged rows. | Label column 180px, or "Checked this month". | shell | fixed r3 |
+
+## Paused — 25 Oct
+
+QA paused at the request of the coordinating session: the whole interface is being reworked, so the open items above (C16–C21, I12–I14, S5) are against the old layout. Re-check them only if they survive the new design.
