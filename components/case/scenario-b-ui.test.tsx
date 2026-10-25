@@ -67,7 +67,7 @@ describe("Scenario B in the app", () => {
   it("lists the waiting CNY line in To decide with a section per status", () => {
     render(<CaseScreen cases={[SCENARIO_B]} />);
     const list = screen.getByRole("region", { name: "To decide" });
-    expect(within(list).getByText(/^Waiting \(1\)$/)).toBeInTheDocument();
+    expect(within(list).getAllByRole("heading").map((h) => h.textContent)).toContain("Waiting · 1");
     expect(within(list).getByText("CNY 4,200")).toBeInTheDocument();
     expect(within(list).queryByText(/1 charges/)).not.toBeInTheDocument();
   });

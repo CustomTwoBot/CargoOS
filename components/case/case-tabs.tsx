@@ -1,21 +1,25 @@
-// The case's tab strip (docs/design.md §0.1): a segmented control on a sunken track. Each tab says
+// The case's tab strip (docs/design.md §0.1, §0.2): a segmented control on a sunken track. Each tab says
 // what it is by shape (status glyph), names it, and carries its amount; the active one is a raised
-// surface. Scrolls sideways when a big case has many issues.
+// surface. Documents and History sit quietly at the right end and switch the view. Scrolls
+// sideways when a big case has many issues or the window is narrow.
 import type { ReactNode } from "react";
 import { cx } from "./cx";
 import { DraftIcon, OverviewIcon, StatusGlyph } from "./glyphs";
 import type { Issue } from "./issues";
 
-type Props = { issues: Issue[]; tab: string; onTab: (id: string) => void };
+export type CaseView = "case" | "documents" | "history";
 
-export function CaseTabs({ issues, tab, onTab }: Props) {
+type Props = { issues: Issue[]; tab: string; onTab: (id: string) => void; view?: CaseView; onView?: (v: CaseView) => void };
+
+export function CaseTabs({ issues, tab, onTab, view = "case", onView }: Props) {
+  const inCase = view === "case";
   return (
     <nav role="tablist" aria-label="Case tabs"
       className="flex gap-1 overflow-x-auto rounded-[11px] border border-line bg-sunken p-1 [scrollbar-width:none]">
-      <Tab id="overview" on={tab === "overview"} onTab={onTab} icon={<OverviewIcon />}>Overview</Tab>
+      <Tab id="overview" on={inCase && tab === "overview"} onTab={onTab} icon={<OverviewIcon />}>Overview</Tab>
       {issues.length > 0 && <span aria-hidden="true" className="mx-1 my-1.5 w-px flex-none bg-line-strong" />}
       {issues.map((i) => (
-        <Tab key={i.id} id={i.id} on={tab === i.id} onTab={onTab} isNew={i.kind === "line" && i.isNew}
+        <Tab key={i.id} id={i.id} on={inCase && tab === i.id} onTab={onTab} isNew={i.kind === "line" && i.isNew}
           icon={i.kind === "line" ? <span className={i.row.group === "waiting" ? "text-waiting" : "text-dispute"}><StatusGlyph group={i.row.group} /></span>
             : i.kind === "question" ? <span className="text-waiting"><StatusGlyph group="waiting" /></span>
             : <DraftIcon />}
@@ -23,6 +27,18 @@ export function CaseTabs({ issues, tab, onTab }: Props) {
           {i.title}
         </Tab>
       ))}
+      {onView && (
+        <span className="ml-auto flex flex-none gap-1 pl-3">
+          {(["documents", "history"] as const).map((v) => (
+            <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} onClick={() => onView(v)}
+              ref={(el) => { if (view === v) el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); }}
+              className={cx("h-8 flex-none whitespace-nowrap rounded-lg border px-3 text-[13px] font-medium",
+                view === v ? "border-line bg-surface text-ink shadow-card" : "border-transparent text-ink-3 hover:text-ink")}>
+              {v === "documents" ? "Documents" : "History"}
+            </button>
+          ))}
+        </span>
+      )}
     </nav>
   );
 }

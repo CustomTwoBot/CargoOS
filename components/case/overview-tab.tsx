@@ -1,17 +1,20 @@
-// The Overview tab: the one number, what changed, the short list of things to decide, and the
-// agreement as it built up (docs/design.md §0, layout A). Details live in each issue's tab.
+// The Overview tab (docs/design.md §0.2): one column. Sections carry the status and a subtotal; each
+// row is a status glyph, a name, one chip and an amount. Details live in each issue's tab; the
+// agreement and its documents live in Documents.
 import { useRef, useState, type ReactNode } from "react";
-import type { SourceSpan } from "@/lib/types";
 import { InlineLineEditor } from "@/components/inputs/line-inline";
 import type { EditableLine, LineChange } from "@/components/inputs/line-edit";
-import { RowTagChip, StatusTag } from "./bits";
+import { RowTagChip } from "./bits";
 import { cx } from "./cx";
-import { DocumentView, Timeline } from "./evidence-panel";
+import { delta, money } from "./format";
+import { StatusGlyph } from "./glyphs";
 import type { ChangeNote, Issue } from "./issues";
+import { chipOf } from "./row-chip";
 import { useRowMoves } from "./row-moves";
-import type { CaseInput, Row } from "./view-model";
+import type { GroupView, Row, UiGroup } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
+const TONE: Record<UiGroup, string> = { dispute: "text-dispute", waiting: "text-waiting", cleared: "text-cleared" };
 
 const MAX_NOTES = 3;
 
@@ -22,7 +25,7 @@ export function ChangedBanner({ notes, onOpen }: { notes: ChangeNote[]; onOpen: 
       <b className="font-semibold">Your answer changed {notes.length} {notes.length === 1 ? "charge" : "charges"}</b>
       {notes.slice(0, MAX_NOTES).map((n) => (
         <button key={n.key} type="button" onClick={() => onOpen(n.key)} className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink">
-          <StatusTag group={n.to} label={n.to === "dispute" ? "To dispute" : n.to === "cleared" ? "Cleared" : "Waiting"} />
+          <span className={TONE[n.to]}><StatusGlyph group={n.to} /></span>
           {n.text}{n.amount && <span className="font-semibold text-dispute">{n.amount}</span>}
         </button>
       ))}
@@ -31,78 +34,107 @@ export function ChangedBanner({ notes, onOpen }: { notes: ChangeNote[]; onOpen: 
   );
 }
 
-type Section = "dispute" | "waiting" | "question";
+type Section = "dispute" | "question" | "waiting";
 const sectionOf = (i: Issue): Section => (i.kind === "question" ? "question" : i.kind === "line" && i.row.group === "waiting" ? "waiting" : "dispute");
-const SECTION_LABEL: Record<Section, string> = { dispute: "To dispute", waiting: "Waiting", question: "Questions for you" };
 const ORDER: Section[] = ["dispute", "question", "waiting"];
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** The second line of a question item: what it covers, saying when sources disagree. */
-const covers = (rows: Row[]) =>
-  rows.map((r) => (r.finding.ruleId === "R7_CONFLICT" ? `${r.description} (sources disagree)` : r.description)).join(", ");
+/** What a question covers, for its row's tooltip: "Chassis, Pre-pull, …". */
+const covers = (rows: Row[]) => rows.map((r) => r.description).join(", ");
 
 type ListProps = {
-  issues: Issue[]; cleared: { count: number; billed: string };
+  issues: Issue[];
+  /** View-model groups: the dispute subtotal and the cleared count and billed amount come from here. */
+  groups: GroupView[];
   onOpen: (id: string) => void; moveMs: number; movingKey?: string;
   allCharges: ReactNode;
 };
 
-export function IssueList({ issues, cleared, onOpen, moveMs, movingKey, allCharges }: ListProps) {
+export function IssueList({ issues, groups, onOpen, moveMs, movingKey, allCharges }: ListProps) {
   const ref = useRef<HTMLUListElement>(null);
   const [showAll, setShowAll] = useState(false);
   useRowMoves(ref, moveMs, movingKey);
-  const toDecide = issues.filter((i) => i.kind !== "dispute")
-    .sort((a, b) => ORDER.indexOf(sectionOf(a)) - ORDER.indexOf(sectionOf(b)));
-  const count = (s: Section) => toDecide.filter((i) => sectionOf(i) === s).length;
-  const several = new Set(toDecide.map(sectionOf)).size > 1 || toDecide.length > 3;
+  const toDecide = issues.filter((i) => i.kind !== "dispute");
+  const of = (s: Section) => toDecide.filter((i) => sectionOf(i) === s);
+  const group = (g: UiGroup) => groups.find((v) => v.group === g)!;
+  const heading = (s: Section): ReactNode[] =>
+    s === "dispute" ? ["To dispute", of(s).length, <span key="t" className="text-dispute">{delta(group("dispute").overCents)}</span>]
+    : s === "question" ? ["Questions for you", of(s).length]
+    : ["Waiting", of(s).length];
+  const cleared = group("cleared");
   return (
-    <section aria-label="To decide" className={cx(CARD, "min-h-0 overflow-auto")}>
-      <h2 className="px-5 pb-2 pt-4 text-meta font-medium text-ink-3">
-        {toDecide.length ? `To decide (${toDecide.length})` : "Nothing left to decide"}
-      </h2>
+    <section aria-label="To decide" className={CARD}>
       <ul ref={ref}>
-        {toDecide.map((i, n) => {
-          const sec = sectionOf(i);
-          return [
-            several && (n === 0 || sectionOf(toDecide[n - 1]) !== sec) && (
-              <li key={`h-${sec}`} data-key={`h-${sec}`} className="border-t border-line bg-sunken px-5 py-1.5 text-xs font-medium text-ink-3">
-                {SECTION_LABEL[sec]} ({count(sec)})
-              </li>
-            ),
+        {!toDecide.length && (
+          <li data-key="none" className="px-5 py-3.5 text-row font-semibold">Nothing left to decide</li>
+        )}
+        {ORDER.filter((s) => of(s).length).flatMap((s, n) => [
+          <li key={`h-${s}`} data-key={`h-${s}`}>
+            <SectionHead parts={heading(s)} first={n === 0} />
+          </li>,
+          ...of(s).map((i) => (
             <li key={i.id} data-key={i.id} className="border-t border-line">
-              <button type="button" onClick={() => onOpen(i.id)}
-                className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">
-                {sec === "question" ? <StatusTag group="waiting" label="Your answer" /> : <StatusTag group={sec} />}
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 text-row font-semibold">
-                    <span className="truncate">
-                      {i.kind === "question"
-                        ? `${i.title === "Your answer" ? "" : `${i.title}: `}${plural(i.rows.length, "charge needs", "charges need")} your answer` : i.title}
-                    </span>
-                    {i.kind === "line" && i.isNew && <RowTagChip>New</RowTagChip>}
-                  </span>
-                  <span className="block truncate text-[13px] text-ink-2">
-                    {i.kind === "question" ? covers(i.rows) : i.kind === "line" ? i.row.reason.plain : ""}
-                  </span>
-                </span>
-                <span className={cx("text-[15px] font-semibold", sec === "dispute" ? "text-dispute" : "text-waiting")}>{i.amount}</span>
-                <span aria-hidden="true" className="text-ink-3">›</span>
-              </button>
-            </li>,
-          ];
-        })}
+              {i.kind === "question" ? <QuestionRow issue={i} onOpen={onOpen} /> : i.kind === "line" ? <LineRow issue={i} onOpen={onOpen} /> : null}
+            </li>
+          )),
+        ])}
         <li data-key="cleared" className="border-t border-line">
           <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
-            className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">
-            <StatusTag group="cleared" />
-            <span className="text-row font-semibold">{cleared.count} charges match what was agreed</span>
-            <span className="text-[15px] font-semibold">{cleared.billed}</span>
-            <span aria-hidden="true" className="text-ink-3">{showAll ? "⌃" : "⌄"}</span>
+            className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left hover:bg-sunken">
+            <span className="text-cleared"><StatusGlyph group="cleared" /></span>
+            <Parts parts={["Cleared", cleared.rows.length, money(cleared.billedCents)]} />
+            <span aria-hidden="true" className="ml-auto text-ink-3">{showAll ? "⌃" : "⌄"}</span>
           </button>
         </li>
       </ul>
       {showAll && <div className="border-t border-line px-3 py-3">{allCharges}</div>}
     </section>
+  );
+}
+
+/** "To dispute · 4 · +$3,340": the status word stays verbatim, the rest is muted. */
+function Parts({ parts }: { parts: ReactNode[] }) {
+  return (
+    <span className="text-[13px] font-semibold text-ink">
+      {parts.map((p, i) => <span key={i} className={i ? "text-ink-2" : undefined}>{i > 0 && <span className="font-normal text-ink-3"> · </span>}{p}</span>)}
+    </span>
+  );
+}
+
+function SectionHead({ parts, first }: { parts: ReactNode[]; first: boolean }) {
+  return <h3 className={cx("bg-sunken px-5 py-1.5", first ? "rounded-t-xl" : "border-t border-line")}><Parts parts={parts} /></h3>;
+}
+
+const ROW = "grid w-full grid-cols-[14px_minmax(0,1fr)_auto_88px_52px] items-center gap-x-3 px-5 py-3 text-left hover:bg-sunken";
+const CHIP = "max-w-[260px] truncate rounded-sm border border-line px-2 text-meta font-medium leading-[22px] text-ink-2";
+
+function LineRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "line" }>; onOpen: (id: string) => void }) {
+  const g = i.row.group;
+  return (
+    <button type="button" onClick={() => onOpen(i.id)} className={ROW} title={i.row.reason.plain}>
+      <span className={TONE[g]}><StatusGlyph group={g} /></span>
+      <span className="flex min-w-0 items-center gap-2 text-row font-semibold">
+        <span className="truncate">{i.title}</span>
+        {i.isNew && <RowTagChip>New</RowTagChip>}
+      </span>
+      <span className={CHIP}>{chipOf(i.row)}</span>
+      <span className={cx("text-right text-[15px] font-semibold", TONE[g])}>{i.amount}</span>
+      <span aria-hidden="true" className="text-right text-ink-3">›</span>
+    </button>
+  );
+}
+
+function QuestionRow({ issue: i, onOpen }: { issue: Extract<Issue, { kind: "question" }>; onOpen: (id: string) => void }) {
+  const conflict = i.rows.length > 0 && i.rows.every((r) => r.finding.ruleId === "R7_CONFLICT");
+  const name = `${i.title === "Your answer" ? "" : `${i.title}: `}${plural(i.rows.length, "charge needs", "charges need")} your answer`;
+  return (
+    <button type="button" onClick={() => onOpen(i.id)} className={ROW} title={covers(i.rows)}>
+      <span className="text-waiting"><StatusGlyph group="waiting" /></span>
+      <span className="truncate text-row font-semibold">{name}</span>
+      {conflict ? <span className={CHIP}>Sources disagree</span> : <span />}
+      <span className="text-right text-[15px] font-semibold text-waiting">{i.amount}</span>
+      <span className="text-right text-meta font-semibold text-link">Answer</span>
+    </button>
   );
 }
 
@@ -113,19 +145,5 @@ export function AllCharges({ rows, lines, onSave }: { rows: Row[]; lines: Editab
       <p className="mb-2 px-2 text-xs text-ink-3">All {rows.length} invoice lines. Select a line, then Edit to fix its description or amount.</p>
       <InlineLineEditor rows={rows} lines={lines} onSave={onSave} />
     </div>
-  );
-}
-
-export function AgreedCard({ x }: { x: CaseInput }) {
-  const [open, setOpen] = useState<SourceSpan | null>(null);
-  return (
-    <section aria-label="What was agreed" className={cx(CARD, "min-h-0 overflow-auto px-5 py-4")}>
-      {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (
-        <>
-          <h2 className="mb-3 text-meta font-medium text-ink-3">What was agreed, oldest first</h2>
-          <Timeline x={x} onQuote={setOpen} />
-        </>
-      )}
-    </section>
   );
 }

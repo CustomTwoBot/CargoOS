@@ -1,57 +1,66 @@
-// At stake card with the stacked bar (docs/design.md §7.3). Rechecking uses the quiet state (§7.14).
+// The money strip pinned above every case tab (docs/design.md §0.2): At stake on the left, one
+// invoice bar and one line of figures on the right. Rechecking uses the quiet state (§7.14).
+import { Fragment } from "react";
 import { cx } from "./cx";
 import { Hint, HINTS } from "./bits";
 import { inCurrency, money } from "./format";
 import { QuietRecheckLine, QUIET_DIM } from "@/components/states/quiet";
 import type { CaseTotals } from "./totals";
 
-type AtStakeProps = { totals: CaseTotals; countLine: string; checked: string; rechecking: boolean; chargeCount: number };
+type StripProps = { totals: CaseTotals; countLine: string; checked: string; rechecking: boolean; chargeCount: number };
 
-export function AtStakeCard({ totals: t, countLine, checked, rechecking, chargeCount }: AtStakeProps) {
+const HATCH = "bg-[repeating-linear-gradient(135deg,var(--waiting-fill)_0_3px,transparent_3px_6px)]";
+
+export function MoneyStrip({ totals: t, countLine, checked, rechecking, chargeCount }: StripProps) {
   const pct = (cents: number) => (t.billedCents ? `${(cents / t.billedCents) * 100}%` : "0%");
   const dim = rechecking ? QUIET_DIM : "";
-  const legend: { label: string; cents: number; swatch: string; amount?: string }[] = [
-    { label: "Matches the agreement", cents: t.agreedCents, swatch: "bg-line-strong" },
-    { label: "At stake", cents: t.atStakeCents, swatch: "bg-dispute", amount: "text-dispute" },
-    { label: "Waiting for answers", cents: t.waitingCents, swatch: "bg-waiting-fill", amount: t.waitingCents ? "" : "text-ink-3" },
-    ...(t.waivedCents ? [{ label: "Waived by clerk", cents: t.waivedCents, swatch: "bg-sunken border border-line-strong" }] : []),
+  const figures: { label: string; cents: number; swatch?: string; value?: string }[] = [
+    { label: "Matches", cents: t.agreedCents, swatch: "bg-line-strong" },
+    { label: "At stake", cents: t.atStakeCents, swatch: "bg-dispute", value: "text-dispute" },
+    { label: "Waiting", cents: t.waitingCents, swatch: HATCH, value: t.waitingCents ? "" : "text-ink-3" },
+    ...(t.waivedCents ? [{ label: "Not an issue", cents: t.waivedCents, swatch: "border border-line-strong" }] : []),
+    { label: "Invoice", cents: t.billedCents },
   ];
   return (
-    <section aria-label="Case totals"
-      className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-xl border border-line bg-surface px-[22px] py-3.5 shadow-card">
+    <section aria-label="Case totals" title={checked}
+      className="grid min-h-16 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-6 rounded-xl border border-line bg-surface px-5 py-2 shadow-card">
       <div>
         <div className="flex items-center gap-[5px] text-meta font-medium text-ink-2">
-          At stake, may not be owed <Hint label="At stake" text={HINTS.atStake} />
+          At stake <Hint label="At stake" text={HINTS.atStake} />
         </div>
-        <div data-testid="at-stake" className={cx("text-hero font-[650] text-dispute", dim)}>{money(t.atStakeCents)}</div>
-        <div className="text-[13px] text-ink-2">{countLine}</div>
-        <div className="mt-0.5 text-meta text-ink-3">Checked before you pay.</div>
+        <div data-testid="at-stake" className={cx("text-[30px] font-[650] leading-[34px] tracking-[-0.02em] text-dispute", dim)}>{money(t.atStakeCents)}</div>
       </div>
-      <div>
-        <div className="mb-2 flex justify-between text-meta">
-          {rechecking ? <QuietRecheckLine count={chargeCount} /> : <span className="text-ink-3">{checked}</span>}
-          <span className="font-medium text-ink-2">
-            Invoice total <b className={cx("text-ink", dim)}>{money(t.billedCents)}</b>
-            {t.unconverted.map((u) => (
-              <span key={u.currency} className="ml-1.5 text-ink-3" title="Billed in another currency. CargoOS doesn't convert it, so it isn't in the USD totals.">
-                + {inCurrency(u.cents, u.currency)} not converted
-              </span>
-            ))}
-          </span>
-        </div>
-        <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] bg-sunken" aria-hidden="true">
+      <div className="min-w-0">
+        <div className={cx("flex h-2 gap-0.5 overflow-hidden rounded-[4px] bg-sunken", dim)} aria-hidden="true">
           <i className="block h-full bg-line-strong" style={{ width: pct(t.agreedCents) }} />
           <i className="block h-full bg-dispute" style={{ width: pct(t.atStakeCents) }} />
-          <i className="block h-full bg-[repeating-linear-gradient(135deg,var(--waiting-fill)_0_3px,transparent_3px_6px)]" style={{ width: pct(t.waitingCents) }} />
+          <i className={cx("block h-full", HATCH)} style={{ width: pct(t.waitingCents) }} />
+          {t.waivedCents > 0 && <i className="block h-full bg-line" style={{ width: pct(t.waivedCents) }} />}
         </div>
-        <dl className="mt-2.5 flex gap-[26px] text-meta text-ink-2">
-          {legend.map((l) => (
-            <div key={l.label}>
-              <dt><span className={cx("mr-1.5 inline-block size-2 rounded-[2px]", l.swatch)} />{l.label}</dt>
-              <dd className={cx("mt-px text-panel font-semibold text-ink", l.amount, dim)}>{money(l.cents)}</dd>
-            </div>
-          ))}
-        </dl>
+        <p data-testid="money-figures" className="mt-1.5 text-meta text-ink-2">
+          {rechecking ? <QuietRecheckLine count={chargeCount} /> : (
+            <>
+              {figures.map((f, i) => (
+                <Fragment key={f.label}>
+                  {i > 0 && <span className="text-ink-3"> · </span>}
+                  <span className="whitespace-nowrap">
+                    {f.swatch && <span aria-hidden="true" className={cx("mr-1.5 inline-block size-2 rounded-[2px] align-[1px]", f.swatch)} />}
+                    {f.label} <b className={cx("font-semibold text-ink", f.value)}>{money(f.cents)}</b>
+                  </span>
+                </Fragment>
+              ))}
+              {t.unconverted.map((u) => (
+                <Fragment key={u.currency}>
+                  <span className="text-ink-3"> · </span>
+                  <span className="whitespace-nowrap text-ink-3" title="Billed in another currency. CargoOS doesn't convert it, so it isn't in the USD totals.">
+                    {inCurrency(u.cents, u.currency)} not converted
+                  </span>
+                </Fragment>
+              ))}
+            </>
+          )}
+        </p>
+        <p className="sr-only">{countLine}</p>
       </div>
     </section>
   );
