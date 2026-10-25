@@ -4,13 +4,14 @@
 // the same page so a quote opens its document without losing the place. Leo sees documents only.
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SourceSpan } from "@/lib/types";
 import { cx } from "@/components/case/cx";
 import { money } from "@/components/case/format";
 import { historyEntries } from "@/components/history/history";
 import { isRechecking } from "@/components/case/view-model";
 import { useBills, type Bill } from "@/components/app/bills-provider";
+import { looksLikeConvexId } from "@/components/app/convex-id";
 import { nextStep } from "@/components/app/next-step";
 import { LinkButton } from "@/components/app/ui";
 import { isUploaderOnly } from "@/components/shell/person";
@@ -26,8 +27,11 @@ type Tab = "bill" | "documents" | "history";
 const TABS: Tab[] = ["bill", "documents", "history"];
 
 export function BillPage({ id }: { id: string }) {
-  const { bill, person, now } = useBills();
+  const { bill, person, now, mode, rememberBill } = useBills();
   const b = bill(id);
+  // A live bill made on another screen (its link, or the phone's QR code): remember it here so it loads.
+  const unknownLive = !b && mode === "live" && looksLikeConvexId(id);
+  useEffect(() => { if (unknownLive) rememberBill(id); }, [unknownLive, id, rememberBill]);
   if (!b) {
     return (
       <div className="mx-auto flex max-w-[920px] flex-col items-start gap-3 px-4 pt-10 sm:px-6">

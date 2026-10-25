@@ -7,10 +7,9 @@ import type { ReactNode } from "react";
 import { cx } from "@/components/case/cx";
 import { displayName } from "@/components/shell/person";
 import { useBills } from "./bills-provider";
-import { Logo, PersonAvatar } from "./ui";
+import { HOME_FOCUS, Logo, PersonAvatar } from "./ui";
 
 const NAV = "inline-flex h-9 items-center rounded-full px-3.5 text-[13.5px] font-semibold";
-
 export function AppFrame({ children }: { children: ReactNode }) {
   const { person, mode } = useBills();
   const path = usePathname() ?? "";
@@ -19,7 +18,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col bg-bg">
       <header className="sticky top-0 z-20 border-b border-line/70 bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center gap-3 px-4 sm:px-8">
-          <Link href="/bills" aria-label="CargoOS bills" className="mr-1"><Logo /></Link>
+          <Link href="/" aria-label="CargoOS home" className={cx("mr-1", HOME_FOCUS)}><Logo /></Link>
           <nav aria-label="Main" className="hidden items-center gap-1 rounded-full bg-raised p-[3px] sm:flex">
             <Link href="/bills" aria-current={inBills ? "page" : undefined}
               className={cx(NAV, inBills ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>Bills</Link>

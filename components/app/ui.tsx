@@ -19,6 +19,9 @@ export function Logo({ className, label = true }: { className?: string; label?: 
   );
 }
 
+/** The focus ring for the logo's link home (app frame, /start, landing). */
+export const HOME_FOCUS = "rounded-[8px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand";
+
 type CardProps = ComponentProps<"section"> & { focus?: boolean; tone?: "plain" | "pay" | "hold" | "brand" };
 /** A white card; `focus` marks the one card that needs this person now. */
 export function Card({ focus, tone = "plain", className, ...rest }: CardProps) {

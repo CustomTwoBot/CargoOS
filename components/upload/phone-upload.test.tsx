@@ -3,8 +3,10 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { FunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { personById } from "@/lib/people";
+import { saveSetup } from "@/components/app/setup";
 import { SCENARIO_A } from "@/components/case/fixture";
-import { PhoneUploadPage } from "./phone-upload";
+import { PhoneUploadPage, phonePerson } from "./phone-upload";
 
 const h = vi.hoisted(() => ({
   live: false,
@@ -36,7 +38,7 @@ const pick = async (label: string, file: File) => {
 const added = () => within(screen.getByRole("list", { name: "You added" })).getAllByRole("listitem");
 const pdf = (name: string) => new File(["%PDF-1.4"], name, { type: "application/pdf" });
 
-beforeEach(() => { h.live = false; h.queries = {}; h.throwQuery = false; h.calls = []; h.results = {}; });
+beforeEach(() => { localStorage.clear(); h.live = false; h.queries = {}; h.throwQuery = false; h.calls = []; h.results = {}; });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Phone page: replay", () => {
@@ -98,7 +100,7 @@ describe("Phone page: live", () => {
     spy.mockRestore();
   });
 
-  it("uploads a chat export into the case as the device's person and follows its reading", async () => {
+  it("uploads a chat export into the case (as Leo on a phone never set up) and follows its reading", async () => {
     h.queries["uploads:getUploadContext"] = { title: "Bayline 40HC Ningbo-LB", documents: [] };
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ storageId: "st_9" })));
     vi.stubGlobal("fetch", fetchMock);
@@ -108,12 +110,26 @@ describe("Phone page: live", () => {
     await pick("WhatsApp chat export", file);
     expect(h.calls.map((c) => c.name)).toEqual(["uploads:generateUploadUrl", "uploads:addDocument"]);
     expect(fetchMock).toHaveBeenCalledWith("https://upload.example/u1", { method: "POST", headers: { "Content-Type": "text/plain" }, body: file });
-    expect(h.calls[1].args).toEqual({ caseId: CASE, personId: "sam", storageId: "st_9", fileName: file.name, docType: "chat" });
+    expect(h.calls[1].args).toEqual({ caseId: CASE, personId: "leo", storageId: "st_9", fileName: file.name, docType: "chat" });
     expect(added()[0]).toHaveTextContent("Reading…");
 
     h.queries["uploads:getUploadContext"] = { title: "Bayline 40HC Ningbo-LB", documents: [{ _id: "doc_9", title: file.name, type: "chat", readStatus: "read" }] };
     view.rerender(<PhoneUploadPage caseId={CASE} />);
     expect(added()[0]).toHaveTextContent("Added ✓");
+  });
+
+  it("a phone set up on /start uploads as its person", async () => {
+    saveSetup("maya", "Bayline Home Goods");
+    h.queries["uploads:getUploadContext"] = { title: "New bill", documents: [] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ storageId: "st_9" }))));
+    render(<PhoneUploadPage caseId={CASE} />);
+    await pick("WhatsApp chat export", new File(["hi"], "chat.txt", { type: "text/plain" }));
+    expect(h.calls.find((c) => c.name === "uploads:addDocument")!.args).toMatchObject({ personId: "maya" });
+  });
+
+  it("phonePerson: Leo when the phone was never set up, the device's person once it was", () => {
+    expect(phonePerson(false, personById("sam")!).id).toBe("leo");
+    expect(phonePerson(true, personById("sam")!).id).toBe("sam");
   });
 
   it("sends an invoice PDF with the kind chosen", async () => {

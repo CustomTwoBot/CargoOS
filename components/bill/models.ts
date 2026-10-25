@@ -109,9 +109,11 @@ export function trackOf(x: CaseInput, step: Step, forwarder: string): TrackStep[
   }
 
   const askedName = personName(asker, OWNER);
+  // The bookkeeper's turn, whether this screen is theirs (request) or the owner's (waitRequest).
+  const asking = step.kind === "request" || step.kind === "waitRequest";
   out.push(d && d.status !== "draft"
     ? { key: "ask", who: askedName.charAt(0), whoId: asker, title: "Asked to approve", sub: `${askedName}${requested ? ` · ${timeOf(requested.at)}` : ""} · ${money(d.totalDisputedCents)}`, state: "done" }
-    : { key: "ask", who: "M", whoId: "maya", title: "Ask to approve", sub: step.kind === "request" ? "Maya · now" : "Maya", state: step.kind === "request" ? "now" : "later" });
+    : { key: "ask", who: "M", whoId: "maya", title: "Ask to approve", sub: asking ? "Maya · now" : "Maya", state: asking ? "now" : "later" });
 
   const decided = latest(x.events, d?.status === "rejected" ? "draft_rejected" : "approved");
   out.push(

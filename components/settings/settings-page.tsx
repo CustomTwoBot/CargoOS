@@ -150,13 +150,23 @@ function WorkspaceSection() {
 }
 
 function DemoSection() {
-  const { mode, resetAll } = useBills();
+  const { mode, resetAll, demoMissing, setupDemo } = useBills();
   return (
     <Section title="Demo data" lead="Synthetic data. Nothing is sent or paid automatically.">
       <div className="flex flex-col gap-1 rounded-[14px] bg-sunken px-4 py-3">
         <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-ink-3">Mode</span>
-        <span className="font-semibold">{mode === "live" ? "Live — connected to the backend" : "Replay — answers play the recorded run"}</span>
-        <span className="text-[12.5px] text-ink-3"><code className="font-mono">?replay=1</code> forces replay, even with a backend.</span>
+        {mode === "live" && demoMissing ? (
+          <>
+            <span className="font-semibold">Live backend has no demo case yet</span>
+            <span className="text-[12.5px] text-ink-3">Until it is set up, the Pacific Crest bill shows the recorded run.</span>
+            {setupDemo && <Button className="mt-1.5 self-start" onClick={setupDemo}>Set up the demo</Button>}
+          </>
+        ) : (
+          <span className="font-semibold">{mode === "live" ? "Live — connected to the backend" : "Replay — answers play the recorded run"}</span>
+        )}
+        <span className="text-[12.5px] text-ink-3">
+          <code className="font-mono">?replay=1</code> forces replay, even with a backend; <code className="font-mono">?replay=0</code> turns it off.
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={resetAll}>Reset demo</Button>
