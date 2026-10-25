@@ -1,5 +1,6 @@
-# CI: typecheck, lint, unit tests, engine-only eval (SPEC.md 4, 9 W4 step 1).
+# CI: typecheck, lint, unit tests, Next.js build, engine-only eval (SPEC.md 4, 9 W4 step 1).
 # Needs no secrets and makes no calls to Claude or Convex; typecheck uses the committed convex/_generated.
+# The build is plain `next build` (not `convex deploy`) with a placeholder Convex URL.
 # No deploy step: Vercel deploys main.
 name: CI
 
@@ -21,6 +22,8 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      # Placeholder only so client code that reads it compiles; nothing contacts it during the build.
+      NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +42,17 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'lib/**', 'convex/**', 'public/**', '*.ts', '*.mjs', '*.json') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build
+        run: npm run build
 
       - name: Eval (engine-only)
         run: npm run eval
