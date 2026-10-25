@@ -1,21 +1,22 @@
 // Questions inbox: every question CargoOS asked you across cases (docs/design.md §0.2 decision 5).
 // The list stays light (case, charges and amount, how long it has waited); the selected question gets
 // the room: the question itself, the lines it covers, what the sources said (folded), and the answer box.
-// Answered ones fold into "Answered (n)" at the bottom of the list.
+// Answered ones fold into "Answered (n)" at the bottom of the list. The owner (ops_lead) answers;
+// the bookkeeper reads the same questions as waiting for the owner (docs/design.md §0.3).
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { whenAt } from "@/components/case/format";
 import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
 import { ago, type InboxLine, type QuestionItem } from "./items";
-import { CARD, Chevron, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, useNow } from "./parts";
-import { ASKED, OPERATOR, type Person } from "./people";
+import { CARD, Chevron, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, NothingWaiting, PRIMARY, useNow, useWide } from "./parts";
+import { ASKED, firstName, SAM, type Person } from "./people";
 
 type Props = {
   items: QuestionItem[];
   onOpen: (caseId: string, questionId: string) => void;
   onReply: (caseId: string, questionId: string, text: string) => void;
-  /** The person this screen is set to; the answer box shows only if they hold ops_lead. Default: one operator holding every role. */
+  /** The person this screen is set to (Settings); the answer box shows only if they hold ops_lead. Default: Sam. */
   viewer?: Person;
   /** Fixed clock for tests; the client clock otherwise. */
   now?: Date;
@@ -26,11 +27,18 @@ export const QUESTIONS_EMPTY = {
   text: "CargoOS asks only when the documents can't settle a charge.",
 };
 
+/** For a screen that only uploads documents. */
+export const NO_QUESTIONS = {
+  title: "Questions aren't on this device.",
+  text: "This device uploads documents. CargoOS's questions go to the owner.",
+};
+
 const charges = (n: number) => `${n} ${n === 1 ? "charge" : "charges"}`;
 
-export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now: fixed }: Props) {
+export function QuestionsInbox({ items, onOpen, onReply, viewer = SAM, now: fixed }: Props) {
   const clock = useNow();
   const now = fixed ?? clock;
+  const wide = useWide();
   const open = items.filter((q) => q.status === "open");
   const answered = items.filter((q) => q.status === "answered");
   const [picked, setPicked] = useState<string | undefined>();
@@ -40,17 +48,22 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now:
   // Answered stays folded unless you open it, or the selected question sits in it.
   const showAnswered = fold ?? selected?.status === "answered";
   const canReply = canAct(viewer.roles, "reply");
-  const asked = canReply ? "you" : ASKED.name;
+  const askedName = firstName(ASKED);
+  const asked = canReply ? "you" : askedName;
 
   const row = (q: QuestionItem) => {
     const when = now && (q.status === "open" ? ago(q.askedAt, now) : q.answer?.at && `answered ${ago(q.answer.at, now)}`);
     return (
-      <Item key={q.id} selected={q.id === selected?.id} onSelect={() => { setPicked(q.id); setReading(true); }}
+      // On a narrow screen the list shows alone, so nothing is marked until you have opened one.
+      <Item key={q.id} selected={(wide || !!picked) && q.id === selected?.id} onSelect={() => { setPicked(q.id); setReading(true); }}
         dot={q.status === "open" ? "Unanswered" : undefined} title={q.caseTitle}
-        meta={[q.followUpOf && "Follow-up", charges(q.lines.length), q.total, when].filter(Boolean).join(" · ")} />
+        meta={[q.label, charges(q.lines.length), q.total, when].filter(Boolean).join(" · ")} />
     );
   };
 
+  if (!canReply && !canAct(viewer.roles, "confirm")) {
+    return <InboxFrame title="Questions" count="" sub="" reading={false} backLabel="" onBack={() => {}} list={<InboxEmpty {...NO_QUESTIONS} />} detail={null} />;
+  }
   return (
     <InboxFrame
       title="Questions"
@@ -60,8 +73,8 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now:
       list={
         <>
           {open.length ? (
-            <ItemList label={canReply ? "Waiting for your answer" : `Waiting for ${ASKED.name}`}>{open.map(row)}</ItemList>
-          ) : <InboxEmpty {...QUESTIONS_EMPTY} />}
+            <ItemList label={canReply ? "Waiting for your answer" : `Waiting for ${askedName}`}>{open.map(row)}</ItemList>
+          ) : wide ? <NothingWaiting>Nothing waiting.</NothingWaiting> : <InboxEmpty {...QUESTIONS_EMPTY} />}
           {answered.length > 0 && (
             <Fold label="Answered" count={answered.length} open={showAnswered} onToggle={() => setFold(!showAnswered)}>
               <ItemList label="Answered" quiet>{answered.map(row)}</ItemList>
@@ -69,8 +82,8 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now:
           )}
         </>
       }
-      detail={selected && (
-        <QuestionDetail key={selected.id} q={selected} now={now} canReply={canReply} asked={asked}
+      detail={!selected ? (wide && <InboxEmpty {...QUESTIONS_EMPTY} />) : (
+        <QuestionDetail key={selected.id} q={selected} now={now} canReply={canReply} asked={asked} askedName={askedName}
           onOpen={() => onOpen(selected.caseId, selected.questionId)}
           // Keep it selected once it moves to Answered, so you see your answer quoted.
           onReply={(text) => { setPicked(selected.id); onReply(selected.caseId, selected.questionId, text); }} />
@@ -80,28 +93,31 @@ export function QuestionsInbox({ items, onOpen, onReply, viewer = OPERATOR, now:
 }
 
 type DetailProps = {
-  q: QuestionItem; now: Date | null; canReply: boolean; asked: string;
+  q: QuestionItem; now: Date | null; canReply: boolean; asked: string; askedName: string;
   onOpen: () => void; onReply: (text: string) => void;
 };
 
-function QuestionDetail({ q, now, canReply, asked, onOpen, onReply }: DetailProps) {
+function QuestionDetail({ q, now, canReply, asked, askedName, onOpen, onReply }: DetailProps) {
   const [text, setText] = useState("");
   const isOpen = q.status === "open";
   const id = `inbox-answer-${q.id}`;
-  const meta = now ? `Asked ${whenAt(q.askedAt, now)}${isOpen ? ` · ${q.waiting} is waiting on this answer` : ""}` : undefined;
-  const status = !isOpen ? "Answered" : canReply ? undefined : `Waiting for ${ASKED.name}`;
+  const meta = [q.label, now && `Asked ${whenAt(q.askedAt, now)}`, isOpen && `${q.waiting} is waiting on this answer`].filter(Boolean).join(" · ");
+  const status = !isOpen ? "Answered" : canReply ? undefined : `Waiting for ${askedName}`;
   return (
     <div className="flex max-w-[780px] flex-col gap-3">
       <DetailHead title={q.caseTitle} meta={meta} onOpen={onOpen} />
-      <section aria-label="Question"
-        className={cx(CARD, "px-5 py-5 md:px-6", isOpen && "border-dashed border-waiting-line bg-waiting-row")}>
+      {/* A plain card: waiting shows in the label's dashed glyph, not a dashed tinted card around the form. */}
+      <section aria-label="Question" className={cx(CARD, "px-5 py-5 md:px-6")}>
         <div className={cx("flex justify-between gap-3 text-meta font-semibold", isOpen ? "text-waiting" : "text-ink-3")}>
-          <span>{q.followUpOf ? `CargoOS asked ${asked} a follow-up` : `CargoOS asked ${asked}`}</span>
+          <span className="flex items-center gap-1.5">
+            <StatusGlyph group={isOpen ? "waiting" : "cleared"} />
+            {q.followUpOf ? `CargoOS asked ${asked} a follow-up` : `CargoOS asked ${asked}`}
+          </span>
           {status && <span>{status}</span>}
         </div>
         {q.followUpOf?.answer && (
           <p className="mt-1.5 truncate text-[13.5px] text-ink-2" title={q.followUpOf.answer}>
-            {canReply ? "Your" : `${ASKED.name}’s`} earlier answer: “{q.followUpOf.answer}”
+            {canReply ? "Your" : `${askedName}’s`} earlier answer: “{q.followUpOf.answer}”
           </p>
         )}
         <p className="mt-2 text-[18px] leading-[28px]">{q.text}</p>
@@ -130,7 +146,7 @@ function QuestionDetail({ q, now, canReply, asked, onOpen, onReply }: DetailProp
         ))}
         {!isOpen && q.answer && (
           <figure className="mt-4">
-            <figcaption className="mb-1.5 text-meta font-semibold">{canReply ? "Your answer" : `${ASKED.name}’s answer`}</figcaption>
+            <figcaption className="mb-1.5 text-meta font-semibold">{canReply ? "Your answer" : `${askedName}’s answer`}</figcaption>
             <blockquote className="rounded-lg bg-sunken px-4 py-3 text-body">“{q.answer.text}”</blockquote>
             {q.answer.at && now && <p className="mt-2 text-xs text-ink-3">Answered {whenAt(q.answer.at, now)}.</p>}
           </figure>
@@ -162,7 +178,7 @@ function Mentions({ q }: { q: QuestionItem }) {
   return (
     <div className="mt-3">
       <button type="button" aria-expanded={shown} onClick={() => setShown(!shown)}
-        className="flex items-center gap-1 text-[13.5px] font-semibold text-link hover:underline">
+        className="flex items-center gap-1 text-[13.5px] font-semibold text-link underline decoration-line-strong underline-offset-[3px] hover:decoration-current">
         <Chevron dir={shown ? "down" : "right"} />{shown ? label.replace("Show", "Hide") : label}
       </button>
       {shown && (

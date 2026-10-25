@@ -1,14 +1,14 @@
-// Approvals inbox: every request to approve a dispute, across cases (SPEC "Changes on Oct 24
-// evening", §8 owner page). The bookkeeper requests; the owner accepts or rejects with a reason.
-// Whoever requested a dispute can't approve it. After Accept, the owner edits and exports the
-// message to the seller. Nothing is ever sent.
+// Approvals inbox: requests to approve a dispute, across cases (SPEC "Changes on Oct 24 evening", §8
+// owner page; docs/design.md §0.3). The owner (controller) sees every request and accepts or rejects
+// with a reason, except one they requested themselves. The bookkeeper sees their own requests and how
+// each was decided. After Accept, the owner edits and exports the message to the seller. Nothing is ever sent.
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { capitalize, timeOf, whenAt } from "@/components/case/format";
 import { canAct } from "@/components/case/roles";
 import { ago, type ApprovalItem, type InboxLine } from "./items";
-import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, SECONDARY, useNow } from "./parts";
-import { ASKED, OPERATOR, personName, type Person } from "./people";
+import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, NothingWaiting, PRIMARY, SECONDARY, useNow, useWide } from "./parts";
+import { DECIDER, firstName, SAM, who, type Person } from "./people";
 import { SellerMessage } from "./seller-message";
 
 type Props = {
@@ -18,7 +18,7 @@ type Props = {
   onReject: (caseId: string, draftId: string, reason: string) => void;
   /** The owner's edits to the message to the seller (editedBody). */
   onMessageChange?: (caseId: string, draftId: string, text: { subject: string; body: string }) => void;
-  /** The person this screen is set to. Default: one operator holding every role. */
+  /** The person this screen is set to (Settings). Default: Sam, who holds every role. */
   viewer?: Person;
   /** Fixed clock for tests; the client clock otherwise. */
   now?: Date;
@@ -31,12 +31,21 @@ export const APPROVALS_EMPTY = {
   text: "A dispute shows up here when someone requests approval. Accepting one sends nothing.",
 };
 
-export const BLOCKED_REASON = "You requested this, so you can't approve it.";
+/** For a bookkeeper: their own requests. */
+export const REQUESTS_EMPTY = {
+  title: "Nothing waiting for a decision.",
+  text: "When you request approval for a dispute, it shows up here with the owner's decision. Nothing is sent either way.",
+};
+
+/** For a screen that only uploads documents. */
+export const NO_APPROVALS = {
+  title: "Approvals aren't on this device.",
+  text: "This device uploads documents. Disputes and amounts are on the owner's and bookkeeper's screens.",
+};
+
+export const BLOCKED_REASON = "You requested this. Another owner decides.";
 
 const lines = (n: number) => `${n} ${n === 1 ? "line" : "lines"}`;
-
-/** "you" for the viewer, else the person's name. */
-const who = (id: string | undefined, viewer: Person) => (id && id === viewer.id ? "you" : personName(id) ?? "someone");
 
 /** "2:07 PM" today, "Oct 23 at 2:07 PM" before. */
 const at = (iso: string, now: Date) => (whenAt(iso, now).startsWith("today") ? timeOf(iso) : whenAt(iso, now));
@@ -45,13 +54,17 @@ const at = (iso: string, now: Date) => (whenAt(iso, now).startsWith("today") ? t
 export const lineChip = (l: InboxLine) =>
   l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed} (${l.delta})` : `${l.reason ?? "No agreement"} · ${l.billed}`;
 
-export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageChange, viewer = OPERATOR, now: fixed, print }: Props) {
+export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageChange, viewer = SAM, now: fixed, print }: Props) {
   const clock = useNow();
   const now = fixed ?? clock;
-  const pending = items.filter((d) => d.status === "pending");
-  const decided = items.filter((d) => d.status !== "pending");
+  const wide = useWide();
+  const canDecide = canAct(viewer.roles, "approve");
+  // A bookkeeper follows their own requests; an owner sees them all.
+  const mine = canDecide ? items : items.filter((d) => who(d.requestedBy, viewer) === "you");
+  const pending = mine.filter((d) => d.status === "pending");
+  const decided = mine.filter((d) => d.status !== "pending");
   const [picked, setPicked] = useState<string | undefined>();
-  const selected = items.find((d) => d.id === picked) ?? pending[0];
+  const selected = mine.find((d) => d.id === picked) ?? pending[0];
   const [reading, setReading] = useState(false);
   const [fold, setFold] = useState<boolean | undefined>();
   // Decided stays folded unless you open it, or the selected request sits in it.
@@ -61,21 +74,29 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
     const when = now && (d.status === "pending" ? d.requestedAt && `requested ${ago(d.requestedAt, now)}`
       : d.decidedAt ? `${d.status} ${at(d.decidedAt, now)}` : d.status);
     return (
-      <Item key={d.id} selected={d.id === selected?.id} onSelect={() => { setPicked(d.id); setReading(true); }}
+      <Item key={d.id} selected={(wide || !!picked) && d.id === selected?.id} onSelect={() => { setPicked(d.id); setReading(true); }}
         dot={d.status === "pending" ? "To decide" : undefined} title={d.caseTitle}
         meta={[d.total, lines(d.lineCount), when].filter(Boolean).join(" · ")} />
     );
   };
 
+  if (!canDecide && !canAct(viewer.roles, "requestApproval")) {
+    return <InboxFrame title="Approvals" count="" sub="" reading={false} backLabel="" onBack={() => {}} list={<InboxEmpty {...NO_APPROVALS} />} detail={null} />;
+  }
+  const decider = firstName(DECIDER);
+  const empty = canDecide ? APPROVALS_EMPTY : REQUESTS_EMPTY;
   return (
     <InboxFrame
       title="Approvals"
-      count={pending.length ? `${pending.length} to decide` : "None to decide"}
-      sub="Requests to approve a dispute, across your cases. Nothing is sent, even after you accept."
+      count={canDecide ? (pending.length ? `${pending.length} to decide` : "None to decide") : pending.length ? `${pending.length} waiting for ${decider}` : "None waiting"}
+      sub={canDecide ? "Requests to approve a dispute, across your cases. Nothing is sent, even after you accept."
+        : `Disputes you asked ${decider} to approve, and how each was decided. Nothing is sent.`}
       reading={reading} backLabel="Back to approvals" onBack={() => setReading(false)}
       list={
         <>
-          {pending.length ? <ItemList label="Waiting for a decision">{pending.map(row)}</ItemList> : <InboxEmpty {...APPROVALS_EMPTY} />}
+          {pending.length ? (
+            <ItemList label={canDecide ? "Waiting for a decision" : `Waiting for ${decider}`}>{pending.map(row)}</ItemList>
+          ) : wide ? <NothingWaiting>{canDecide ? "Nothing to decide." : "Nothing waiting."}</NothingWaiting> : <InboxEmpty {...empty} />}
           {decided.length > 0 && (
             <Fold label="Decided" count={decided.length} open={showDecided} onToggle={() => setFold(!showDecided)}>
               <ItemList label="Decided" quiet>{decided.map(row)}</ItemList>
@@ -83,7 +104,7 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
           )}
         </>
       }
-      detail={selected && (
+      detail={!selected ? (wide && <InboxEmpty {...empty} />) : (
         <ApprovalDetail key={selected.id} d={selected} now={now} viewer={viewer} print={print}
           onOpen={() => onOpen(selected.caseId, selected.draftId)}
           // Keep it selected once it moves to Decided, so you see the outcome (and, after Accept, the message).
@@ -133,7 +154,7 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
           <p className="text-[13px] text-ink-2">{capitalize(requested)}.</p>
           {d.status === "pending" && (canDecide
             ? <Decide ownRequest={ownRequest} requester={who(d.requestedBy, viewer)} onAccept={onAccept} onReject={onReject} />
-            : <p className="text-[13.5px] font-semibold text-waiting">Waiting for {ASKED.name} to decide.</p>)}
+            : <p className="text-[13.5px] font-semibold text-waiting">Waiting for {firstName(DECIDER)} to decide.</p>)}
           {d.status === "accepted" && (
             <p className="rounded-lg border border-cleared px-3 py-2 text-[13.5px] font-semibold">
               Accepted by {who(d.decidedBy, viewer)}{d.decidedAt && now ? `, ${at(d.decidedAt, now)}` : ""}. Nothing was sent.
@@ -147,7 +168,7 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
           )}
           <p className="text-xs text-ink-3">
             {d.status === "rejected" ? `${d.requestedBy ? `It went back to ${who(d.requestedBy, viewer)}. ` : "Change the lines and draft it again. "}Nothing went to the seller.`
-              : d.status === "pending" ? "Accepting drafts a message to the seller. Nothing is sent."
+              : d.status === "pending" ? (canDecide ? "Accepting drafts a message to the seller. Nothing is sent." : "Nothing is sent either way.")
               : "CargoOS never sends email."}
           </p>
         </aside>
