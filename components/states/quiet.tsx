@@ -1,6 +1,7 @@
 // Screen states, quiet and in place: every state lives inside the card it affects. The screen keeps
 // its geometry; only the affected card changes (docs/design.md §7.14 as written).
 import { cx } from "@/components/case/cx";
+import { Info, X } from "@/components/app/icons";
 import { StatusGlyph } from "@/components/case/glyphs";
 import {
   EMPTY_CASE, EXTRACTION_FAILED, LOADING_LABEL, PASTE_INSTEAD, linesLabel, recheckingLabel,
@@ -85,13 +86,26 @@ export function QuietEmpty({ onLoad }: { onLoad?: () => void }) {
   );
 }
 
-/** One line, dark, Undo as a text button. */
+/** One line on a floating card: a neutral mark (toasts carry good news and refusals alike), the words, Undo as a text button, a close cross.
+ *  Slides in from the bottom right (not with reduced motion). */
 export function QuietToast({ text, onUndo, onClose }: ToastProps) {
   return (
-    <div role="status" className="flex items-center gap-4 rounded-[10px] bg-ink py-2.5 pl-3.5 pr-2.5 text-[13px] text-bg shadow-[0_8px_24px_rgba(0,0,0,.18)]">
-      <span>{text}</span>
-      {onUndo && <button type="button" onClick={onUndo} className="rounded-[6px] px-1.5 font-semibold underline underline-offset-2">Undo</button>}
-      {onClose && <button type="button" onClick={onClose} aria-label="Close" className="rounded-[6px] px-1 text-bg/70">×</button>}
+    <div role="status"
+      className="pointer-events-auto flex w-full max-w-[420px] items-center gap-3 rounded-[14px] border border-line bg-surface py-2.5 pl-3.5 pr-2 text-[13.5px] text-ink shadow-float animate-in fade-in slide-in-from-bottom-3 slide-in-from-right-2 duration-300 ease-[var(--ease-move)] motion-reduce:animate-none sm:w-auto">
+      <Info aria-hidden="true" strokeWidth={2} className="size-[18px] shrink-0 text-ink-3" />
+      <span className="min-w-0 flex-1">{text}</span>
+      {onUndo && (
+        <button type="button" onClick={onUndo}
+          className="shrink-0 rounded-[8px] px-2 py-1 font-semibold text-link underline-offset-4 transition-colors hover:bg-sunken hover:underline">
+          Undo
+        </button>
+      )}
+      {onClose && (
+        <button type="button" onClick={onClose} aria-label="Close"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-sunken hover:text-ink">
+          <X aria-hidden="true" strokeWidth={2} className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

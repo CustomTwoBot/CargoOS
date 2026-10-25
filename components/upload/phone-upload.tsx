@@ -7,6 +7,8 @@ import { useQuery } from "convex/react";
 import { Component, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { Camera, ChevronRight, CircleX, FileText, MessageCircle, type LucideIcon } from "@/components/app/icons";
+import { RISE } from "@/components/app/motion";
 import { Button, Kicker } from "@/components/app/ui";
 import { errorText } from "@/components/case/live-store";
 import { SCENARIO_A } from "@/components/case/fixture";
@@ -44,7 +46,7 @@ type Source = "chat" | "pdf" | "photo";
 const rowKind = (source: Source, docType: UploadDocType) =>
   source === "chat" ? PHONE_COPY.chat : source === "photo" ? PHONE_COPY.photo : `${PDF_KINDS.find((k) => k.docType === docType)?.label ?? "Other"} PDF`;
 
-export type PhoneRow = { key: string; kind: string; name: string; state: UploadState; error?: string };
+export type PhoneRow = { key: string; kind: string; name: string; state: UploadState; error?: string; source?: Source };
 
 const PHONE_STATE: Record<UploadState, string> = {
   uploading: "Uploading", reading: "Reading…", read: "Added ✓", failed: "Couldn't read", not_read: "Couldn't read",
@@ -75,7 +77,7 @@ function ReplayPhone() {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const add = (file: File, docType: UploadDocType, source: Source) => {
     const key = uploadKey();
-    setRows((all) => [...all, { key, kind: rowKind(source, docType), name: file.name, state: "reading" }]);
+    setRows((all) => [...all, { key, kind: rowKind(source, docType), name: file.name, state: "reading", source }]);
     timers.current.push(setTimeout(() => setRows((all) => all.map((r) => (r.key === key ? { ...r, state: "read" } : r))), READ_MS));
   };
   return <PhoneView title={SCENARIO_A.title} rows={rows} onAdd={add} demo />;
@@ -88,14 +90,14 @@ function LivePhone({ caseId }: { caseId: Id<"cases"> }) {
   const ctx = useQuery(api.uploads.getUploadContext, { caseId });
   const live = useLiveUploads(person);
   const local = useLocalUploads();
-  const [kinds, setKinds] = useState<Record<string, string>>({});
+  const [kinds, setKinds] = useState<Record<string, { kind: string; source: Source }>>({});
 
   if (ctx === undefined) return <PhoneShell><p className="px-1 text-ink-3">{PHONE_COPY.loading}</p></PhoneShell>;
   if (ctx === null) return <PhoneShell><Missing /></PhoneShell>;
 
   const add = async (file: File, docType: UploadDocType, source: Source) => {
     const key = uploadKey();
-    setKinds((k) => ({ ...k, [key]: rowKind(source, docType) }));
+    setKinds((k) => ({ ...k, [key]: { kind: rowKind(source, docType), source } }));
     local.add([{ key, name: file.name, docType, file, state: "uploading" }]);
     try { local.patch(key, { docId: await live.uploadFile(caseId, file, docType) }); } catch (e) {
       local.patch(key, { state: "failed", error: errorText(e) });
@@ -103,7 +105,7 @@ function LivePhone({ caseId }: { caseId: Id<"cases"> }) {
   };
   const rows: PhoneRow[] = local.items.map((i) => {
     const doc = i.docId ? ctx.documents.find((d) => d._id === i.docId) : undefined;
-    const base = { key: i.key, kind: kinds[i.key] ?? "Document", name: i.name };
+    const base = { key: i.key, kind: kinds[i.key]?.kind ?? "Document", source: kinds[i.key]?.source, name: i.name };
     if (i.state === "failed") return { ...base, state: "failed", error: i.error };
     if (!i.docId) return { ...base, state: "uploading" };
     return { ...base, state: stateOf(doc?.readStatus), error: doc?.readError };
@@ -120,26 +122,57 @@ class LiveBoundary extends Component<{ children: ReactNode; fallback: ReactNode 
 
 // ---- the page ------------------------------------------------------------
 
-function PhoneShell({ title, children }: { title?: string; children: ReactNode }) {
+function PhoneShell({ title, children, footer }: { title?: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="min-h-screen bg-bg">
-      <div className="mx-auto flex min-h-screen w-full max-w-[480px] flex-col">
-        <header className="flex flex-col gap-1 bg-[var(--lime-ink)] px-5 pb-4 pt-[26px] text-white dark:bg-raised">
+    <div className="min-h-dvh bg-bg">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
+        <header className="flex flex-col gap-1.5 bg-[var(--lime-ink)] px-5 pb-5 pt-[max(22px,env(safe-area-inset-top))] text-white dark:bg-raised dark:text-ink">
           <span className="text-[13px] text-brand-soft dark:text-ink-2">{PHONE_COPY.brand}</span>
-          {title && <h1 className="text-[22px] font-extrabold leading-[28px]">{PHONE_COPY.title(title)}</h1>}
+          {title && <h1 className="text-[22px] font-extrabold leading-[28px] tracking-[-0.02em]">{PHONE_COPY.title(title)}</h1>}
         </header>
         <main className="flex flex-1 flex-col gap-2.5 p-4">{children}</main>
+        {footer && (
+          <footer className="sticky bottom-0 border-t border-line bg-bg/95 px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] text-center backdrop-blur supports-[backdrop-filter]:bg-bg/80">
+            {footer}
+          </footer>
+        )}
       </div>
     </div>
   );
 }
 
 function Missing() {
-  return <p role="alert" className="rounded-[18px] border border-line bg-surface p-4 text-[15px] font-semibold text-ink">{PHONE_COPY.missing}</p>;
+  return (
+    <p role="alert" className="flex items-start gap-2.5 rounded-[18px] border border-line bg-surface p-4 text-[15px] font-semibold text-ink">
+      <CircleX aria-hidden="true" strokeWidth={2} className="mt-0.5 size-5 flex-none text-hold" />
+      {PHONE_COPY.missing}
+    </p>
+  );
 }
 
-const BIG = "flex min-h-[76px] w-full items-center gap-3.5 rounded-[18px] border border-line bg-surface px-[18px] py-3 text-left text-[17px] font-bold text-ink shadow-card hover:bg-sunken";
-const ICON = "inline-flex size-11 flex-none items-center justify-center rounded-[13px] text-[12px] font-extrabold";
+const BIG = cx(
+  "group flex min-h-[76px] w-full items-center gap-3.5 rounded-[18px] border border-line bg-surface px-[18px] py-3 text-left text-[17px] font-bold text-ink shadow-card",
+  "transition-[transform,background-color] duration-150 hover:bg-sunken active:scale-[0.98] active:bg-sunken motion-reduce:transition-none motion-reduce:active:scale-100",
+  "[-webkit-tap-highlight-color:transparent]",
+);
+const ICON = "inline-flex size-11 flex-none items-center justify-center rounded-[13px]";
+
+const SOURCE_ICON: Record<Source, LucideIcon> = { chat: MessageCircle, pdf: FileText, photo: Camera };
+
+function BigButton({ icon: Icon, tone, label, hint, hintId, onClick }: {
+  icon: LucideIcon; tone: string; label: string; hint?: string; hintId?: string; onClick: () => void;
+}) {
+  return (
+    <button type="button" className={BIG} aria-label={hint ? label : undefined} aria-describedby={hintId} onClick={onClick}>
+      <span aria-hidden="true" className={cx(ICON, tone)}><Icon strokeWidth={1.9} className="size-[22px]" /></span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span>{label}</span>
+        {hint && <span id={hintId} className="text-meta font-medium text-ink-3">{hint}</span>}
+      </span>
+      <ChevronRight aria-hidden="true" strokeWidth={2} className="size-5 flex-none text-ink-4 transition-transform group-active:translate-x-0.5 motion-reduce:transition-none" />
+    </button>
+  );
+}
 
 export function PhoneView({ title, rows, onAdd, demo }: {
   title: string; rows: PhoneRow[]; onAdd: (file: File, docType: UploadDocType, source: Source) => void; demo?: boolean;
@@ -150,40 +183,42 @@ export function PhoneView({ title, rows, onAdd, demo }: {
   const [pendingPdf, setPendingPdf] = useState<File>();
   const picked = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ""; return f; };
 
+  const footer = (
+    <>
+      <p className="text-[12.5px] text-ink-3">{PHONE_COPY.footer}</p>
+      {demo && <p className="text-[12px] font-semibold text-ink-3">{PHONE_COPY.demo}</p>}
+    </>
+  );
+
   return (
-    <PhoneShell title={title}>
+    <PhoneShell title={title} footer={footer}>
       {pendingPdf ? (
-        <div role="group" aria-labelledby="what-pdf" className="flex flex-col gap-2.5 rounded-[18px] border-2 border-ink bg-surface p-3.5">
-          <span id="what-pdf" className="font-bold text-ink">{PHONE_COPY.whatPdf}</span>
-          <span className="break-all text-meta text-ink-3">{pendingPdf.name}</span>
+        <div role="group" aria-labelledby="what-pdf"
+          className="flex flex-col gap-2.5 rounded-[18px] border-2 border-ink bg-surface p-3.5 animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none">
+          <span className="flex items-center gap-2.5">
+            <span aria-hidden="true" className={cx(ICON, "size-9 rounded-[11px] bg-raised text-ink-2")}><FileText strokeWidth={1.9} className="size-[18px]" /></span>
+            <span className="flex min-w-0 flex-col">
+              <span id="what-pdf" className="font-bold text-ink">{PHONE_COPY.whatPdf}</span>
+              <span className="truncate text-meta text-ink-3">{pendingPdf.name}</span>
+            </span>
+          </span>
           <div className="grid grid-cols-2 gap-1.5 min-[400px]:grid-cols-4">
             {PDF_KINDS.map((k) => (
               <button key={k.docType} type="button"
                 onClick={() => { onAdd(pendingPdf, k.docType, "pdf"); setPendingPdf(undefined); }}
-                className="h-11 rounded-[12px] border border-line-strong bg-surface px-3 text-[14px] font-bold text-ink hover:bg-sunken">
+                className="h-11 rounded-[12px] border border-line-strong bg-surface px-3 text-[14px] font-bold text-ink transition-transform hover:bg-sunken active:scale-[0.97] motion-reduce:transition-none">
                 {k.label}
               </button>
             ))}
           </div>
-          <Button variant="ghost" className="h-9 self-start" onClick={() => setPendingPdf(undefined)}>Cancel</Button>
+          <Button variant="ghost" className="h-9 self-start px-0!" onClick={() => setPendingPdf(undefined)}>Cancel</Button>
         </div>
       ) : (
         <>
-          <button type="button" className={BIG} aria-label={PHONE_COPY.chat} aria-describedby="chat-hint" onClick={() => chat.current?.click()}>
-            <span aria-hidden="true" className={cx(ICON, "bg-pay-tint text-pay")}>WA</span>
-            <span className="flex flex-col">
-              <span>{PHONE_COPY.chat}</span>
-              <span id="chat-hint" className="text-meta font-medium text-ink-3">{PHONE_COPY.chatHint}</span>
-            </span>
-          </button>
-          <button type="button" className={BIG} onClick={() => pdf.current?.click()}>
-            <span aria-hidden="true" className={cx(ICON, "bg-raised text-ink-2")}>PDF</span>
-            <span>{PHONE_COPY.pdf}</span>
-          </button>
-          <button type="button" className={BIG} onClick={() => photo.current?.click()}>
-            <span aria-hidden="true" className={cx(ICON, "bg-ask-tint text-ask")}>IMG</span>
-            <span>{PHONE_COPY.photo}</span>
-          </button>
+          <BigButton icon={MessageCircle} tone="bg-pay-tint text-pay" label={PHONE_COPY.chat} hint={PHONE_COPY.chatHint} hintId="chat-hint"
+            onClick={() => chat.current?.click()} />
+          <BigButton icon={FileText} tone="bg-raised text-ink-2" label={PHONE_COPY.pdf} onClick={() => pdf.current?.click()} />
+          <BigButton icon={Camera} tone="bg-ask-tint text-ask" label={PHONE_COPY.photo} onClick={() => photo.current?.click()} />
         </>
       )}
       <input ref={chat} type="file" accept=".txt,text/plain" aria-label="WhatsApp chat export" className="hidden"
@@ -193,29 +228,43 @@ export function PhoneView({ title, rows, onAdd, demo }: {
       <input ref={photo} type="file" accept="image/*" capture="environment" aria-label="Photo of a paper" className="hidden"
         onChange={(e) => { const f = picked(e); if (f) onAdd(f, "other", "photo"); }} />
 
-      <Kicker className="pt-1.5">{PHONE_COPY.added}</Kicker>
+      <Kicker className="pt-2">{PHONE_COPY.added}</Kicker>
       {rows.length === 0 ? (
-        <p className="text-[13px] text-ink-4">{PHONE_COPY.none}</p>
+        <p className="text-[13px] text-ink-3">{PHONE_COPY.none}</p>
       ) : (
         <ul aria-label={PHONE_COPY.added} className="flex flex-col gap-2">
-          {rows.map((r) => (
-            <li key={r.key} className="flex flex-col gap-0.5 rounded-[14px] bg-surface px-3 py-2.5 text-[13.5px]">
-              <span className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate font-semibold text-ink">{r.kind}</span>
-                <span className={cx("inline-flex flex-none items-center gap-1.5 font-bold",
-                  r.state === "read" ? "text-pay" : r.state === "failed" ? "text-hold" : "text-ink-3")}>
-                  {isBusy(r.state) && <i aria-hidden="true" className="inline-block size-3 animate-spin rounded-full border-2 border-line-strong border-t-brand motion-reduce:animate-none" />}
-                  {PHONE_STATE[r.state]}
-                </span>
-              </span>
-              <span className="truncate text-meta text-ink-3">{r.name}</span>
-              {r.state === "failed" && r.error && <span className="text-meta text-hold">{r.error}</span>}
-            </li>
-          ))}
+          {rows.map((r) => <AddedRow key={r.key} row={r} />)}
         </ul>
       )}
-      <p className="pt-1 text-center text-[12px] text-ink-3">{PHONE_COPY.footer}</p>
-      {demo && <p className="text-center text-[12px] font-semibold text-ink-3">{PHONE_COPY.demo}</p>}
     </PhoneShell>
+  );
+}
+
+function AddedRow({ row: r }: { row: PhoneRow }) {
+  const Icon = r.source ? SOURCE_ICON[r.source] : FileText;
+  const read = r.state === "read";
+  const failed = r.state === "failed" || r.state === "not_read";
+  return (
+    <li className={cx("grid grid-cols-[32px_minmax(0,1fr)] items-center gap-x-3 rounded-[14px] border border-line bg-surface px-3 py-2.5 text-[13.5px] transition-colors duration-500", RISE,
+      read && "border-pay/30")}>
+      <span key={read ? "read" : "busy"} aria-hidden="true"
+        className={cx("inline-flex size-8 items-center justify-center rounded-[10px]",
+          read ? "bg-pay-tint text-pay animate-in zoom-in-75 duration-300 motion-reduce:animate-none" : failed ? "bg-hold-tint text-hold" : "bg-raised text-ink-2")}>
+        <Icon strokeWidth={1.9} className="size-4" />
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex items-center justify-between gap-2">
+          <span data-kind className="min-w-0 truncate font-semibold text-ink">{r.kind}</span>
+          <span key={r.state} className={cx("inline-flex flex-none items-center gap-1.5 font-bold",
+            read ? "text-pay animate-in zoom-in-90 fade-in duration-300 motion-reduce:animate-none" : failed ? "text-hold" : "text-ink-3")}>
+            {isBusy(r.state) && <i aria-hidden="true" className="inline-block size-3 animate-spin rounded-full border-2 border-line-strong border-t-brand motion-reduce:animate-none" />}
+            {failed && <CircleX aria-hidden="true" strokeWidth={2.2} className="size-3.5" />}
+            {PHONE_STATE[r.state]}
+          </span>
+        </span>
+        <span className="truncate text-meta text-ink-3">{r.name}</span>
+        {failed && r.error && <span className="text-meta text-hold">{r.error}</span>}
+      </span>
+    </li>
   );
 }

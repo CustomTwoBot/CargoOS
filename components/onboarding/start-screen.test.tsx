@@ -21,7 +21,7 @@ describe("/start: set up this screen", () => {
     expect(screen.getByRole("radio", { name: "Maya · Bookkeeper" })).not.toBeChecked();
     expect(screen.getByRole("radio", { name: "Leo · Uploader" })).toHaveAccessibleDescription(/Doesn't see amounts, findings or disputes/);
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "← Back" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/");
   });
 
   it("Continue saves the workspace and the person, then opens the bills", () => {

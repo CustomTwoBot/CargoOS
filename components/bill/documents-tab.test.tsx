@@ -74,6 +74,43 @@ describe("DocumentsTab", () => {
     Reflect.deleteProperty(Element.prototype, "scrollIntoView");
   });
 
+  it("the focused quote flashes once when motion is allowed", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }));
+    const { rerender } = mount();
+    rerender({ focus: { docId: "doc_email", quote: EMAIL_QUOTE } });
+    const flashing = () => screen.getByTestId("document-text").querySelector("mark[data-flash]");
+    expect(flashing()).toHaveTextContent(EMAIL_QUOTE);
+    act(() => { vi.advanceTimersByTime(1700); });
+    expect(flashing()).toBeNull();
+    // Still marked as the focused quote after the flash.
+    expect(screen.getByTestId("document-text").querySelector("mark[data-focused]")).toHaveTextContent(EMAIL_QUOTE);
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("no flash under reduced motion", () => {
+    const { rerender } = mount();
+    rerender({ focus: { docId: "doc_email", quote: EMAIL_QUOTE } });
+    expect(screen.getByTestId("document-text").querySelector("mark[data-flash]")).toBeNull();
+  });
+
+  it("a bill with no documents says so and shows no document", () => {
+    mount({ tweak: (b) => ({ ...b, x: { ...b.x, documents: [] } }) });
+    expect(screen.getByText("No documents on this bill yet.")).toBeInTheDocument();
+    expect(screen.queryByTestId("document-text")).not.toBeInTheDocument();
+  });
+
+  it("the document has a way back to the list when they stack", () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "All documents" }));
+    expect(scroll).toHaveBeenCalled();
+    expect(document.activeElement).toBe(current());
+    Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+  });
+
   it("a document that couldn't be read says so with the reason", () => {
     mount({ tweak: (b) => ({ ...b, x: { ...b.x, documents: b.x.documents.map((d) => d._id === "doc_chat"
       ? { ...d, readStatus: "not_read" as const, readError: "The screenshot is too blurry to read." } : d) } }) });

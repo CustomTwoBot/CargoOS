@@ -11,6 +11,9 @@ import { highlight } from "@/components/case/evidence";
 import { groupTotals } from "@/components/case/totals";
 import type { Bill } from "@/components/app/bills-provider";
 import { Button, Card, Kicker } from "@/components/app/ui";
+import { CircleHelp, SendHorizontal } from "@/components/app/icons";
+import { RISE } from "@/components/app/motion";
+import { cx } from "@/components/case/cx";
 import { readingOf, type Reading } from "./models";
 
 type Phase = "ask" | "reading" | "confirm";
@@ -52,7 +55,10 @@ export function AnswerCard({ bill, question }: { bill: Bill; question: Question 
   return (
     <Card focus className="flex flex-col gap-3.5 px-5 py-[22px] sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Kicker tone="ask">CargoOS asks you · {lines === 1 ? "1 line" : `${lines} lines`} · {total}</Kicker>
+        <span className="inline-flex items-center gap-1.5">
+          <CircleHelp aria-hidden="true" strokeWidth={2.2} className="size-3.5 shrink-0 text-ask" />
+          <Kicker tone="ask">CargoOS asks you · {lines === 1 ? "1 line" : `${lines} lines`} · {total}</Kicker>
+        </span>
         {question.followupOf && <Kicker>Follow-up · asked once, then it waits</Kicker>}
       </div>
       <p className="text-[19px] font-bold leading-7 sm:text-[20px]">{question.text}</p>
@@ -70,39 +76,41 @@ export function AnswerCard({ bill, question }: { bill: Bill; question: Question 
       )}
 
       {phase === "ask" && (
-        <>
+        <div key="ask" className={cx(RISE, "flex flex-col gap-3.5")}>
           <div className="flex flex-wrap gap-2">
             <label htmlFor={`answer-${question._id}`} className="sr-only">Your answer</label>
             <input id={`answer-${question._id}`} value={text} onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") answer(); }}
               placeholder={recorded ? recorded.text : "In your own words, e.g. “approved the congestion fee on WhatsApp”"}
-              className="h-12 min-w-0 flex-[1_1_320px] rounded-[12px] border border-line-strong bg-sunken px-3.5 text-[14.5px] text-ink placeholder:text-ink-4" />
-            <Button onClick={answer} className="h-12" aria-disabled={!replay && !text.trim() ? true : undefined}>Answer</Button>
+              className="h-12 min-w-0 flex-[1_1_320px] rounded-[12px] border border-line-strong bg-sunken px-3.5 text-[14.5px] text-ink transition-colors placeholder:text-ink-4 focus:border-ink focus:bg-surface" />
+            <Button onClick={answer} className="h-12" aria-disabled={!replay && !text.trim() ? true : undefined}>
+              Answer<SendHorizontal aria-hidden="true" strokeWidth={2} className="size-4" />
+            </Button>
           </div>
           <span className="text-[12.5px] text-ink-3">
             {replay ? "Replay: CargoOS reads the recorded answer shown in the box. " : ""}Your answer becomes evidence. CargoOS rechecks the lines; nothing is sent.
           </span>
-        </>
+        </div>
       )}
 
+      {phase !== "ask" && <Bubble text={shown} />}
+
       {phase === "reading" && (
-        <div className="flex flex-col gap-2.5" aria-live="polite">
-          <Bubble text={shown} />
+        <div key="reading" className="flex flex-col gap-2.5" aria-live="polite">
           <span className="inline-flex items-center gap-2.5 font-semibold"><Spinner />Reading your answer…</span>
         </div>
       )}
 
       {phase === "confirm" && (
-        <div className="flex flex-col gap-3" aria-live="polite">
-          <Bubble text={shown} />
+        <div key="confirm" className="flex flex-col gap-3" aria-live="polite">
           {text.trim() && recorded && text.trim() !== recorded.text && (
             <span className="text-[12.5px] text-ink-3">Replay: CargoOS read the recorded answer “{recorded.text}”.</span>
           )}
-          <Kicker tone="ink">Is this what you meant?</Kicker>
+          <Kicker tone="ink" className={RISE}>Is this what you meant?</Kicker>
           <ul className="flex flex-col gap-2">
-            {readings.map((r) => <ReadingRow key={r.key} r={r} answer={recorded?.text ?? ""} />)}
+            {readings.map((r, i) => <ReadingRow key={r.key} r={r} index={i + 1} answer={recorded?.text ?? ""} />)}
           </ul>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className={cx(RISE, "flex flex-wrap items-center gap-2.5")} style={stagger(readings.length + 1)}>
             <Button onClick={() => bill.actions.reply(question._id, shown)}>Yes, recheck the bill</Button>
             <Button variant="secondary" onClick={() => setPhase("ask")}>No, let me rephrase</Button>
             <span className="text-[12.5px] text-ink-3">CargoOS reads your words. The rules move the money.</span>
@@ -113,11 +121,14 @@ export function AnswerCard({ bill, question }: { bill: Bill; question: Question 
   );
 }
 
-export function ReadingRow({ r, answer, now }: { r: Reading; answer: string; now?: string }) {
+/** Rows arrive one after another; with reduced motion the animation is off, so they are just there. */
+const stagger = (i: number) => ({ animationDelay: `${i * 140}ms`, animationFillMode: "both" as const });
+
+export function ReadingRow({ r, answer, now, index = 0 }: { r: Reading; answer: string; now?: string; index?: number }) {
   const v = VERDICT[r.verdict];
   const h = r.quote ? highlight(answer, r.quote) : null;
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[14px] bg-sunken px-3.5 py-3">
+    <li style={stagger(index)} className={cx(RISE, "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[14px] bg-sunken px-3.5 py-3")}>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="font-bold">Line {r.lineNo} · {r.description} · {money(r.billedCents)}</span>
         <span className="text-[13px] text-ink-2">
@@ -134,7 +145,7 @@ export function ReadingRow({ r, answer, now }: { r: Reading; answer: string; now
 
 function Bubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-end">
+    <div className={cx(RISE, "flex justify-end")}>
       <span className="max-w-[85%] rounded-[16px_16px_4px_16px] bg-brand px-3.5 py-2.5 text-brand-ink">{text}</span>
     </div>
   );

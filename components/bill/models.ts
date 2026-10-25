@@ -3,8 +3,11 @@
 // engine's totals or from findings; this file only regroups them.
 import type { CaseEvent, Fact, Person, Question } from "@/lib/types";
 import { personById } from "@/lib/people";
-import { money, timeOf } from "@/components/case/format";
-import { instant, latestDraft, toRows, totalsOf, type CaseInput } from "@/components/case/view-model";
+import { delta, money, timeOf } from "@/components/case/format";
+import { caseTotals } from "@/components/case/totals";
+import {
+  currencyOf, instant, isRechecking, latestChanges, latestDraft, latestQuestion, toRows, totalsOf, type CaseInput, type UiGroup,
+} from "@/components/case/view-model";
 import { OWNER, firstName } from "@/components/shell/person";
 import type { Step } from "@/components/app/next-step";
 
@@ -22,6 +25,13 @@ export function heroOf(s: Split): { before: string; amount: string; after: strin
   if (s.pay === s.billed) return { before: "You can safely pay ", amount: `all ${money(s.billed)}`, after: "." };
   if (s.pay === 0) return { before: "Hold ", amount: money(s.billed), after: " until the questions are answered." };
   return { before: "You can safely pay ", amount: money(s.pay), after: ` of ${money(s.billed)}.` };
+}
+
+/** The amount in the hero sentence as cents, so it can count to a new value; undefined when there is none. */
+export function heroCount(s: Split): { cents: number; prefix: string } | undefined {
+  if (s.billed === 0) return undefined;
+  if (s.pay === s.billed) return { cents: s.billed, prefix: "all " };
+  return { cents: s.pay === 0 ? s.billed : s.pay, prefix: "" };
 }
 
 /** "Good morning" / "Good afternoon" / "Good evening" for the hour on this device. */
@@ -76,6 +86,43 @@ export function lastAnswer(x: CaseInput): { question: Question; text?: string; a
   const reply = x.replies.filter((r) => r.questionId === answered._id).at(-1);
   const doc = reply && x.documents.find((d) => d._id === reply.docId);
   return { question: answered, text: doc?.text, at: doc?.sentAt };
+}
+
+// ---- After a recheck (M1 motion) ---------------------------------------
+
+/** Pay / Hold / Ask of the previous revision, from the engine's totals of its findings. */
+export function previousSplitOf(x: CaseInput): Split | undefined {
+  const prev = x.findings.filter((f) => f.revision === x.case.revision - 1);
+  if (!prev.length) return undefined;
+  const t = caseTotals(prev, currencyOf(x));
+  return { pay: t.agreedCents + t.waivedCents, hold: t.atStakeCents, ask: t.waitingCents, billed: t.billedCents };
+}
+
+export type MovedLine = { key: string; lineNo: number; description: string; from: UiGroup; to: UiGroup; amount: string };
+
+/** The lines the latest recheck moved, each with the amount it now counts for. Empty while rechecking. */
+export function movedLines(x: CaseInput): MovedLine[] {
+  if (isRechecking(x)) return [];
+  const rows = new Map(toRows(x).map((r) => [r.key, r]));
+  return latestChanges(x).map((c) => {
+    const row = rows.get(c.key);
+    const amount = c.to === "dispute" ? delta(c.deltaCents) : money(row?.billedCents ?? 0);
+    return { key: c.key, lineNo: c.lineNo, description: row?.description ?? `Line ${c.lineNo}`, from: c.from, to: c.to, amount };
+  });
+}
+
+export type RecheckLine = { key: string; lineNo: number; description: string; moved?: MovedLine };
+
+/** The lines the latest question covered, each marked once the recheck has moved it. */
+export function recheckLinesOf(x: CaseInput): RecheckLine[] {
+  const q = latestQuestion(x);
+  if (!q) return [];
+  const rows = new Map(toRows(x).map((r) => [r.key, r]));
+  const moved = new Map(movedLines(x).map((m) => [m.key, m]));
+  return q.findingKeys.flatMap((key) => {
+    const row = rows.get(key);
+    return row ? [{ key, lineNo: row.lineNo, description: row.description, moved: moved.get(key) }] : [];
+  });
 }
 
 // ---- Approval track (P3) -------------------------------------------------

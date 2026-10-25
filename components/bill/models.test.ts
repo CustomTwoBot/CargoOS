@@ -3,7 +3,7 @@ import { personById } from "@/lib/people";
 import { SCENARIO_A } from "@/components/case/fixture";
 import type { CaseInput } from "@/components/case/view-model";
 import { groupOf, nextStep, statusOf } from "@/components/app/next-step";
-import { greeting, heroOf, lastAnswer, readingOf, splitOf, trackOf } from "./models";
+import { greeting, heroCount, heroOf, lastAnswer, movedLines, previousSplitOf, readingOf, recheckLinesOf, splitOf, trackOf } from "./models";
 
 const SAM = personById("sam")!, MAYA = personById("maya")!, LEO = personById("leo")!;
 const before = SCENARIO_A.at("before");
@@ -26,6 +26,35 @@ describe("splitOf and the hero sentence (Scenario A, SPEC §7.2)", () => {
 
   it("says “all” when every line is safe to pay", () => {
     expect(heroOf({ pay: 100, hold: 0, ask: 0, billed: 100 }).amount).toBe("all $1");
+  });
+});
+
+describe("heroCount: the hero amount as cents, so it can count", () => {
+  it("is the pay amount, all of it, or the whole bill on hold", () => {
+    expect(heroCount(splitOf(before))).toEqual({ cents: 660000, prefix: "" });
+    expect(heroCount({ pay: 100, hold: 0, ask: 0, billed: 100 })).toEqual({ cents: 100, prefix: "all " });
+    expect(heroCount({ pay: 0, hold: 100, ask: 0, billed: 100 })).toEqual({ cents: 100, prefix: "" });
+    expect(heroCount({ pay: 0, hold: 0, ask: 0, billed: 0 })).toBeUndefined();
+  });
+});
+
+describe("after a recheck (Scenario A, SPEC §7.2)", () => {
+  it("the previous revision held $300; the answer moved line 4 to Pay and line 6 to Hold", () => {
+    expect(previousSplitOf(before)).toBeUndefined();
+    expect(previousSplitOf(after)).toEqual({ pay: 660000, hold: 30000, ask: 60000, billed: 750000 });
+    expect(movedLines(after).map((m) => [m.lineNo, m.to, m.amount])).toEqual([[4, "cleared", "$200"], [6, "dispute", "+$400"]]);
+  });
+
+  it("nothing has moved before the answer or while it is being rechecked", () => {
+    expect(movedLines(before)).toEqual([]);
+    expect(movedLines(SCENARIO_A.at("answered"))).toEqual([]);
+  });
+
+  it("the lines being rechecked tick off one by one", () => {
+    const at = (stage: string) => recheckLinesOf(SCENARIO_A.at(stage)).map((l) => [l.lineNo, l.moved?.to]);
+    expect(at("answered")).toEqual([[4, undefined], [6, undefined]]);
+    expect(at("partial")).toEqual([[4, "cleared"], [6, undefined]]);
+    expect(at("after")).toEqual([[4, "cleared"], [6, "dispute"]]);
   });
 });
 

@@ -98,10 +98,64 @@ describe("New bill: replay", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Paste text" }));
     fireEvent.change(screen.getByLabelText("Pasted text"), { target: { value: CHAT } });
-    expect(screen.getByLabelText("What it is")).toHaveValue("chat");
-    fireEvent.change(screen.getByLabelText("What it is"), { target: { value: "other" } });
+    const kinds = screen.getByRole("radiogroup", { name: "What it is" });
+    expect(within(kinds).getByRole("radio", { name: "Chat" })).toBeChecked();
+    expect(screen.getByText(`${CHAT.length} characters`)).toBeInTheDocument();
+    fireEvent.click(within(kinds).getByRole("radio", { name: "Note" }));
     fireEvent.click(screen.getByRole("button", { name: "Add text" }));
     expect(rows()[0]).toHaveTextContent("Note");
+  });
+
+  it("says Drop to add while files are dragged over, through nested enter and leave", async () => {
+    mount();
+    const zone = screen.getByTestId("drop-zone");
+    expect(zone).not.toHaveAttribute("data-over");
+    fireEvent.dragEnter(zone);
+    expect(zone).toHaveAttribute("data-over");
+    expect(screen.getByText("Drop to add")).toBeInTheDocument();
+    // Moving onto a button inside: enter the child, leave the zone. Still over.
+    const choose = screen.getByRole("button", { name: "Choose files" });
+    fireEvent.dragEnter(choose);
+    fireEvent.dragLeave(zone);
+    expect(zone).toHaveAttribute("data-over");
+    fireEvent.dragLeave(choose);
+    expect(zone).not.toHaveAttribute("data-over");
+    expect(screen.getByText("Drop files here")).toBeInTheDocument();
+
+    fireEvent.dragEnter(zone);
+    await act(async () => { fireEvent.drop(zone, { dataTransfer: { files: [pdf("PCL-INV-1012.pdf")], types: ["Files"] } }); });
+    expect(zone).not.toHaveAttribute("data-over");
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent("PCL-INV-1012.pdf");
+  });
+
+  it("removes a dropped file from the list", async () => {
+    mount();
+    await choose([pdf("PCL-INV-1012.pdf"), pdf("Q-PCL-0902.pdf")]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove PCL-INV-1012.pdf" }));
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent("Q-PCL-0902.pdf");
+  });
+
+  it("copies the phone link: Copy link, then Copied", async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    mount();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Copy link" })); });
+    expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^http:\/\/localhost(:\d+)?\/upload\/demo$/));
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+    await act(async () => { vi.advanceTimersByTime(2100); });
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
+  });
+
+  it("says so when the link can't be copied", async () => {
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn(async () => { throw new Error("denied"); }) } });
+    mount();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Copy link" })); });
+    expect(screen.getByText("Couldn't copy the link. Select it and copy it instead.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
   });
 });
 
@@ -153,12 +207,42 @@ describe("New bill: live", () => {
     expect(screen.queryByRole("link", { name: "Open the bill" })).not.toBeInTheDocument();
   });
 
-  it("makes the case for a phone link before any file", async () => {
-    mount();
+  it("makes the case for a phone link before any file, then waits for the phone", async () => {
+    const view = mount();
     expect(screen.queryByRole("img", { name: /QR code/ })).not.toBeInTheDocument();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Get a phone link" })); });
     expect(h.calls.find((c) => c.name === "uploads:createCase")!.args).toEqual({ personId: "sam", title: "New bill" });
     expect(screen.getByRole("img", { name: new RegExp(`QR code for .*/upload/${CASE}$`) })).toBeInTheDocument();
+    h.queries["uploads:getUploadContext"] = { title: "New bill", documents: [] };
+    view.rerender(<BillsProvider><NewBillPage /></BillsProvider>);
+    expect(screen.getByText("Waiting for the phone…")).toBeInTheDocument();
+
+    // A file from the phone arrives: listed as such, and the page stops waiting.
+    h.queries["uploads:getUploadContext"] = { title: "New bill", documents: [{ _id: "doc_p", title: "WhatsApp Chat with Derek PCL.txt", type: "chat", readStatus: "reading" }] };
+    view.rerender(<BillsProvider><NewBillPage /></BillsProvider>);
+    expect(rows()[0]).toHaveTextContent("from a phone");
+    expect(screen.queryByText("Waiting for the phone…")).not.toBeInTheDocument();
+  });
+
+  it("a failed upload can be tried again into the same case, or removed", async () => {
+    let attempt = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => (++attempt === 1
+      ? new Response("", { status: 500 })
+      : new Response(JSON.stringify({ storageId: "st_2" })))));
+    mount();
+    await choose([pdf("PCL-INV-1012.pdf")]);
+    expect(rows()[0]).toHaveTextContent("Couldn't read");
+    await act(async () => { fireEvent.click(within(rows()[0]).getByRole("button", { name: "Try again" })); });
+    expect(h.calls.filter((c) => c.name === "uploads:createCase")).toHaveLength(1);
+    expect(h.calls.filter((c) => c.name === "uploads:addDocument").map((c) => c.args)).toEqual([
+      { caseId: CASE, personId: "sam", storageId: "st_2", fileName: "PCL-INV-1012.pdf", docType: "freight_invoice" },
+    ]);
+    expect(within(rows()[0]).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+
+    attempt = 0;
+    await choose([pdf("scan.pdf")]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove scan.pdf" }));
+    expect(rows()).toHaveLength(1);
   });
 
   it("sends pasted text with its type and title", async () => {
