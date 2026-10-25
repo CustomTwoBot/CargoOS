@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { scenarioAAt } from "@/components/case/fixture";
 import type { CaseEvent } from "@/lib/types";
-import { docRows, itemsOf, segmentsOf, statusOf, usedFor } from "./documents";
+import { largeCase } from "./large-case";
+import { amountIn, docRows, itemsOf, linesText, segmentsOf, statusOf, usedFor } from "./documents";
 
 const x = scenarioAAt("after");
 const doc = (id: string) => x.documents.find((d) => d._id === id)!;
@@ -9,13 +10,13 @@ const evt = (type: CaseEvent["type"], at: string, payload: Record<string, unknow
   ({ _id: `t_${type}_${at}`, caseId: "case_A", at, actor: "system", type, payload });
 
 describe("docRows", () => {
-  it("lists Scenario A oldest first with kind, date, sender and what was read", () => {
-    expect(docRows(x).map((r) => [r.kind, r.date, r.sender, r.status.label])).toEqual([
-      ["Quote", "Sep 2", "Forwarder", "Read, 7 facts"],
-      ["Email", "Sep 5", "Forwarder", "Read, 1 fact"],
-      ["Chat", "Sep 28", undefined, "Read, 1 fact"],
-      ["Invoice", "Oct 12", "Forwarder", "Read, 8 invoice lines"],
-      ["Your answer", "Oct 24", "You", "Read, 2 facts"],
+  it("lists Scenario A oldest first with kind, date, sender, what was read and the lines it was used for", () => {
+    expect(docRows(x).map((r) => [r.kind, r.date, r.sender, r.status.label, r.lines])).toEqual([
+      ["Quote", "Sep 2", "Forwarder", "Read, 7 facts", [2, 3, 5, 7, 8]],
+      ["Email", "Sep 5", "Forwarder", "Read, 1 fact", [1]],
+      ["Chat", "Sep 28", undefined, "Read, 1 fact", [1]],
+      ["Invoice", "Oct 12", "Forwarder", "Read, 8 invoice lines", []],
+      ["Your answer", "Oct 24", "You", "Read, 2 facts", [4, 6]],
     ]);
   });
 
@@ -26,9 +27,21 @@ describe("docRows", () => {
 
 describe("statusOf", () => {
   const email = doc("doc_email");
-  it("is Couldn't read when the latest result is extraction_failed", () => {
-    const events = [...x.events, evt("extraction_failed", "2026-10-24T13:51:00-07:00", { docId: "doc_email" })];
-    expect(statusOf(email, events)).toEqual({ state: "failed", label: "Couldn't read" });
+  it("is Couldn't read when the only result is extraction_failed", () => {
+    const events = [...x.events.filter((e) => e.type !== "facts_extracted"), evt("extraction_failed", "2026-10-24T13:51:00-07:00", { docId: "doc_email" })];
+    expect(statusOf(email, events)).toEqual({ state: "failed", label: "Couldn't read", where: undefined });
+  });
+
+  it("is Partly read when part of the text failed next to a read, and says where", () => {
+    const events = [...x.events, evt("extraction_failed", "2026-10-24T13:51:00-07:00", { docId: "doc_email", locator: "second paragraph" })];
+    expect(statusOf(email, events)).toEqual({ state: "partial", label: "Partly read, 1 fact", read: "1 fact", where: "second paragraph" });
+  });
+
+  it("forgets an old failure once the document is added again", () => {
+    const events = [...x.events, evt("extraction_failed", "2026-10-24T13:51:00-07:00", { docId: "doc_email" }),
+      evt("doc_added", "2026-10-24T15:00:00-07:00", { docId: "doc_email" }),
+      evt("facts_extracted", "2026-10-24T15:00:05-07:00", { docId: "doc_email", factIds: ["fact_email_ocean"] })];
+    expect(statusOf(email, events)).toEqual({ state: "read", label: "Read, 1 fact", read: "1 fact" });
   });
 
   it("is Waiting to be read when a doc_added has no later result", () => {
@@ -107,5 +120,41 @@ describe("usedFor", () => {
     expect(usedFor([])).toBeUndefined();
     expect(usedFor([3])).toBe("Used for line 3");
     expect(usedFor([2, 4, 6])).toBe("Used for lines 2, 4 and 6");
+  });
+});
+
+describe("linesText", () => {
+  it("reads runs of three or more as a range so long lists stay short", () => {
+    expect(linesText([4])).toBe("line 4");
+    expect(linesText([6, 4])).toBe("lines 4 and 6");
+    expect(linesText([1, 2])).toBe("lines 1 and 2");
+    expect(linesText([3, 1, 2])).toBe("lines 1–3");
+    expect(linesText([1, 2, 3, 9, 12, 13, 14, 15])).toBe("lines 1–3, 9 and 12–15");
+    expect(linesText([2, 2, 5])).toBe("lines 2 and 5");
+  });
+});
+
+describe("itemsOf on a large case", () => {
+  const big = largeCase();
+  const texts = (id: string) => itemsOf(big, big.documents.find((d) => d._id === id)!).map((i) => i.text);
+
+  it("names a charge typed other in its own words, never 'Other charge'", () => {
+    expect(texts("ld_quote")).toContain("ISF filing agreed at $35");
+    expect(texts("ld_quote")).toContain("Not included: customs exams, storage, demurrage and detention");
+    expect(texts("ld_email_free")).toContain("Allowed: Exams are ordered by CBP and billed at cost if they happen");
+    expect(big.documents.flatMap((d) => itemsOf(big, d)).filter((i) => i.text.includes("Other charge"))).toEqual([]);
+  });
+
+  it("shows an amount in its own currency when it isn't USD, never converted", () => {
+    expect(texts("ld_chat_derek")).toContain("Origin THC agreed at CNY 1,370");
+    expect(texts("ld_invoice").at(-1)).toBe("Line 17: Origin THC Shanghai, CNY 1,370");
+    expect(texts("ld_invoice")[0]).toBe("Line 1: Ocean freight 40HC Shanghai-LA TGHU1234567, $3,900");
+    expect([amountIn(137000, "CNY"), amountIn(480000, "USD"), amountIn(480000), amountIn(-30000, "EUR")])
+      .toEqual(["CNY 1,370", "$4,800", "$4,800", "EUR −300"]);
+  });
+
+  it("words an answer with the invoice line it was checked against, even when lines share a charge type", () => {
+    expect(texts("ld_reply_1")).toEqual(["CBP exam fee MSKU7654321 approved at $385", "Port congestion fee not agreed"]);
+    expect(texts("ld_reply_3")).toEqual(["Detention 3 hrs CAIU5551234 approved at $95"]);
   });
 });

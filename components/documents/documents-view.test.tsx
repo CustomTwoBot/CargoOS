@@ -18,11 +18,11 @@ describe("DocumentsView on Scenario A", () => {
     render(<DocumentsView x={x} />);
     const items = within(list()).getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toEqual([
-      "Quote Q-PCL-0902Quote · Forwarder · Sep 2Read, 7 facts",
-      "Email: RE: Q-PCL-0902 revisedEmail · Forwarder · Sep 5Read, 1 fact",
-      "WhatsApp: Derek PCL / Sam BaylineChat · Sep 28Read, 1 fact",
+      "Quote Q-PCL-0902Quote · Forwarder · Sep 2Read, 7 facts· lines 2, 3, 5, 7 and 8",
+      "Email: RE: Q-PCL-0902 revisedEmail · Forwarder · Sep 5Read, 1 fact· line 1",
+      "WhatsApp: Derek PCL / Sam BaylineChat · Sep 28Read, 1 fact· line 1",
       "Invoice PCL-INV-1012Invoice · Forwarder · Oct 12Read, 8 invoice lines",
-      "Reply from ops leadYour answer · You · Oct 24Read, 2 facts",
+      "Reply from ops leadYour answer · You · Oct 24Read, 2 facts· lines 4 and 6",
     ]);
     expect(within(list()).getAllByRole("button")[0]).toHaveAttribute("aria-current", "true");
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
@@ -37,7 +37,7 @@ describe("DocumentsView on Scenario A", () => {
   });
 
   it("shows Couldn't read and Waiting to be read from the events", () => {
-    render(<DocumentsView x={{ ...x, events: [...x.events,
+    render(<DocumentsView x={{ ...x, events: [...x.events.filter((e) => !(e.type === "facts_extracted" && e.payload.docId === "doc_chat")),
       evt("extraction_failed", "2026-10-24T13:51:00-07:00", "doc_chat"),
       evt("doc_added", "2026-10-24T15:00:00-07:00", "doc_email")] }} />);
     expect(within(list()).getByText("Couldn't read")).toBeInTheDocument();
@@ -48,6 +48,25 @@ describe("DocumentsView on Scenario A", () => {
     expect(marks()).toEqual([]);
     open("Email: RE");
     expect(screen.getByText("Not read yet.")).toBeInTheDocument();
+  });
+
+  it("a partly read document keeps what was read under the failure sentence", () => {
+    render(<DocumentsView x={{ ...x, events: [...x.events, evt("extraction_failed", "2026-10-24T13:51:00-07:00", "doc_chat")] }} />);
+    expect(within(list()).getByText("Partly read, 1 fact")).toHaveClass("text-waiting");
+    open("WhatsApp");
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't read part of this document; affected lines are waiting on answers.");
+    expect(marks()).toEqual(["Booking confirmed for your 40HC, booked today Sep 8"]);
+  });
+
+  it("marks quotes lightly until one is selected, then marks that one in full", () => {
+    render(<DocumentsView x={x} />);
+    const quote = () => screen.getByTestId("document-text").querySelector('[data-quote="fact_quote_dthc"]')!;
+    expect(quote()).toHaveClass("bg-highlight/30");
+    fireEvent.click(screen.getByRole("button", { name: /Destination THC agreed at \$650/ }));
+    expect(quote()).not.toHaveClass("bg-highlight/30");
+    expect(quote()).toHaveAttribute("data-selected", "true");
+    expect(screen.getByRole("button", { name: /Destination THC agreed at \$650/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("document-text").querySelectorAll("mark.bg-highlight\\/30")).toHaveLength(6);
   });
 
   it("highlights the email's quote and says what it became", () => {
