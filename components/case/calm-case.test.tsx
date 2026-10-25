@@ -18,7 +18,7 @@ import { CaseWorkspace } from "./workspace";
 const figures = () => screen.getByTestId("money-figures").textContent;
 const list = () => screen.getByRole("region", { name: "To decide" });
 const headings = () => within(list()).getAllByRole("heading").map((h) => h.textContent);
-const rowTexts = () => [...list().querySelectorAll("button")].map((b) => b.textContent);
+const rowTexts = () => [...list().querySelectorAll("ul button")].map((b) => b.textContent);
 
 /** CaseWorkspace on its own, with the shell's `onView` and `view` under the test's control. */
 function Workspace({ demo, view, onView }: { demo: DemoCase; view: CaseView; onView: (v: CaseView) => void }) {
@@ -46,31 +46,21 @@ describe("case header", () => {
     expect(screen.queryByRole("button", { name: "Add evidence" })).not.toBeInTheDocument();
   });
 
-  it("keeps Add evidence and the theme in the ⋯ menu; Add evidence opens its panel", async () => {
+  it("keeps Add evidence in the ⋯ menu, without the theme; Add evidence opens its panel", async () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     const item = await screen.findByRole("menuitem", { name: "Add evidence" });
-    expect(screen.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByRole("menuitemradio")).not.toBeInTheDocument();
+    expect(screen.queryByText("Theme")).not.toBeInTheDocument();
     fireEvent.click(item);
     expect(await screen.findByRole("complementary", { name: "Add evidence" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("complementary", { name: "Add evidence" })).not.toBeInTheDocument();
   });
 
-  it("switches the theme from the menu", async () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Dark" }));
-    expect(document.documentElement).toHaveClass("dark");
-    expect(localStorage.getItem("cargoos.theme")).toBe("dark");
-    document.documentElement.classList.remove("dark");
-  });
-
-  it("hides Add evidence from a screen that only answers", async () => {
+  it("has no ⋯ menu on a screen that can't add evidence", () => {
     render(<CaseScreen cases={[SCENARIO_A]} roles={["ops_lead"]} />);
-    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-    await screen.findByRole("menuitemradio", { name: "Dark" });
-    expect(screen.queryByRole("menuitem", { name: "Add evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
   });
 });
 
@@ -89,7 +79,7 @@ describe("money strip", () => {
     expect(figures()).toBe("Rechecking 8 charges with your answer…");
     act(() => { vi.advanceTimersByTime(5000); });
     expect(screen.getByTestId("at-stake")).toHaveTextContent("$700");
-    expect(figures()).toBe("Matches $6,800 · At stake $700 · Waiting $0 · Invoice $7,500");
+    expect(figures()).toBe("Matches $6,800 · At stake $700 · Invoice $7,500");
   });
 
   it("Scenario B: leaves the CNY line out of the USD figures and says so", () => {
@@ -98,12 +88,12 @@ describe("money strip", () => {
     expect(figures()).toBe("Matches $16,470 · At stake $3,340 · Waiting $7,515 · Invoice $27,325 · CNY 4,200 not converted");
   });
 
-  it("stays above Documents and History", () => {
+  it("stays under the views for Review and Documents, not History", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Documents/ }));
     expect(screen.getByTestId("at-stake")).toHaveTextContent("$300");
-    fireEvent.click(screen.getByRole("tab", { name: "History" }));
-    expect(screen.getByRole("region", { name: "Case totals" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
+    expect(screen.queryByRole("region", { name: "Case totals" })).not.toBeInTheDocument();
   });
 });
 
@@ -111,15 +101,16 @@ describe("tabs and views", () => {
   it("Documents and History tabs call onView, and an issue tab goes back to the case", () => {
     const onView = vi.fn();
     const { rerender } = render(<Workspace demo={SCENARIO_A} view="case" onView={onView} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Documents/ }));
     expect(onView).toHaveBeenLastCalledWith("documents");
-    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
     expect(onView).toHaveBeenLastCalledWith("history");
     rerender(<Workspace demo={SCENARIO_A} view="history" onView={onView} />);
-    expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: /^History/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Review" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("tablist", { name: "Case tabs" })).not.toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /Ocean freight/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
     expect(onView).toHaveBeenLastCalledWith("case");
   });
 
@@ -127,13 +118,15 @@ describe("tabs and views", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
     expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
     expect(screen.getAllByText("draft_created").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Documents/ }));
     expect(within(screen.getByRole("list", { name: "Documents" })).getByText("Invoice PCL-INV-1012")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /Dispute/ }));
-    expect(screen.getByText(/Drafted by you/)).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Case tabs" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+    expect(screen.getByRole("tab", { name: /Dispute/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("complementary", { name: "Decision" })).toHaveTextContent("$700");
     expect(screen.getByTestId("at-stake")).toHaveTextContent("$700");
   });
 
@@ -144,7 +137,7 @@ describe("tabs and views", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     fireEvent.change(screen.getByLabelText("Why are you rejecting it?"), { target: { value: "They did expedite it. Pay it this time." } });
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
     expect(screen.getAllByText("draft_rejected").length).toBeGreaterThan(0);
     expect(screen.getByText("Rejected the dispute. Nothing went to the seller.")).toBeInTheDocument();
   });
@@ -156,13 +149,16 @@ describe("tabs and views", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Bayline 40HC Ningbo-LB");
   });
 
-  it("scrolls the issue tabs sideways and keeps Documents and History outside the scroll", () => {
+  it("puts Review, Documents and History above the money strip, with counts, and scrolls the issue tabs", () => {
     render(<CaseScreen cases={[SCENARIO_B]} />);
+    const views = screen.getByRole("tablist", { name: "Case views" });
+    expect(within(views).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Review", "Documents5", "History13"]);
+    expect(views.compareDocumentPosition(screen.getByRole("region", { name: "Case totals" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const scroller = screen.getByTestId("issue-tabs");
     expect(scroller).toHaveClass("overflow-x-auto");
-    expect(within(scroller).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
-    expect(within(scroller).queryByRole("tab", { name: "Documents" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("tablist", { name: "Case tabs" })).getByRole("tab", { name: "History" })).toBeInTheDocument();
+    expect(within(scroller).queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("tablist", { name: "Case tabs" })).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
+    expect(within(screen.getByRole("tablist", { name: "Case tabs" })).queryByRole("tab", { name: /Documents|History/ })).not.toBeInTheDocument();
   });
 });
 
@@ -172,7 +168,7 @@ describe("Overview, one column", () => {
     expect(headings()).toEqual(["To dispute · 1 · +$300", "Questions for you · 1"]);
     expect(rowTexts()).toEqual([
       "Ocean freight 40HC Ningbo-Long BeachAgreed $4,500 → Billed $4,800+$300›",
-      "2 charges need your answer$600Answer",
+      "2 charges need your answer$600›",
       "Cleared · 5 · $2,100⌄",
     ]);
     expect(screen.queryByRole("region", { name: "What was agreed" })).not.toBeInTheDocument();
@@ -198,18 +194,24 @@ describe("Overview, one column", () => {
       "Low sulphur surcharge (LSS)Cap $450 → Billed $600+$150›",
       "Customs entryAgreed $185 → Billed $225+$40›",
       "Destination THC OaklandBilled twice+$1,950›",
-      "Question 1: 4 charges need your answer$1,665Answer",
-      "Question 2: 1 charge needs your answerSources disagree$5,850Answer",
+      "Question 1: 4 charges need your answer$1,665›",
+      "Question 2: 1 charge needs your answerSources disagree$5,850›",
       "Origin trucking Kunshan-Shanghai portNo agreed rateCNY 4,200›",
       "Cleared · 5 · $4,735⌄",
     ]);
   });
 
-  it("folds Cleared into one row that opens every invoice line", () => {
+  it("folds Cleared into one row that opens the cleared lines only; every invoice line is a quiet link", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     const cleared = within(list()).getByRole("button", { name: /^Cleared/ });
     expect(cleared).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(cleared);
+    const rows = [...list().querySelectorAll("ul > li")].slice(-5);
+    expect(rows.map((r) => r.querySelector(".text-cleared")).every(Boolean)).toBe(true);
+    expect(list().textContent).not.toMatch(/To dispute.*To dispute/);
+    expect(within(list()).queryByText("Ocean freight 40HC Ningbo-Long Beach", { selector: "ul li div *" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^All 8 invoice lines\./)).not.toBeInTheDocument();
+    fireEvent.click(within(list()).getByRole("button", { name: "All invoice lines · edit" }));
     expect(screen.getByText(/^All 8 invoice lines\./)).toBeInTheDocument();
   });
 
@@ -231,25 +233,53 @@ describe("row chip", () => {
 });
 
 describe("below 1024px", () => {
-  it("the line and question tabs stack (evidence or question first) and go two-column from lg", () => {
+  it("the line tab puts the decision above the evidence, the question tab the question first; two columns from lg", () => {
     expect(ISSUE_GRID.split(" ")).toEqual(expect.arrayContaining(["grid-cols-1", "lg:grid-cols-[minmax(0,1fr)_360px]"]));
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("tab", { name: /Ocean freight/ }));
     let grid = screen.getByTestId("issue-grid");
     expect(grid).toHaveClass("grid-cols-1");
+    expect(screen.getByRole("complementary", { name: "Decision" })).toHaveClass("order-first", "lg:order-none");
     expect([...grid.children].map((c) => c.getAttribute("aria-label"))).toEqual(["Evidence", "Decision"]);
     fireEvent.click(screen.getByRole("tab", { name: /Your answer/ }));
     grid = screen.getByTestId("issue-grid");
     expect([...grid.children].map((c) => c.getAttribute("aria-label"))).toEqual(["Question", "What it's about"]);
   });
 
-  it("the dispute tab stacks the message above the decision", () => {
+});
+
+describe("design QA round 1", () => {
+  it("C2/C10: the decision shows the delta once at panel size, under 'Line 1'; the Result step has no amount", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Ocean freight/ }));
+    const decision = screen.getByRole("complementary", { name: "Decision" });
+    expect(within(decision).getByText("+$300")).toHaveClass("text-delta");
+    expect(within(decision).getByText("Line 1")).toBeInTheDocument();
+    const result = screen.getByText("Result").parentElement!;
+    expect(result.textContent).toBe("ResultCharged more than agreed");
+  });
+
+  it("C12: after Agree the line says 'You agreed'", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Ocean freight/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Agree" }));
+    expect(screen.getByText("You agreed")).toBeInTheDocument();
+    expect(screen.queryByText("Finding confirmed by clerk")).not.toBeInTheDocument();
+  });
+
+  it("C7/C14: the title writes × and the trust line wraps below 1024 instead of being cut", () => {
+    render(<CaseScreen cases={[SCENARIO_B]} />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Juniper Peak 3×40HC Shanghai-Oakland");
+    const facts = screen.getByTestId("case-facts");
+    expect(facts).toHaveClass("lg:truncate");
+    expect(facts).not.toHaveClass("truncate");
+  });
+
+  it("C13: History keeps the event code to a quiet column from 1280px and drops 'revision N'", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    const stack = screen.getByTestId("dispute-stack");
-    expect(stack).toHaveClass("max-lg:[&>div>.grid]:grid-cols-1");
-    const grid = stack.querySelector(":scope > div > .grid")!;
-    expect(grid.lastElementChild).toHaveAttribute("aria-label", "Decision");
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
+    expect(screen.getByRole("columnheader", { name: "Event" })).toHaveClass("hidden", "xl:block");
+    expect(screen.queryByText(/^revision \d/)).not.toBeInTheDocument();
   });
 });

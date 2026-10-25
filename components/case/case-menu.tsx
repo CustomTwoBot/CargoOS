@@ -1,32 +1,18 @@
-// The header's "⋯" menu (docs/design.md §0.2): Add evidence and the theme. Add evidence opens the
+// The header's "⋯" menu (docs/design.md §0.2): Add evidence (the theme moved to Settings, §0.3). It opens the
 // same panel as before; it's rebuilt here from the inputs' pieces because `EvidenceDrawer` owns its
 // own button. TODO(merge): once `EvidenceDrawer` takes `open` / `onOpenChange`, use it and drop
 // `EvidenceSheet`.
 import { Menu } from "@base-ui/react/menu";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { EVIDENCE_COPY, useEvidenceForm, type AddEvidence } from "@/components/inputs/evidence-input";
 import { EvidenceResult, EvidenceText, PrimaryButton, TypePicker } from "@/components/inputs/fields";
 
-// Same switch as `ThemeToggle`: `.dark` on <html>, remembered under "cargoos.theme" (§3.2). The
-// class is the source of truth, so the menu stays right whichever control changed it.
-const KEY = "cargoos.theme";
-const html = () => document.documentElement;
-const subscribe = (cb: () => void) => {
-  const o = new MutationObserver(cb);
-  o.observe(html(), { attributes: true, attributeFilter: ["class"] });
-  return () => o.disconnect();
-};
-const useTheme = () => useSyncExternalStore(subscribe, () => (html().classList.contains("dark") ? "dark" : "light"), () => "light");
-function setTheme(t: "light" | "dark") {
-  html().classList.toggle("dark", t === "dark");
-  try { localStorage.setItem(KEY, t); } catch { /* private mode: theme just isn't remembered */ }
-}
-
 const ITEM = "flex cursor-default items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-[13.5px] outline-none data-[highlighted]:bg-sunken";
 
+/** Renders nothing when the screen has nothing for it (no Add evidence). */
 export function CaseMenu({ onAddEvidence }: { onAddEvidence?: AddEvidence }) {
   const [sheet, setSheet] = useState(false);
-  const theme = useTheme();
+  if (!onAddEvidence) return null;
   return (
     <>
       <Menu.Root>
@@ -36,29 +22,25 @@ export function CaseMenu({ onAddEvidence }: { onAddEvidence?: AddEvidence }) {
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-50">
-            <Menu.Popup className="w-[200px] rounded-[10px] border border-line bg-surface p-1 text-ink shadow-[0_8px_24px_rgba(0,0,0,.25)] outline-none">
-              {onAddEvidence && (
-                <>
-                  <Menu.Item className={ITEM} onClick={() => setSheet(true)}>Add evidence</Menu.Item>
-                  <Menu.Separator className="mx-1 my-1 h-px bg-line" />
-                </>
-              )}
-              <Menu.Group>
-                <Menu.GroupLabel className="px-2.5 pb-0.5 pt-1 text-xs font-medium text-ink-3">Theme</Menu.GroupLabel>
-                <Menu.RadioGroup value={theme} onValueChange={(v: "light" | "dark") => setTheme(v)}>
-                  {(["light", "dark"] as const).map((t) => (
-                    <Menu.RadioItem key={t} value={t} className={ITEM}>
-                      <span className="w-3.5 flex-none text-ink-2"><Menu.RadioItemIndicator>✓</Menu.RadioItemIndicator></span>
-                      {t === "light" ? "Light" : "Dark"}
-                    </Menu.RadioItem>
-                  ))}
-                </Menu.RadioGroup>
-              </Menu.Group>
+            <Menu.Popup className="w-[180px] rounded-[10px] border border-line bg-surface p-1 text-ink shadow-[0_8px_24px_rgba(0,0,0,.25)] outline-none">
+              <Menu.Item className={ITEM} onClick={() => setSheet(true)}>Add evidence</Menu.Item>
             </Menu.Popup>
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
-      {onAddEvidence && <EvidenceSheet open={sheet} onClose={() => setSheet(false)} onAdd={onAddEvidence} />}
+      <EvidenceSheet open={sheet} onClose={() => setSheet(false)} onAdd={onAddEvidence} />
+    </>
+  );
+}
+
+/** Add evidence as the header's main button, for a screen whose only job is documents (the uploader). */
+export function AddEvidenceButton({ onAdd }: { onAdd: AddEvidence }) {
+  const [sheet, setSheet] = useState(false);
+  return (
+    <>
+      <button type="button" aria-expanded={sheet} onClick={() => setSheet((v) => !v)}
+        className="whitespace-nowrap rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibold text-primary-ink">Add evidence</button>
+      <EvidenceSheet open={sheet} onClose={() => setSheet(false)} onAdd={onAdd} />
     </>
   );
 }
