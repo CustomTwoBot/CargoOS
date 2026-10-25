@@ -5,7 +5,7 @@
 import { useState, type ReactNode } from "react";
 import type { Person, Role } from "@/lib/types";
 import { cx } from "@/components/case/cx";
-import { setThemeChoice, useThemeChoice, type ThemeChoice } from "@/components/case/theme-toggle";
+import { setThemeChoice, useThemeChoice, type ThemeChoice } from "@/components/shell/theme";
 import { Avatar } from "@/components/shell/avatar";
 import { PEOPLE_IN_ORDER as PEOPLE, PERSON_COPY, WORKSPACE, displayName, firstName, setDevicePerson, titleOf } from "@/components/shell/person";
 
@@ -37,33 +37,31 @@ export function SettingsView({ person, caseCount, onReset, initial = "device" }:
   const [section, setSection] = useState<SettingsSection>(initial);
   const current = SECTIONS.find((s) => s.id === section)!;
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-10">
-      <header className="px-4 pb-3 pt-3.5 md:px-6">
-        <h1 className="text-title font-[650] tracking-[-0.012em]">Settings</h1>
-        <p className="mt-0.5 text-[13px] text-ink-2">
-          This screen is set to {displayName(person)}.
-        </p>
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
+      <header className="flex h-[60px] flex-none flex-col justify-center border-b border-line px-4 md:px-6">
+        <h1 className="truncate text-[17px] font-[650] tracking-[-0.01em]">Settings</h1>
+        <p className="truncate text-meta text-ink-3">This screen is set to {displayName(person)}.</p>
       </header>
-      <div className="mx-4 grid grid-cols-[164px_minmax(0,1fr)] gap-5 md:mx-6 lg:grid-cols-[188px_minmax(0,1fr)] lg:gap-8">
-        <nav aria-label="Settings sections" className="flex flex-col gap-0.5">
-          {SECTIONS.map((s) => (
-            <button key={s.id} type="button" onClick={() => setSection(s.id)} aria-current={s.id === section ? "page" : undefined}
-              className={cx("relative flex h-8 items-center rounded-lg px-2.5 text-left text-[13.5px] font-medium",
-                s.id === section
-                  ? "bg-surface text-ink shadow-card before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
-                  : "text-ink-2 hover:bg-surface hover:text-ink")}>
-              {s.label}
-            </button>
-          ))}
-        </nav>
-        <section aria-labelledby="settings-title" className="min-w-0 max-w-[720px]">
-          <h2 id="settings-title" className="text-panel font-[650]">{current.label}</h2>
-          {section === "device" && <Device person={person} />}
-          {section === "workspace" && <Workspace person={person} />}
-          {section === "appearance" && <Appearance />}
-          {section === "billing" && <Billing caseCount={caseCount} />}
-          {section === "demo" && <DemoData onReset={onReset} />}
-        </section>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg px-4 pb-10 pt-6 md:px-7">
+        <div className="mx-auto grid max-w-[960px] grid-cols-[164px_minmax(0,1fr)] gap-5 lg:grid-cols-[188px_minmax(0,1fr)] lg:gap-8">
+          <nav aria-label="Settings sections" className="flex flex-col gap-0.5">
+            {SECTIONS.map((s) => (
+              <button key={s.id} type="button" onClick={() => setSection(s.id)} aria-current={s.id === section ? "page" : undefined}
+                className={cx("flex h-8 items-center rounded-lg px-2.5 text-left text-[13.5px] font-medium",
+                  s.id === section ? "bg-surface text-ink shadow-[0_0_0_1px_var(--line)]" : "text-ink-2 hover:bg-surface/60 hover:text-ink")}>
+                {s.label}
+              </button>
+            ))}
+          </nav>
+          <section aria-labelledby="settings-title" className="min-w-0 max-w-[720px]">
+            <h2 id="settings-title" className="text-panel font-[650]">{current.label}</h2>
+            {section === "device" && <Device person={person} />}
+            {section === "workspace" && <Workspace person={person} />}
+            {section === "appearance" && <Appearance />}
+            {section === "billing" && <Billing caseCount={caseCount} />}
+            {section === "demo" && <DemoData onReset={onReset} />}
+          </section>
+        </div>
       </div>
     </div>
   );

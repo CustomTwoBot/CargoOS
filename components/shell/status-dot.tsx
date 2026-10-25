@@ -1,12 +1,12 @@
-// The dot next to a case: amber when it waits on you, red when it is ready to dispute, an empty
-// ring when there is nothing to do. Always paired with the status in words for screen readers.
+// The small dot on a case's tile in the collapsed rail: the colour of its status word when the case
+// needs this person (red to dispute, amber to answer or approve), nothing otherwise.
 import { cx } from "@/components/case/cx";
-import type { CaseTone } from "./case-status";
+import type { Tone } from "@/components/case/words";
 
-export function StatusDot({ tone, className }: { tone: CaseTone; className?: string }) {
+export function StatusDot({ tone, className }: { tone: Tone; className?: string }) {
+  if (tone !== "dispute" && tone !== "waiting") return null;
   return (
     <span aria-hidden="true" data-tone={tone}
-      className={cx("block size-2 flex-none rounded-full",
-        tone === "you" ? "bg-waiting-fill" : tone === "dispute" ? "bg-dispute" : "border-[1.5px] border-line-strong", className)} />
+      className={cx("block size-2 flex-none rounded-full", tone === "dispute" ? "bg-dispute" : "bg-waiting-fill", className)} />
   );
 }

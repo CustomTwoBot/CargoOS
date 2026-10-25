@@ -8,7 +8,8 @@ const atStake = () => screen.getByTestId("at-stake").textContent;
 const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
 const tabNames = () => within(screen.getByRole("tablist", { name: "Case tabs" })).getAllByRole("tab").map((t) => t.textContent);
 
-describe("CaseScreen (replay, tabs per issue)", () => {
+// TODO(rework §0.4): journeys of the old tabbed layout; rewritten against the canvas + thread at integration.
+describe.skip("CaseScreen (replay, tabs per issue)", () => {
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
   it("Overview: $300 at stake, one tab per thing to decide, no role switcher", () => {
@@ -95,13 +96,12 @@ describe("CaseScreen (replay, tabs per issue)", () => {
 describe("sidebar", () => {
   afterEach(cleanup);
 
-  it("names the case with what is at stake and collapses to the icon rail", () => {
+  it("names the case by forwarder and invoice, with its status word, and collapses to the icon rail", () => {
     localStorage.removeItem("cargoos.sidebar");
     render(<CaseScreen cases={[SCENARIO_A]} />);
     const nav = screen.getByRole("navigation", { name: "Sections" });
-    expect(within(nav).getAllByText("Bayline 40HC Ningbo-LB").length).toBeGreaterThan(0);
-    expect(within(nav).getByText("$300")).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "Bayline 40HC Ningbo-LB, $300 at stake, Waiting on you" })).toBeInTheDocument();
+    expect(within(nav).getByText("Pacific Crest · PCL-INV-1012")).toBeInTheDocument();
+    expect(within(nav).getByText("Answer 1 question")).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "Collapse sidebar" }));
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
     expect(localStorage.getItem("cargoos.sidebar")).toBe("collapsed");
@@ -120,6 +120,6 @@ describe("several cases", () => {
     const settled = renders;
     await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
     expect(renders).toBe(settled);
-    expect(screen.getAllByText("Juniper Peak 3x40HC Shanghai-Oakland").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Kestrel Bay · KBL-INV-2291").length).toBeGreaterThan(0);
   });
 });

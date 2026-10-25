@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { ApprovalsInbox } from "./approvals-inbox";
+import { ApprovalDetail, ApprovalsInbox } from "./approvals-inbox";
 import { approvalItems, questionItems } from "./items";
 import { QuestionsInbox } from "./questions-inbox";
 import { LEO, MAYA, SAM } from "./people";
@@ -107,6 +107,11 @@ describe("QuestionsInbox", () => {
     expect(title).toHaveClass("line-clamp-2");
     expect(title).toHaveAttribute("title", long);
     expect(screen.getByRole("heading", { level: 2, name: long })).not.toHaveClass("truncate");
+  });
+
+  it("without a fixed clock, ages run on the replay's clock, not the wall clock", () => {
+    render(<QuestionsInbox items={questionItems(allAsking())} onOpen={vi.fn()} onReply={vi.fn()} />);
+    expect(items("Waiting for your answer").map((r) => r.textContent?.split(" · ").at(-1))).toEqual(["yesterday", "5 hours ago", "1 minute ago"]);
   });
 
   it("what the chat said stays folded until asked for", () => {
@@ -315,6 +320,22 @@ describe("ApprovalsInbox", () => {
     expect(screen.getByText("Nothing is sent either way.")).toBeInTheDocument();
   });
 
+  it("Maya reads Sam's answer as Sam's, not hers, in the line chips", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={MAYA} />);
+    fireEvent.click(items("Waiting for Sam")[1]);
+    const lines = screen.getByRole("region", { name: "Lines to dispute" });
+    expect(within(lines).getByText("Sam said it was never agreed")).toBeInTheDocument();
+    expect(within(lines).queryByText(/You said/)).not.toBeInTheDocument();
+  });
+
+  it("in a card under 560px the chip sits under the line's name; the name keeps the width", () => {
+    render(<ApprovalsInbox items={requested()} {...props} viewer={SAM} />);
+    fireEvent.click(items("Waiting for a decision")[1]);
+    const chip = within(screen.getByRole("region", { name: "Lines to dispute" })).getByText("Agreed $4,500 → Billed $4,800");
+    expect(chip).toHaveClass("col-start-2", "row-start-2", "@[560px]:col-start-3", "@[560px]:row-start-1");
+    expect(chip.closest("ul")?.parentElement).toHaveClass("@container");
+  });
+
   it("Maya sees her accepted request with who accepted it; the message is read-only for her", () => {
     render(<ApprovalsInbox items={approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("accepted"))])} {...props} viewer={MAYA} />);
     unfold(/^Decided \(1\)$/);
@@ -324,6 +345,12 @@ describe("ApprovalsInbox", () => {
     expect(within(msg).queryByRole("textbox")).not.toBeInTheDocument();
     expect(within(msg).getByText(/^Hi Derek,/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+  });
+
+  it("the Dispute tab's detail reads times on the replay clock even when handed the wall clock", () => {
+    const [d] = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft())]);
+    render(<ApprovalDetail d={d} now={new Date("2026-10-25T09:00:00-07:00")} viewer={SAM} onAccept={vi.fn()} onReject={vi.fn()} />);
+    expect(screen.getByText("Requested by Maya at 2:07 PM.")).toBeInTheDocument();
   });
 
   it("Leo (uploader) gets no approvals", () => {

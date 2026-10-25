@@ -2,6 +2,8 @@
 Source of truth for visuals and copy: docs/design.md. Visual reference: docs/design-reference.html (open in a browser).
 Users are AP clerks, controllers and ops leads, not engineers: order every screen as what to do → why → details.
 
+**Current layout: docs/design.md §0.4** (invoice canvas + CargoOS thread, ChatGPT-like sidebar with Needs you / Earlier, people per device and Settings from §0.3). It replaces the Layout section below and the status glyphs in Look; the tokens, words and anti-AI rules still apply.
+
 ## One operator (overrides anything below and in docs/design.md)
 - The default app is run by one person who holds all three roles (docs/design.md §0). Build everything without a role switcher; a switcher is a possible later feature, not part of this work. Role-specific interfaces and separate ops-lead / controller apps come later too.
 - The UI knows the set of roles this screen holds, not a "current role". Default: all three. A demo laptop may hold only `ops_lead`; the set comes from one device-level config point, never from a UI control. Show an action's control only if the screen holds that action's role.

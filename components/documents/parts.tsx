@@ -41,7 +41,7 @@ const LIGHT = "bg-highlight/30 text-ink dark:bg-highlight/20";
 
 /** The document text with one mark per quote: the selected quote in full, the hovered one outlined. */
 export function DocumentText({ text, items, active, selected, onPick }: {
-  text: string; items: Item[]; active?: string; selected?: string; onPick?: (id: string) => void;
+  text: string; items: Pick<Item, "id" | "quote">[]; active?: string; selected?: string; onPick?: (id: string) => void;
 }) {
   const { segments } = segmentsOf(text, items);
   return (

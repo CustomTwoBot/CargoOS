@@ -108,7 +108,10 @@ export function Item({ selected, onSelect, title, meta, dot }: ItemProps) {
           {dot && <span className="sr-only">{dot}: </span>}
           <span className={cx("line-clamp-2 text-row font-semibold", !dot && "text-ink-2")} title={title}>{title}</span>
         </span>
-        <span className="mt-0.5 block pl-4 text-meta text-ink-2">{meta}</span>
+        {/* Each " · " part stays whole ("15 minutes ago" never breaks after "minutes"); the line wraps between parts. */}
+        <span className="mt-0.5 block pl-4 text-meta text-ink-2">
+          {meta.split(" · ").map((part, i) => <span key={i}>{i > 0 && " · "}<span className="whitespace-nowrap">{part}</span></span>)}
+        </span>
       </button>
     </li>
   );
@@ -148,22 +151,33 @@ export type LineRow = { key: string; lineNo: number; description: string; chip?:
 
 /**
  * Invoice lines as compact rows: line number, name, one chip, amount. One grid for all rows (subgrid),
- * so chips start on one edge and amounts end on one edge whatever their widths; long names wrap.
+ * so chips start on one edge and amounts end on one edge whatever their widths. In a card narrower
+ * than 560px the chip moves under the name, so the name keeps the width instead of wrapping word by word.
  */
 export function LineRows({ label, rows }: { label: string; rows: LineRow[] }) {
   const amounts = rows.some((r) => r.amount);
   const chips = rows.some((r) => r.chip);
-  const cols = ["1.5rem", "minmax(0,1fr)", ...(chips ? ["max-content"] : []), ...(amounts ? ["max-content"] : [])];
+  // Narrow: number | name | amount, chip on a second row under the name. Wide: number | name | chip | amount.
+  const cols = chips && amounts ? "grid-cols-[1.5rem_minmax(0,1fr)_max-content] @[560px]:grid-cols-[1.5rem_minmax(0,1fr)_max-content_max-content]"
+    : chips ? "grid-cols-[1.5rem_minmax(0,1fr)] @[560px]:grid-cols-[1.5rem_minmax(0,1fr)_max-content]"
+    : amounts ? "grid-cols-[1.5rem_minmax(0,1fr)_max-content]" : "grid-cols-[1.5rem_minmax(0,1fr)]";
   return (
-    <ul aria-label={label} className="grid items-center gap-x-3" style={{ gridTemplateColumns: cols.join(" ") }}>
-      {rows.map((r) => (
-        <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center border-b border-line py-2 last:border-0">
-          <span className="text-xs text-ink-3">{r.lineNo}</span>
-          <span className="text-[14px] font-semibold">{r.description}</span>
-          {chips && <span className="inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{r.chip}</span>}
-          {amounts && <b className="text-right text-[14px] font-semibold">{r.amount}</b>}
-        </li>
-      ))}
-    </ul>
+    <div className="@container">
+      <ul aria-label={label} className={cx("grid items-center gap-x-3", cols)}>
+        {rows.map((r) => (
+          <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center gap-y-1 border-b border-line py-2 last:border-0">
+            <span className="col-start-1 row-start-1 text-xs text-ink-3">{r.lineNo}</span>
+            <span className="col-start-2 row-start-1 text-[14px] font-semibold">{r.description}</span>
+            {chips && (
+              <span className={cx("col-start-2 row-start-2 inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2",
+                "@[560px]:col-start-3 @[560px]:row-start-1")}>{r.chip}</span>
+            )}
+            {amounts && (
+              <b className={cx("row-start-1 text-right text-[14px] font-semibold", chips ? "col-start-3 @[560px]:col-start-4" : "col-start-3")}>{r.amount}</b>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

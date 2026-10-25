@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><title>C · ChatGPT-style thread</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.top { height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+.top h1 { font-size: 15px; font-weight: 600; }
+.scroll { flex: 1; overflow: auto; }
+.col { max-width: 760px; margin: 0 auto; padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 22px; }
+.user { align-self: flex-end; background: var(--sunken); border-radius: 18px; padding: 10px 16px; max-width: 70%; font-size: 15px; line-height: 23px; }
+.files { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.file { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.file i { width: 26px; height: 30px; border-radius: 5px; background: #E9ECF1; display: inline-block; }
+.bot { font-size: 15px; line-height: 24px; }
+.bot p + p { margin-top: 10px; }
+.card { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.card .hd { padding: 12px 16px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); background: var(--sunken); }
+.card .hd b { font-size: 28px; color: var(--dispute); font-weight: 650; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+td { padding: 8px 16px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border: 0; }
+td.r { text-align: right; } td.res { font-weight: 600; text-align: right; white-space: nowrap; }
+.q { margin-top: 12px; border: 1px solid rgba(176,118,0,.45); background: var(--waiting-tint); border-radius: 14px; padding: 12px 16px; font-size: 14.5px; line-height: 22px; }
+.composer { max-width: 760px; width: 100%; margin: 0 auto; padding: 0 24px 18px; }
+.box { border: 1px solid var(--line-strong); border-radius: 24px; padding: 12px 14px 12px 20px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.box div { flex: 1; color: var(--ink-3); font-size: 15px; }
+.send { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: #fff; border: 0; }
+.hint { font-size: 12px; color: var(--ink-3); margin-top: 8px; text-align: center; }
+.chips { display:flex; gap:8px; margin-top: 12px; }
+</style></head><body><div class="app">
+<aside class="side">
+  <div class="brand"><i></i>CargoOS</div>
+  <button class="newcase">＋ New case</button>
+  <div class="grp">Today</div>
+  <a class="case on"><b>Pacific Crest · PCL-INV-1012</b><span class="amber">Answer 1 question</span></a>
+  <a class="case"><b>Kestrel Bay · KBL-INV-2291</b><span class="amber">Answer 2 questions</span></a>
+  <div class="grp">Earlier</div>
+  <a class="case"><b>Harbor Line · HL-88120</b><span class="muted">Paid · nothing disputed</span></a>
+  <div class="me"><div class="av">S</div><div><b>Sam · Owner</b><span>Bayline Trading</span></div></div>
+</aside>
+<main class="main">
+  <div class="top"><h1>Pacific Crest · PCL-INV-1012</h1><span class="muted" style="font-size:12.5px">Replay · Synthetic data</span></div>
+  <div class="scroll"><div class="col">
+    <div class="files"><div class="file"><i></i>quote.pdf</div><div class="file"><i></i>invoice.pdf</div><div class="file"><i></i>email.eml</div><div class="file"><i></i>whatsapp.txt</div></div>
+    <div class="user">Check this invoice against what we agreed.</div>
+    <div class="bot">
+      <p>I read the quote, Derek’s email, the WhatsApp chat and the invoice, and checked all 8 charges.</p>
+      <div class="card"><div class="hd"><span><b class="num">$300</b> may not be owed</span><span class="muted num">of $7,500 billed</span></div>
+        <table class="num">
+          <tr><td>1 · Ocean freight 40HC</td><td class="r">$4,800</td><td class="res red">$300 over</td></tr>
+          <tr><td>4 · Port congestion fee</td><td class="r">$200</td><td class="res amber">Need your answer</td></tr>
+          <tr><td>6 · Rush handling</td><td class="r">$400</td><td class="res amber">Need your answer</td></tr>
+          <tr><td class="muted">5 other charges</td><td class="r muted">$2,100</td><td class="res green">Match</td></tr>
+        </table></div>
+      <p style="margin-top:12px">Line 1: Derek lowered ocean freight to $4,500 on Sep 5 if booked by Sep 10, and you booked Sep 8.</p>
+      <div class="q">Did anyone agree to the $200 congestion fee (line 4) or the $400 rush handling (line 6)? The WhatsApp chat only says congestion <mark>may be extra</mark>.</div>
+    </div>
+  </div></div>
+  <div class="composer"><div class="box"><div>Reply to CargoOS…</div><button class="send">↑</button></div><div class="hint">CargoOS checks with rules and never pays or sends anything.</div></div>
+</main></div></body></html>

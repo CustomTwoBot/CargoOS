@@ -14,12 +14,12 @@ export function Busy({ label, className }: { label: string; className?: string }
 }
 
 /**
- * Bottom-right stack for toasts (QuietToast). Below 1280px a toast is wide enough to reach the
- * case's demo bar (bottom-centre), so the stack sits above it there.
+ * Bottom-right stack for toasts (QuietToast). `className` replaces the position: the open case puts
+ * the stack over its invoice so it never covers the CargoOS thread or its answer box.
  */
-export function ToastRegion({ children }: { children: ReactNode }) {
+export function ToastRegion({ children, className = "fixed bottom-5 right-5" }: { children: ReactNode; className?: string }) {
   return (
-    <div aria-live="polite" aria-label="Notifications" role="region" className="fixed bottom-16 right-5 z-50 flex flex-col items-end gap-2 xl:bottom-5">
+    <div aria-live="polite" aria-label="Notifications" role="region" className={`${className} z-50 flex flex-col items-end gap-2`}>
       {children}
     </div>
   );

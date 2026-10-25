@@ -1,9 +1,7 @@
-"use client";
-// Light by default; dark is `.dark` on <html>, remembered in localStorage (docs/design.md §3.2).
-// "system" follows the OS setting (Settings → Appearance, §0.3); app/layout.tsx applies it before paint.
+// The theme (docs/design.md §3.2): light by default, dark is `.dark` on <html>, "system" follows the
+// OS. Remembered in localStorage ("cargoos.theme"); app/layout.tsx applies it before first paint.
+// Chosen in Settings → Appearance (§0.3).
 import { useSyncExternalStore } from "react";
-import { cx } from "./cx";
-import { MoonIcon, SunIcon } from "./glyphs";
 
 type Theme = "light" | "dark";
 export type ThemeChoice = Theme | "system";
@@ -11,7 +9,6 @@ const KEY = "cargoos.theme";
 const DARK_OS = "(prefers-color-scheme: dark)";
 const listeners = new Set<() => void>();
 
-const read = (): Theme => (document.documentElement.classList.contains("dark") ? "dark" : "light");
 const readChoice = (): ThemeChoice => {
   try {
     const v = localStorage.getItem(KEY);
@@ -28,8 +25,6 @@ export function setThemeChoice(c: ThemeChoice) {
   listeners.forEach((l) => l());
 }
 
-const setTheme = (t: Theme) => setThemeChoice(t);
-
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
 /** The stored choice; "light" on the server. */
@@ -42,20 +37,4 @@ export function followSystemTheme(): () => void {
   const on = () => { if (readChoice() === "system") { apply("system"); listeners.forEach((l) => l()); } };
   m.addEventListener("change", on);
   return () => m.removeEventListener("change", on);
-}
-
-export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribe, read, () => "light" as Theme);
-  const seg = (t: Theme, label: string, icon: React.ReactNode) => (
-    <button type="button" aria-label={label} aria-pressed={theme === t} onClick={() => setTheme(t)}
-      className={cx("grid h-6 w-7 place-items-center rounded-[6px] text-ink-3", theme === t && "bg-line-strong text-ink")}>
-      {icon}
-    </button>
-  );
-  return (
-    <div className="inline-flex rounded-[9px] border border-line bg-surface p-[3px]" role="group" aria-label="Theme">
-      {seg("light", "Light theme", <SunIcon />)}
-      {seg("dark", "Dark theme", <MoonIcon />)}
-    </div>
-  );
 }

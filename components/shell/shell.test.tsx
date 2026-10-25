@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CaseScreen } from "@/components/case/case-screen";
 import { SCENARIO_A } from "@/components/case/fixture";
+import { setDevicePerson } from "./person";
 
 /** Pretends the window is `w` pixels wide for the shell's (min-width: …) queries. */
 function atWidth(w: number) {
@@ -13,61 +14,96 @@ function atWidth(w: number) {
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Sections" });
-const BAYLINE = "Bayline 40HC Ningbo-LB";
+const group = (name: string) => within(nav()).getByRole("region", { name });
+const PCL = "Pacific Crest · PCL-INV-1012";
+const KBL = "Kestrel Bay · KBL-INV-2291";
 
 beforeEach(() => { localStorage.removeItem("cargoos.sidebar"); localStorage.removeItem("cargoos.person"); });
 afterEach(() => { cleanup(); Reflect.deleteProperty(window, "matchMedia"); });
 
-describe("sidebar: places shared by every case", () => {
-  it("groups Waiting on you and Cases, with counts and a status for each case", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    const waiting = within(nav()).getByRole("region", { name: "Waiting on you" });
-    expect(within(waiting).getByRole("button", { name: "Questions, 1 waiting" })).toBeInTheDocument();
-    expect(within(waiting).getByRole("button", { name: "Approvals" })).toBeInTheDocument();
-
-    const cases = within(nav()).getByRole("region", { name: /Cases/ });
-    const open = within(cases).getByRole("button", { name: `${BAYLINE}, $300 at stake, Waiting on you` });
-    expect(open).toHaveAttribute("aria-current", "page");
-    expect(within(cases).getByRole("button", { name: "All cases" })).toBeInTheDocument();
-    expect(within(cases).getByRole("button", { name: "New case" })).toBeInTheDocument();
-    expect(within(nav()).getByText("Replay")).toHaveAttribute("title", expect.stringMatching(/^Replay of a recorded run\./));
+describe("sidebar like ChatGPT (§0.4 п.1)", () => {
+  it("has New case, the cases under Needs you and Earlier with their status words, and the account; no Questions or Approvals", () => {
+    render(<CaseScreen />);
+    expect(within(nav()).getByRole("button", { name: "New case" })).toBeInTheDocument();
+    const needs = group("Needs you");
+    expect(within(needs).getByRole("button", { name: `${PCL}. Answer 1 question` })).toHaveAttribute("aria-current", "page");
+    expect(within(needs).getByRole("button", { name: new RegExp(`^${KBL}\\. Answer \\d+ questions$`) })).toBeInTheDocument();
+    expect(within(nav()).queryByRole("region", { name: "Earlier" })).not.toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Settings. This device: Sam · Owner" })).toBeInTheDocument();
+    for (const name of [/^Questions/, /^Approvals/, /^All cases/]) expect(within(nav()).queryByRole("button", { name })).not.toBeInTheDocument();
   });
 
-  it("follows the case: ready to dispute after the answers, an approval waiting once drafted, nothing to do after accepting", () => {
+  it("follows the case: after the answers it is ready to dispute $700, and Reset demo brings the question back", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    expect(within(nav()).getByRole("button", { name: "Questions" })).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: `${BAYLINE}, $700 at stake, Ready to dispute` })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    expect(within(nav()).getByRole("button", { name: "Approvals, 1 waiting" })).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: `${BAYLINE}, $700 at stake, Waiting on you` })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    expect(within(nav()).getByRole("button", { name: "Approvals" })).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: `${BAYLINE}, $700 at stake, Nothing to do` })).toBeInTheDocument();
-    fireEvent.click(within(nav()).getByRole("button", { name: "All cases" }));
-    const row = within(screen.getByRole("region", { name: "Cases" })).getByRole("button", { name: /^Bayline/ });
-    expect(row).toHaveTextContent("Dispute accepted");
-    expect(row).not.toHaveTextContent(/to decide/);
+    expect(within(group("Needs you")).getByRole("button", { name: `${PCL}. Ready to dispute $700` })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
+    expect(within(group("Needs you")).getByRole("button", { name: `${PCL}. Answer 1 question` })).toBeInTheDocument();
   });
 
-  it("holds nothing from the open case: no Overview, Open question, Documents, History or repeated title", () => {
+  it("on the bookkeeper's screen the question waits for Sam, so the case is under Earlier", () => {
+    act(() => setDevicePerson("maya"));
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    for (const name of [/^Overview/, /^Open question/, /^Documents/, /^History/]) {
-      expect(within(nav()).queryByRole("button", { name })).not.toBeInTheDocument();
-    }
-    expect(within(nav()).getAllByText(BAYLINE)).toHaveLength(1);
+    expect(within(group("Needs you")).getByText("Nothing waits on you.")).toBeInTheDocument();
+    expect(within(group("Earlier")).getByRole("button", { name: `${PCL}. Waiting for Sam` })).toBeInTheDocument();
   });
 
-  it("goes to the places it names and marks where you are", () => {
+  it("goes to New case, Settings and back to a case, marking only where you are", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(within(nav()).getByRole("button", { name: "All cases" }));
-    expect(screen.getByRole("heading", { name: /^Cases/, level: 1 })).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: "All cases" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav()).getByRole("button", { name: /^Bayline/ })).not.toHaveAttribute("aria-current");
-    fireEvent.click(within(nav()).getByRole("button", { name: "Questions, 1 waiting" }));
-    expect(within(nav()).getByRole("button", { name: "Questions, 1 waiting" })).toHaveAttribute("aria-current", "page");
-    fireEvent.click(within(nav()).getByRole("button", { name: /^Bayline/ }));
-    expect(screen.getByTestId("at-stake")).toHaveTextContent("$300");
+    const current = () => within(nav()).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.getAttribute("aria-label") ?? b.textContent);
+    fireEvent.click(within(nav()).getByRole("button", { name: "New case" }));
+    expect(screen.getByRole("heading", { name: "New case", level: 1 })).toBeInTheDocument();
+    expect(current()).toEqual(["New case"]);
+    fireEvent.click(within(nav()).getByRole("button", { name: /^Settings\. This device/ }));
+    expect(screen.getByRole("heading", { name: "Settings", level: 1 })).toBeInTheDocument();
+    expect(current()).toEqual(["Settings. This device: Sam · Owner"]);
+    fireEvent.click(within(nav()).getByRole("button", { name: new RegExp(`^${PCL}`) }));
+    expect(screen.getByRole("heading", { name: "Invoice PCL-INV-1012 from Pacific Crest Logistics", level: 1 })).toBeInTheDocument();
+    expect(current()).toEqual([`${PCL}. Answer 1 question`]);
+  });
+
+  it("an uploader sees one plain list of cases, without amounts or anything to act on", () => {
+    act(() => setDevicePerson("leo"));
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    expect(within(nav()).queryByRole("region", { name: "Needs you" })).not.toBeInTheDocument();
+    expect(within(group("Cases")).getByRole("button", { name: `${PCL}. 4 documents` })).toBeInTheDocument();
+    expect(within(nav()).queryByText(/\$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("the open case (§0.4 п.2, п.7)", () => {
+  it("heads the case with the invoice, what was shipped and the trust line; Replay and ⋯ on the right", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    expect(screen.getByRole("heading", { name: "Invoice PCL-INV-1012 from Pacific Crest Logistics", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("40HC Ningbo → Long Beach · Oct 12 · Synthetic data. Nothing is sent or paid automatically.")).toBeInTheDocument();
+    expect(screen.getByText("Replay")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More actions" })).toBeInTheDocument();
+  });
+
+  it("puts the invoice on the left and CargoOS on the right; the demo controls float over the invoice, never the thread", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const invoice = screen.getByRole("region", { name: "Invoice" });
+    const thread = screen.getByRole("complementary", { name: "CargoOS" });
+    expect(invoice.compareDocumentPosition(thread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const demo = screen.getByRole("group", { name: "Demo controls" });
+    expect(demo.parentElement).toContainElement(invoice);
+    expect(demo.parentElement).not.toContainElement(thread);
+  });
+
+  it("below 1024 shows one pane; it opens on CargoOS when a question waits for this person, with the count", () => {
+    atWidth(900);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const show = screen.getByRole("group", { name: "Show" });
+    expect(within(show).getByRole("button", { name: "CargoOS1" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(show).getByRole("button", { name: "Invoice" }));
+    expect(within(show).getByRole("button", { name: "Invoice" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens on the invoice for someone nothing waits on", () => {
+    act(() => setDevicePerson("maya"));
+    atWidth(900);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    expect(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Invoice" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 
@@ -78,17 +114,18 @@ describe("sidebar by window width", () => {
     fireEvent.click(within(nav()).getByRole("button", { name: "Collapse sidebar" }));
     expect(localStorage.getItem("cargoos.sidebar")).toBe("collapsed");
     expect(within(nav()).getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
-    expect(within(nav()).queryByText(BAYLINE)).not.toBeInTheDocument();
+    expect(within(nav()).queryByText(PCL)).not.toBeInTheDocument();
   });
 
-  it("is a rail of icons and case initials by default at 1180, and the operator's choice to expand wins", () => {
+  it("is a rail of New case, case initials and the account by default at 1180, and the operator's choice to expand wins", () => {
     atWidth(1180);
     render(<CaseScreen />);
     expect(within(nav()).queryByRole("button", { name: "Collapse sidebar" })).not.toBeInTheDocument();
-    expect(within(nav()).getByText("BN")).toBeInTheDocument();
-    expect(within(nav()).getByText("JP")).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: /^Bayline 40HC Ningbo-LB, \$300 at stake/ })).toHaveAttribute("aria-current", "page");
-    expect(within(nav()).getByRole("button", { name: /^Questions, \d+ waiting$/ })).toBeInTheDocument();
+    expect(within(nav()).getByText("PC")).toBeInTheDocument();
+    expect(within(nav()).getByText("KB")).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: `${PCL}. Answer 1 question` })).toHaveAttribute("aria-current", "page");
+    expect(within(nav()).getByRole("button", { name: "New case" })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: /^Settings\. This device/ })).toBeInTheDocument();
     fireEvent.click(within(nav()).getByRole("button", { name: "Expand sidebar" }));
     expect(localStorage.getItem("cargoos.sidebar")).toBe("expanded");
     expect(within(nav()).getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
@@ -108,7 +145,7 @@ describe("below 1024px: a menu button and a drawer", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
     const menu = screen.getByRole("button", { name: "Open menu" });
-    expect(screen.getByRole("banner", { name: "CargoOS" })).toHaveTextContent(BAYLINE);
+    expect(screen.getByRole("banner", { name: "CargoOS" })).toHaveTextContent(PCL);
     menu.focus();
     fireEvent.click(menu);
     const drawer = screen.getByRole("dialog", { name: "Menu" });
@@ -136,8 +173,8 @@ describe("below 1024px: a menu button and a drawer", () => {
     fireEvent.keyDown(drawer, { key: "Tab", shiftKey: true });
     expect(buttons.at(-1)).toHaveFocus();
 
-    fireEvent.click(within(drawer).getByRole("button", { name: "Questions, 1 waiting" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "New case" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("banner", { name: "CargoOS" })).toHaveTextContent("Questions");
+    expect(screen.getByRole("banner", { name: "CargoOS" })).toHaveTextContent("New case");
   });
 });
