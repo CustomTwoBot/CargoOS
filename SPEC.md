@@ -304,9 +304,9 @@ The screen holds a set of roles (all three by default; set per device, never by 
 | Function | Where | Owner | Signature |
 | --- | --- | --- | --- |
 | `extractDocument` | `lib/ai/extract.ts`, called from a Convex action | Arpan | `(doc: SourceDoc) => Promise<{ facts: NewFact[]; charges: NewCharge[] }>` |
-| `reconcile` | `lib/engine/reconcile.ts`, pure | Dev | `(input: { case: Case; facts: Fact[]; charges: Charge[]; prior?: Finding[] }) => Finding[]` |
+| `reconcile` | `lib/engine/reconcile.ts`, pure | Dev | `(input: { case: Case; facts: Fact[]; charges: Charge[]; prior?: Finding[]; documents?: SourceDoc[] }) => Finding[]` (`documents` optional: lets why lines name the source type; the pipeline should pass the case's documents) |
 | `diffFindings` | `lib/engine/diff.ts`, pure | Dev | `(prev: Finding[], next: Finding[], eventId: string) => FindingChange[]` |
-| `explain` | `lib/engine/explain.ts`, pure | Dev | `(f: Finding, facts: Fact[]) => string` |
+| `explain` | `lib/engine/explain.ts`, pure | Dev | `(f: Finding, facts: Fact[], context?: { documents?: SourceDoc[]; charge?: Charge }) => string` (`reconcile` calls it; other code reads `Finding.explanation`) |
 | `planQuestion` | `lib/ai/planQuestion.ts` | Arpan | `(state: CaseState, open: Finding[]) => Promise<NewQuestion \| null>` |
 | `interpretReply` | `lib/ai/interpretReply.ts` | Arpan | `(q: Question, replyDoc: SourceDoc, state: CaseState) => Promise<{ interpretation; facts: NewFact[] }>` |
 | `draftDispute` | `lib/ai/draftDispute.ts` | Arpan | `(findings: Finding[], state: CaseState) => Promise<{ subject; body }>` (code adds totals) |
@@ -362,7 +362,7 @@ The screen holds a set of roles (all three by default; set per device, never by 
 
 **Step order for each charge `c`:**
 
-1. **Currency (R3).** If `c.currency` is not the case currency: use the latest `fx_rate` fact to convert. No `fx_rate` fact → `needs_review`, R3, missing `["exchange rate for <currency>"]`.
+1. **Currency (R3).** The base currency is **USD** (team decision). If `c.currency` is not USD → `needs_review`, R3, routeTo `ops_lead`, missing `["exchange rate for <currency>"]`. Conversion with an `fx_rate` fact is **not implemented** because the spec never defined how a rate is stored (`amountCents` can't hold 7.1 CNY/USD); a non-USD line with an `fx_rate` fact still waits, with missing `["agreed conversion for <currency> (fx_rate format not defined yet)"]`.
 2. **Duplicate (R1).** If an earlier line on the same invoice has the same `chargeType` and the same `amountCents` → this line is `potential_discrepancy`, R1, expected 0, delta = billed.
 3. **Decisive facts.** Collect facts for `c.chargeType` of kind `agreed_rate` (only if applicable, see below), `approval`, or `rejection`. Take the one with the **latest `effectiveAt`**.
    - Two decisive facts at the same `effectiveAt` that disagree (different amounts, or approval vs rejection) → `needs_review`, **R7**, missing `["sources disagree"]`, routeTo `ops_lead`.
@@ -410,7 +410,54 @@ The screen holds a set of roles (all three by default; set per device, never by 
 | R8 | Billed {billed}. Approved by the {role} on {date}: "{quote}". |
 | R9 | Billed {billed}. The {role} said this was not agreed on {date}: "{quote}". Over by {delta}. |
 
-Money renders as `$4,800`; dates as `Sep 5`. `{conditionText}` = ", if booked by Sep 10; booked Sep 8" when a condition applied.
+Money renders as `$4,800`; dates as `Sep 5`. `{conditionText}` = ", if booked by Sep 10; booked Sep 8" when a condition applied. `{docTitle}` renders as the document **type** (`quote`, `email`, `chat`, `invoice`, `reply`, `proforma`, `document`), not its title: "(email, Sep 5)". `{role}` renders `ops_lead` as "ops lead". The exact text for every Scenario A line is in `fixtures/scenarioA.ui.json`, and the engine matches it word for word.
+
+**Engine decisions (gaps the engine filled; implemented and tested in `lib/engine/`, Oct 24):**
+
+These settle details the rules above left open. Agents building against the engine should treat them as part of the spec.
+
+*Money and dates (`money.ts`)*
+- `formatUSD` shows cents only when non-zero (`$4,800`, `$300.50`, `$0`) and puts the minus first (`-$300`). It throws on non-integer cents.
+- `parseMoneyToCents` accepts an optional leading `-`, an optional `$`, correctly grouped commas and any number of decimals. More than two decimals round half away from zero (`"1.005"` → 101). Anything else (e.g. `"USD 650.00"`, `"4,80,0"`, `""`) returns `null`; it never guesses.
+- A date is read from the ISO string **as written**, never through the machine's time zone: `2026-09-05T23:30:00-07:00` is `Sep 5` everywhere.
+- Booked-by and valid-until checks compare **calendar dates**, inclusive (booked Sep 10 with "if booked by Sep 10" applies).
+- "Latest" and "same `effectiveAt`" compare **instants**, so `14:21-07:00` and `21:21Z` are the same moment. A datetime without an offset is rejected; a date-only string counts as midnight UTC.
+
+*Rules (`rules.ts`)*
+- **Booking date** = the calendar date of the latest `booking_date` fact's `effectiveAt` (`Fact` has no separate date field).
+- An `agreed_rate` with no `amountCents` is ignored.
+- **R1** needs the same invoice (`docId`), an earlier `lineNo`, the same `chargeType` and the same `amountCents`. routeTo the biller.
+- **R7** (same latest instant): a rejection alongside a rate or approval, or two different amounts. The same amount from two sources is **not** a conflict. If a rate and an approval tie and agree, the rate decides (R0/R2).
+- When an R0/R2 rate had a `bookedBy` condition, the booking fact is added to `factIds`, so the why line and source panel can show "booked Sep 8".
+- `expectedCents` / `deltaCents` per rule:
+
+| Rule | `expectedCents` | `deltaCents` |
+| --- | --- | --- |
+| R0 | agreed rate (also when billed is under it) | none (never negative) |
+| R1, R9 | 0 | billed |
+| R2 | agreed rate | billed − agreed |
+| R3, R6, R7 | none | none |
+| R4 | the clause's cap if it has one, else none | billed − cap, only when over |
+| R5 | billed (excluded but billable at cost; `A-excl` answer key) | none |
+| R8 | approved amount, or billed if the approval has no amount | billed − approved, only when over |
+
+*Findings (`reconcile.ts`)*
+- New findings get `revision = case.revision + 1` (the seeded case starts at 0, so the first revision is 1). `key = chargeId`. Lines come back in `lineNo` order.
+- `billedCents` = the charge's `amountCents` as billed, even when it is not USD (`A-cny` line 3 is 461500).
+- `evidence` = the cited facts' spans in `factIds` order, plus for R1 the earlier duplicate line's span. It never contains text the engine wrote, so every evidence quote is a document substring.
+- Optional fields (`expectedCents`, `deltaCents`, `missing`, `routeTo`, `userVerdict`, `userVerdictBy`) are **left off**, never set to `undefined` (Convex rejects `undefined` values).
+- "Unchanged `factIds`" for carrying a user verdict compares them as a **set** (order doesn't matter).
+- Known gap: the valid-until fallback to the invoice `sentAt` (when there is no booking fact) is not wired yet. `reconcile` could read it from `documents`, but doesn't. No current fixture needs it.
+
+*Why lines (`explain.ts`)*
+- The verdict-cleared sentence is appended **after** the rule's template.
+- Additions where a template would mislead or hide the numbers:
+  - R0 with billed under the rate: "Billed $800. Under the agreed rate of $850 (quote, Sep 2)."
+  - R4 or R8 when disputed: the template plus " Over by {delta}."
+  - R7: each source is written as amount (or "approved" / "not agreed") plus `(type, date)`: "Sources disagree: $4,500 (email, Sep 5) vs $4,400 (chat, Sep 5)."
+  - R3 with an unusable `fx_rate` fact: "Billed in CNY. An exchange rate was mentioned, but converting it is not supported yet, so it cannot be checked yet."
+- A quote that already ends in `.`, `!` or `?` gets no second full stop after the closing quotation mark.
+- Without `documents`, sources read "(Sep 2)" instead of "(quote, Sep 2)". `explain` never throws: if a cited fact is missing, it falls back to the numbers it has ("Billed $4,800. Over by $300.").
 
 ## 7. Scenario A, variations and eval
 
