@@ -1,14 +1,17 @@
-// One open case (docs/design.md §0.1, §0.2): its header, the money strip, the tab strip and the
-// open tab or view (Documents, History), all under the same header. Owns nothing: state comes from the case store.
+// One open case (docs/design.md §0.2, §0.3): its header, the views (Review, Documents, History), the
+// money strip under them for Review and Documents, and in Review the issue tabs and the open tab.
+// What a screen sees and can do follows the device's person (§0.3 п.3). Owns nothing: state comes
+// from the case store.
 import { useState } from "react";
-import type { Role } from "@/lib/types";
+import type { Person, Role } from "@/lib/types";
+import { PEOPLE, personById } from "@/lib/people";
 import { DocumentsView } from "@/components/documents/documents-view";
+import { historyEntries, uploaderEntries } from "@/components/history/history";
 import { HistoryView } from "@/components/history/history-view";
 import { ApprovalDetail } from "@/components/inboxes/approvals-inbox";
 import { approvalItems, type InboxCase } from "@/components/inboxes/items";
-import { OPERATOR } from "@/components/inboxes/people";
-import { CaseMenu } from "./case-menu";
-import { CaseTabs, type CaseView } from "./case-tabs";
+import { AddEvidenceButton, CaseMenu } from "./case-menu";
+import { CaseTabs, CaseViews, type CaseView } from "./case-tabs";
 import type { CaseActions, CaseLocal } from "./case-store";
 import { CaseHeader, DraftButton } from "./chrome";
 import { cx } from "./cx";
@@ -22,16 +25,37 @@ import {
   casePill, checkedAgainst, checkedLine, countLine, groupsOf, isRechecking, latestDraft, toRows, totalsOf, type CaseInput,
 } from "./view-model";
 
+/** The default person: Sam, every role (the one operator of §0). */
+export const SAM: Person = personById("sam")!;
+
+/** "Sam" from "Sam — owner". */
+export const firstName = (p: Person) => p.name.split(" — ")[0];
+
+/** Who CargoOS asks: the seeded person holding ops_lead. */
+const ASKED = PEOPLE.find((p) => p.roles.includes("ops_lead"));
+
 export type WorkspaceProps = {
-  demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions; roles: readonly Role[];
+  demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions;
+  /** The person this screen is set to (§0.3); Sam when left out. Their roles decide what shows. */
+  viewer?: Person;
+  /** Older way to set the screen's roles; `viewer` wins when both are given. */
+  roles?: readonly Role[];
   view: CaseView; now: Date | null; tab: string; onTab: (t: string) => void; inbox: InboxCase;
-  /** Switches between the case's tabs and its Documents / History views (docs/design.md §0.2). */
+  /** Switches between Review and the case's Documents / History views (docs/design.md §0.3). */
   onView?: (v: CaseView) => void;
 };
 
-/** One case: header, pinned money strip, tabs, and the open tab or view. */
-export function CaseWorkspace({ demo, x, local, actions, roles, view: shown, onView, now: clock, tab, onTab, inbox }: WorkspaceProps) {
-  const [view, setView] = useOwnView(shown, onView);
+/** Bottom padding so the floating demo bar never covers the last line of a view. */
+const PANEL_END = "pb-20";
+
+/** One case: header, views, money strip, and the open tab or view. */
+export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, view: shown, onView, now: clock, tab, onTab, inbox }: WorkspaceProps) {
+  const roles = viewer?.roles ?? legacy ?? SAM.roles;
+  // An uploader works with documents only: no money, findings or Review (§0.3).
+  const reviews = roles.some((r) => r !== "uploader");
+  const decides = canAct(roles, "approve");
+  const [chosen, setView] = useOwnView(shown, onView);
+  const view: CaseView = !reviews && chosen === "case" ? "documents" : chosen;
   const openTab = (t: string) => { setView("case"); onTab(t); };
   const now = clock ?? new Date(x.events.at(-1)?.at ?? x.questions[0]?.createdAt ?? 0);
   const rows = toRows(x);
@@ -42,74 +66,92 @@ export function CaseWorkspace({ demo, x, local, actions, roles, view: shown, onV
   const rechecking = isRechecking(x);
   const ready = demo.draft(x);
   const approval = draft && approvalItems([inbox]).find((a) => a.draftId === draft._id);
+  const asked = ASKED ? firstName(ASKED) : "the owner";
+  const history = reviews ? historyEntries(x) : uploaderEntries(historyEntries(x));
 
   const draftDisabledReason = rechecking ? "CargoOS is rechecking. Wait a moment."
     : totals.atStakeCents === 0 ? "Nothing to dispute. At stake is $0."
-    : draft && draft.status !== "rejected" ? "A dispute is already drafted."
+    : draft && draft.status !== "rejected" ? (decides ? "A dispute is already drafted." : "Approval is already requested.")
     : !ready ? "In this replay, answer the open questions first." : undefined;
+  const pill = casePill(x);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <CaseHeader title={x.case.title} pill={casePill(x)} facts={headerFacts(x, inbox.forwarder)} replay
-        actions={<>
-          {canAct(roles, "draftDispute") && (
-            <DraftButton disabledReason={draftDisabledReason} onDraft={() => { if (actions.draftDispute()) openTab("dispute"); }} />
-          )}
-          <CaseMenu onAddEvidence={canAct(roles, "addEvidence") ? actions.addEvidence : undefined} />
-        </>} />
+      <CaseHeader title={x.case.title} facts={headerFacts(x, inbox.forwarder)} replay
+        pill={!reviews ? undefined : pill.label === "Waiting for your answer" && !canAct(roles, "reply") ? { ...pill, label: `Waiting for ${asked}` } : pill}
+        actions={reviews ? (
+          <>
+            {canAct(roles, "draftDispute") && (
+              <DraftButton label={decides ? "Draft dispute" : "Request approval"} disabledReason={draftDisabledReason}
+                onDraft={() => { if (actions.draftDispute()) openTab("dispute"); }} />
+            )}
+            <CaseMenu onAddEvidence={canAct(roles, "addEvidence") ? actions.addEvidence : undefined} />
+          </>
+        ) : <AddEvidenceButton onAdd={actions.addEvidence} />} />
 
-      <div className="px-6">
-        <MoneyStrip totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
-      </div>
-      <div className="mx-6 mt-2.5">
-        <CaseTabs issues={issues} tab={current ? tab : "overview"} onTab={openTab} view={view} onView={setView} />
-      </div>
+      <CaseViews views={reviews ? ["case", "documents", "history"] : ["documents", "history"]} view={view} onView={setView}
+        counts={{ documents: x.documents.length, history: history.length }} />
+
+      {reviews && view !== "history" && (
+        <div className="px-6 pt-3">
+          <MoneyStrip totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
+        </div>
+      )}
 
       {view === "case" && (
-        <div role="tabpanel" aria-labelledby={`tab-${current?.id ?? "overview"}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-6 pb-14 pt-3">
-          {!current ? (
-            <>
-              {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => onTab(issues.some((i) => i.id === k) ? k : "overview")} />}
-              <IssueList issues={issues} groups={groupsOf(rows)} onOpen={onTab}
-                moveMs={local.replaying ? 560 : 280} movingKey={local.moving}
-                allCharges={<AllCharges rows={rows}
-                  lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents, currency: c.currency }))}
-                  onSave={actions.saveLine} />} />
-            </>
-          ) : current.kind === "line" ? (
-            <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
-              onConfirm={(k) => actions.verdict(k, "confirmed")}
-              onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
-          ) : current.kind === "question" ? (
-            <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
-              canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)}
-              replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
-              onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
-          ) : approval ? (
-            // ApprovalDetail (components/inboxes) has a fixed two-column grid; below 1024px this stacks the
-            // message above the decision. TODO(merge): drop once ApprovalDetail stacks on its own.
-            <div data-testid="dispute-stack" className="flex min-h-0 flex-1 flex-col max-lg:[&>div>.grid]:grid-cols-1 max-lg:[&>div>.grid]:content-start">
-              <ApprovalDetail d={approval} now={clock} viewer={OPERATOR}
+        <>
+          <div className="mx-6 mt-2.5"><CaseTabs issues={issues} tab={current ? tab : "overview"} onTab={openTab} answerer={canAct(roles, "reply") ? undefined : asked} /></div>
+          <div role="tabpanel" aria-labelledby={`tab-${current?.id ?? "overview"}`} className={cx("flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-6 pt-3", PANEL_END)}>
+            {!current ? (
+              <>
+                {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => onTab(issues.some((i) => i.id === k) ? k : "overview")} />}
+                <IssueList issues={issues} groups={groupsOf(rows)} onOpen={onTab} canReply={canAct(roles, "reply")} asked={asked}
+                  moveMs={local.replaying ? 560 : 280} movingKey={local.moving}
+                  allCharges={<AllCharges rows={rows}
+                    lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents, currency: c.currency }))}
+                    onSave={actions.saveLine} />} />
+              </>
+            ) : current.kind === "line" ? (
+              <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
+                onConfirm={(k) => actions.verdict(k, "confirmed")}
+                onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
+            ) : current.kind === "question" ? (
+              <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
+                canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)} asked={asked}
+                replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
+                onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
+            ) : approval ? (
+              <ApprovalDetail d={approval} now={clock} viewer={inboxViewer(viewer ?? { ...SAM, roles: [...roles] })}
                 onAccept={() => actions.accept(approval.draftId)}
                 onReject={(reason) => actions.reject(approval.draftId, reason)}
                 onMessageChange={(t) => actions.editMessage(approval.draftId, t)} />
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        </>
       )}
       {view === "documents" && (
-        <div role="tabpanel" aria-labelledby="tab-documents" className="flex min-h-0 flex-1 flex-col pt-3">
-          <p className="truncate px-6 pb-2.5 text-[13px] text-ink-2" title={checkedAgainst(x)}>{checkedAgainst(x)}</p>
-          <DocumentsView x={x} />
+        <div role="tabpanel" aria-labelledby="view-documents" className="flex min-h-0 flex-1 flex-col pt-3">
+          {reviews && <p className="truncate px-6 pb-2.5 text-[13px] text-ink-2" title={checkedAgainst(x)}>{checkedAgainst(x)}</p>}
+          <DocumentsView x={x} facts={reviews} />
         </div>
       )}
       {view === "history" && (
-        <div role="tabpanel" aria-labelledby="tab-history" className="min-h-0 flex-1 overflow-auto px-6 pb-14 pt-3"><HistoryView x={x} /></div>
+        <div role="tabpanel" aria-labelledby="view-history" className={cx("min-h-0 flex-1 overflow-auto px-6 pt-3", PANEL_END)}>
+          <HistoryView x={x} entries={reviews ? undefined : history} />
+        </div>
       )}
 
       <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
     </div>
   );
+}
+
+/**
+ * `ApprovalDetail` still types its viewer with the inboxes' local person (it has a `title`).
+ * TODO(merge): pass `viewer` straight through once components/inboxes uses lib/types' Person.
+ */
+function inboxViewer(p: Person) {
+  return Object.assign({ title: "" }, p);
 }
 
 /**

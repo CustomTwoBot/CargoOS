@@ -5,7 +5,8 @@ import { cx } from "./cx";
 
 type HeaderProps = {
   title: string;
-  pill: { label: string; tone: "waiting" | "neutral" };
+  /** Left out for a screen that sees no findings (the uploader). */
+  pill?: { label: string; tone: "waiting" | "neutral" };
   /** "Invoice PCL-INV-1012", "Pacific Crest Logistics": shown muted before Replay and the trust line. */
   facts: string[];
   replay?: boolean;
@@ -21,10 +22,12 @@ export function CaseHeader({ title, pill, facts, replay, actions }: HeaderProps)
       <div className="min-w-0">
         <h1 className="flex min-w-0 items-center gap-2.5 text-title font-[650] tracking-[-0.012em]">
           <span className="truncate" title={title}>{title}</span>
-          <span data-testid="case-pill" className={cx("flex-none whitespace-nowrap rounded-full border px-2 text-xs font-semibold leading-5",
-            pill.tone === "waiting" ? "border-waiting-line text-waiting" : "border-line-strong text-ink-2")}>
-            {pill.label}
-          </span>
+          {pill && (
+            <span data-testid="case-pill" className={cx("flex-none whitespace-nowrap rounded-full border px-2 text-xs font-semibold leading-5",
+              pill.tone === "waiting" ? "border-waiting-line text-waiting" : "border-line-strong text-ink-2")}>
+              {pill.label}
+            </span>
+          )}
         </h1>
         <p data-testid="case-facts" className="mt-0.5 truncate text-[13px] text-ink-3" title={[...line, TRUST_LINE].join(" · ")}>
           {line.map((f) => (
@@ -41,13 +44,18 @@ export function CaseHeader({ title, pill, facts, replay, actions }: HeaderProps)
   );
 }
 
-/** "Draft dispute": primary; when it can't run, aria-disabled with the reason as its tooltip. */
-export function DraftButton({ disabledReason, onDraft }: { disabledReason?: string; onDraft: () => void }) {
+/**
+ * "Draft dispute" for the owner, "Request approval" for the bookkeeper (§0.3): primary; when it can't
+ * run, aria-disabled with the reason as its tooltip.
+ */
+export function DraftButton({ label = "Draft dispute", disabledReason, onDraft }: {
+  label?: "Draft dispute" | "Request approval"; disabledReason?: string; onDraft: () => void;
+}) {
   return (
     <button type="button" onClick={disabledReason ? undefined : onDraft}
       aria-disabled={!!disabledReason || undefined} title={disabledReason}
       className="whitespace-nowrap rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibold text-primary-ink aria-disabled:cursor-not-allowed aria-disabled:opacity-50">
-      Draft dispute
+      {label}
     </button>
   );
 }

@@ -3,7 +3,7 @@
 import type { SourceSpan } from "@/lib/types";
 import { cx } from "./cx";
 import { chainOf, highlight, timelineOf, type ChainStep } from "./evidence";
-import { ChainGlyph } from "./glyphs";
+import { ChainGlyph, StatusGlyph } from "./glyphs";
 import type { CaseInput, Row } from "./view-model";
 
 type OnQuote = (s: SourceSpan) => void;
@@ -20,6 +20,8 @@ function Quote({ span, onQuote, plain, label }: { span: SourceSpan; onQuote: OnQ
   );
 }
 
+const RESULT_TONE = { dispute: "text-dispute", waiting: "text-waiting", cleared: "text-cleared" } as const;
+
 const STEP = "relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-4";
 const LINE = "before:absolute before:bottom-1 before:left-[13.5px] before:top-8 before:w-px before:bg-line-strong";
 
@@ -32,12 +34,17 @@ export function Chain({ x, row, onQuote }: { x: CaseInput; row: Row; onQuote: On
         const isResult = s === "result";
         return (
           <li key={i} className={cx(STEP, i < steps.length - 1 && LINE)}>
-            <span className={cx("grid size-7 place-items-center rounded-full border text-ink-2",
-              isResult && chain.result.tone === "dispute" ? "border-dispute bg-dispute text-dispute-ink"
-                : isResult && chain.result.tone === "cleared" ? "border-cleared bg-cleared text-cleared-ink"
-                : isResult ? "border-waiting-line bg-waiting-tint text-waiting" : "border-line-strong bg-surface")}>
-              <ChainGlyph icon={isResult ? "result" : s.icon} />
-            </span>
+            {isResult ? (
+              // The same status glyph as the tab and the Overview row, outlined, the size of a step (§0.3 п.5).
+              <span data-testid="chain-result-glyph" className={cx("grid size-7 place-items-center rounded-full bg-surface", RESULT_TONE[chain.result.tone],
+                chain.result.tone === "cleared" && "border border-cleared")}>
+                {chain.result.tone === "cleared" ? <StatusGlyph group="cleared" size={16} /> : <StatusGlyph group={chain.result.tone} size={28} />}
+              </span>
+            ) : (
+              <span className="grid size-7 place-items-center rounded-full border border-line-strong bg-surface text-ink-2">
+                <ChainGlyph icon={s.icon} />
+              </span>
+            )}
             {isResult ? (
               <div>
                 <div className="text-[14px] font-[650] leading-5">Result</div>

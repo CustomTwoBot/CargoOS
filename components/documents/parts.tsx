@@ -74,15 +74,15 @@ export function ItemButton({ item, active, selected, missing, onActive, onShow }
   );
 }
 
-/** The selected document: its text with quotes highlighted, and what each quote became. */
-export function DocumentCard({ x, row }: { x: CaseInput; row: DocRow }) {
+/** The selected document: its text with quotes highlighted, and what each quote became (unless `facts` is off). */
+export function DocumentCard({ x, row, facts = true }: { x: CaseInput; row: DocRow; facts?: boolean }) {
   const [active, setActive] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const textBox = useRef<HTMLDivElement>(null);
   const listBox = useRef<HTMLDivElement>(null);
   const st = row.status;
   const read = st.state === "read" || st.state === "partial";
-  const items = read ? itemsOf(x, row.doc) : [];
+  const items = read && facts ? itemsOf(x, row.doc) : [];
   const { missing } = segmentsOf(row.doc.text, items);
 
   // From the list: select it and scroll the text. From the text: select it and scroll the list.
@@ -90,7 +90,7 @@ export function DocumentCard({ x, row }: { x: CaseInput; row: DocRow }) {
   const pick = (id: string) => { setSelected(id); bringIntoView(listBox.current, listBox.current?.querySelector(`[data-item="${id}"]`)); };
 
   return (
-    <section aria-label={row.doc.title} className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+    <section aria-label={row.doc.title} className="flex flex-none flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card lg:min-h-0 lg:flex-auto">
       <div className="flex items-start justify-between gap-4 border-b border-line px-4 pb-2.5 pt-3">
         <div className="min-w-0">
           <div className="text-meta text-ink-3">{meta(row)}</div>
@@ -98,8 +98,8 @@ export function DocumentCard({ x, row }: { x: CaseInput; row: DocRow }) {
         </div>
         <div className="shrink-0 pt-[18px]"><StatusText status={st} /></div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)]">
-        <div ref={textBox} data-testid="document-scroll" className="min-h-0 overflow-auto bg-sunken p-3">
+      <div className={cx("grid min-h-0 flex-1 grid-cols-1 lg:grid-rows-[minmax(0,1fr)]", facts && "lg:grid-cols-[minmax(0,1fr)_300px]")}>
+        <div ref={textBox} data-testid="document-scroll" className="max-h-[60vh] min-h-0 overflow-auto bg-sunken p-3 lg:max-h-none">
           {(st.state === "failed" || st.state === "partial") && (
             <div role="status" className="mb-3 rounded-lg bg-waiting-tint px-3 py-2 text-meta text-waiting">
               <p>{FAILED}</p>
@@ -108,7 +108,7 @@ export function DocumentCard({ x, row }: { x: CaseInput; row: DocRow }) {
           )}
           <DocumentText text={row.doc.text} items={items} active={active} selected={selected} onPick={pick} />
         </div>
-        <div ref={listBox} className="min-h-0 overflow-auto border-l border-line px-4 pt-3">
+        {facts && <div ref={listBox} className="min-h-0 overflow-auto border-t border-line px-4 pt-3 lg:border-l lg:border-t-0">
           <h3 className="text-[13.5px] font-[650]">What CargoOS read</h3>
           {st.state === "waiting" && <p className="mt-1 text-why text-ink-2">Not read yet.</p>}
           {st.state === "failed" && <p className="mt-1 text-why text-ink-2">Nothing was taken from it.</p>}
@@ -121,7 +121,7 @@ export function DocumentCard({ x, row }: { x: CaseInput; row: DocRow }) {
               </li>
             ))}
           </ul>
-        </div>
+        </div>}
       </div>
     </section>
   );

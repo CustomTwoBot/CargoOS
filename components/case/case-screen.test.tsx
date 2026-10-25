@@ -6,7 +6,7 @@ import { SCENARIO_A } from "./fixture";
 
 const atStake = () => screen.getByTestId("at-stake").textContent;
 const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
-const tabNames = () => screen.getAllByRole("tab").map((t) => t.textContent);
+const tabNames = () => within(screen.getByRole("tablist", { name: "Case tabs" })).getAllByRole("tab").map((t) => t.textContent);
 
 describe("CaseScreen (replay, tabs per issue)", () => {
   afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -15,7 +15,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     expect(atStake()).toBe("$300");
     expect(screen.getByText("1 to dispute · 2 waiting on answers · 5 cleared")).toBeInTheDocument();
-    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Your answer$600", "Documents", "History"]);
+    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Your answer$600"]);
     expect(screen.getByTestId("case-facts")).toHaveTextContent(/^Invoice PCL-INV-1012 · Pacific Crest Logistics · Replay · /);
     expect(screen.queryByText("Ops lead")).not.toBeInTheDocument();
   });
@@ -52,7 +52,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     act(() => { vi.advanceTimersByTime(2600); });
     expect(atStake()).toBe("$700");
     expect(screen.getByText("Your answer changed 2 charges")).toBeInTheDocument();
-    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400New", "Documents", "History"]);
+    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400New"]);
   });
 
   it("one operator drafts and accepts; the message to the seller is drafted and nothing is sent", () => {

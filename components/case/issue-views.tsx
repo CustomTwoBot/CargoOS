@@ -1,17 +1,19 @@
 // One tab per thing to decide (docs/design.md §0, layout A): a disputed line, the question to
 // answer (the dispute draft's tab is ApprovalDetail from the inboxes). Each tab tells one story: evidence on the left, the decision
-// on the right; below 1024px they stack, evidence first.
+// on the right; below 1024px they stack, the decision first (§0.3) and the question first.
 import { useState } from "react";
 import type { Question, SourceSpan } from "@/lib/types";
-import { RowTagChip, StatusTag } from "./bits";
+import { RowTagChip } from "./bits";
 import { cx } from "./cx";
 import { Chain, DocumentView } from "./evidence-panel";
 import { delta, inCurrency, whenAt } from "./format";
-import type { CaseInput, Row } from "./view-model";
+import { StatusGlyph } from "./glyphs";
+import { GROUP_NAME, type CaseInput, type Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
-/** Two columns from 1024px; below that the story stacks: evidence or question first, then the rest (§0.2). */
+/** Two columns from 1024px; below that the story stacks (§0.2, §0.3). */
 export const ISSUE_GRID = "grid min-h-0 flex-1 grid-cols-1 content-start items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]";
+const TONE = { dispute: "text-dispute", waiting: "text-waiting", cleared: "text-ink [&_svg]:text-cleared" } as const;
 const PRIMARY = "rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibold text-primary-ink";
 const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7px] text-[13.5px] font-semibold text-ink hover:bg-sunken";
 
@@ -37,9 +39,11 @@ export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: Line
   return (
     <div data-testid="issue-grid" className={ISSUE_GRID}>
       <Evidence key={row.key} x={x} row={row} />
-      <aside aria-label="Decision" className={cx(CARD, "flex flex-col gap-3 px-5 py-5 lg:sticky lg:top-0")}>
+      <aside aria-label="Decision" className={cx(CARD, "order-first flex flex-col gap-3 px-5 py-5 lg:sticky lg:top-0 lg:order-none")}>
         <div className="flex items-center gap-2">
-          <StatusTag group={row.group} />
+          <span data-testid="decision-status" className={cx("inline-flex items-center gap-1.5 text-meta font-semibold", TONE[row.group])}>
+            <StatusGlyph group={row.group} />{GROUP_NAME[row.group]}
+          </span>
           {row.tag && <RowTagChip>{row.tag}</RowTagChip>}
         </div>
         <div>
@@ -69,9 +73,11 @@ type QuestionProps = {
   canReply: boolean; replyNote?: string; onReply: (questionId: string, text: string) => void;
   /** Why the answer box is closed in this replay (e.g. "Answer Question 1 first."); open when absent. */
   blockedReason?: string;
+  /** Who answers when this screen can't: "Sam". */
+  asked?: string;
 };
 
-export function QuestionView({ x, question: q, rows, amount, now, canReply, replyNote, onReply, blockedReason }: QuestionProps) {
+export function QuestionView({ x, question: q, rows, amount, now, canReply, replyNote, onReply, blockedReason, asked = "the owner" }: QuestionProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState<SourceSpan | null>(null);
   const id = `answer-${q._id}`;
@@ -83,7 +89,8 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
     <div data-testid="issue-grid" className={ISSUE_GRID}>
       <section aria-label="Question" className={cx(CARD, "border-dashed border-waiting-line bg-waiting-row px-6 py-5")}>
         <div className="flex justify-between text-meta font-semibold text-waiting">
-          <span>{q.followupOf ? "CargoOS asked a follow-up" : "CargoOS asked you"}</span><span>Waiting for your answer</span>
+          <span>{q.followupOf ? "CargoOS asked a follow-up" : `CargoOS asked ${canReply ? "you" : asked}`}</span>
+          <span>{canReply ? "Waiting for your answer" : `Waiting for ${asked}`}</span>
         </div>
         {earlierText && (
           <p className="mt-2 text-[13.5px] leading-5 text-ink-2">
@@ -104,6 +111,7 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
             </div>
           </form>
         )}
+        {!canReply && <p className="mt-4 text-[13.5px] text-ink-2">{asked} answers this. The lines recheck when the answer arrives.</p>}
         <p className="mt-3 text-xs text-ink-3">Asked {whenAt(q.createdAt, now)}. {amount} is waiting on this answer.</p>
       </section>
       <aside aria-label="What it's about" className={cx(CARD, "px-5 py-5")}>
