@@ -1,9 +1,13 @@
 // What the Scenario B run in the app found, kept fixed: a 15-line case with a CNY line, a
 // duplicate, a capped surcharge, a conflict, two questions and a follow-up.
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { personById } from "@/lib/people";
+import { CaseCanvas } from "@/components/canvas/case-canvas";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { CaseScreen } from "./case-screen";
+import { useCaseStore } from "./case-store";
+import { INVOICE, type Focus } from "./panes";
 import { chainOf, timelineOf } from "./evidence";
 import { issuesOf, questionTitle } from "./issues";
 import { casePill, checkedAgainst, toRows, totalsOf } from "./view-model";
@@ -52,24 +56,45 @@ describe("Scenario B in the case model", () => {
   });
 });
 
-// TODO(rework §0.4): old tabbed layout; the canvas session rewrites these.
-describe.skip("Scenario B in the app", () => {
+/** The canvas for Scenario B on Sam's screen, with its own store and focus. */
+function CanvasB({ start = INVOICE }: { start?: Focus }) {
+  const store = useCaseStore([SCENARIO_B], () => {});
+  const [focus, setFocus] = useState<Focus>(start);
+  return (
+    <CaseCanvas demo={SCENARIO_B} x={store.inputs[SCENARIO_B.id]} local={store.state[SCENARIO_B.id]} actions={store.actionsFor(SCENARIO_B)}
+      viewer={personById("sam")!} now={null} forwarder="Kestrel Bay Logistics" focus={focus} onFocus={setFocus} />
+  );
+}
+
+/** A cell's text as a wide screen shows it (without the copy that only narrow panes show). */
+const cellText = (d: Element) => { const c = d.cloneNode(true) as Element; c.querySelectorAll("[data-narrow]").forEach((e) => e.remove()); return c.textContent; };
+const cells = (line: number) => [...screen.getAllByRole("row").find((r) => r.querySelector("td")?.textContent === String(line))!.querySelectorAll("td")]
+  .map(cellText);
+
+describe("Scenario B in the app", () => {
   afterEach(cleanup);
 
-  it("only lets you answer the next recorded question in this replay", () => {
-    render(<CaseScreen cases={[SCENARIO_B]} />);
-    fireEvent.click(screen.getByRole("tab", { name: /Question 2/ }));
-    expect(screen.getByText(/Answer Question 1 first/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Your answer")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /Question 1/ }));
-    expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
+  it("shows all 15 lines and leaves the CNY line out of the USD verdict", () => {
+    render(<CanvasB />);
+    expect(screen.getByTestId("at-stake")).toHaveAccessibleName("$3,340");
+    expect(screen.getByTestId("verdict-sentence")).toHaveTextContent(
+      "Kestrel Bay billed $27,325. $16,470 matches what was agreed, $3,340 is more than agreed, and $7,515 waits for your answer. CNY 4,200 is billed in another currency and isn't counted.");
+    expect(within(screen.getByRole("group", { name: "Show lines" })).getAllByRole("button").map((b) => b.textContent))
+      .toEqual(["All 15", "To dispute 4", "Waiting 6", "Cleared 5"]);
+    expect(cells(2)).toEqual(["2", "Origin trucking Kunshan-Shanghai port", "CNY 4,200", "no rate agreed", "Waiting for rate"]);
   });
 
-  it("lists the waiting CNY line in To decide with a section per status", () => {
-    render(<CaseScreen cases={[SCENARIO_B]} />);
-    const list = screen.getByRole("region", { name: "To decide" });
-    expect(within(list).getAllByRole("heading").map((h) => h.textContent)).toContain("Waiting · 1");
-    expect(within(list).getByText("CNY 4,200")).toBeInTheDocument();
-    expect(within(list).queryByText(/1 charges/)).not.toBeInTheDocument();
+  it("calls the duplicate Billed twice and proves it with the earlier line", () => {
+    render(<CanvasB />);
+    expect(cells(12)).toEqual(["12", "Destination THC Oakland", "$1,950", "already billed", "Billed twice"]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Destination THC Oakland" })[1]);
+    expect(screen.getByTestId("proof")).toHaveTextContent(/Already billed on line 6: 6 Destination THC Oakland 1,950\.00/);
+  });
+
+  it("names the conflict, the cap and the CNY line in plain words", () => {
+    render(<CanvasB />);
+    expect(cells(9).slice(3)).toEqual(["sources disagree", "Asked you"]);
+    expect(cells(5).slice(2)).toEqual(["$600", "$450", "$150 over"]);
+    expect(cells(1)[1]).toBe("Ocean freight 3×40HC Shanghai-Oakland");
   });
 });
