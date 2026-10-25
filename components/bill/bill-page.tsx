@@ -14,6 +14,7 @@ import { useBills, type Bill } from "@/components/app/bills-provider";
 import { looksLikeConvexId } from "@/components/app/convex-id";
 import { nextStep } from "@/components/app/next-step";
 import { LinkButton } from "@/components/app/ui";
+import { FileText, History, Receipt } from "@/components/app/icons";
 import { isUploaderOnly } from "@/components/shell/person";
 import { DocumentsTab } from "./documents-tab";
 import { HistoryTab } from "./history-tab";
@@ -73,6 +74,7 @@ function Body({ b, person, now }: { b: Bill; person: ReturnType<typeof useBills>
           <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
             className={cx("inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold",
               tab === t ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>
+            {(() => { const Icon = t === "bill" ? Receipt : t === "documents" ? FileText : History; return <Icon aria-hidden="true" strokeWidth={2} className="size-[15px] shrink-0" />; })()}
             {t === "bill" ? "Bill" : t === "documents" ? "Documents" : "History"}
             {t !== "bill" && <span className="tabular-nums text-ink-3">{t === "documents" ? docsCount : historyCount}</span>}
           </button>

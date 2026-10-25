@@ -10,6 +10,7 @@ import { instant, toRows, totalsOf, type Row } from "@/components/case/view-mode
 import { bookkeeperName, type Step } from "@/components/app/next-step";
 import type { Bill } from "@/components/app/bills-provider";
 import { Button, Card, Kicker, LinkButton } from "@/components/app/ui";
+import { BadgeCheck, Ban, CircleCheck, Clock, Hourglass, MessageSquareText, Scale, Stamp, Undo2 } from "@/components/app/icons";
 import { OWNER, firstName } from "@/components/shell/person";
 import type { Person } from "@/lib/types";
 import { AnswerCard, ReadingRow, Spinner } from "./answer-card";
@@ -25,7 +26,7 @@ export function NextStepCard({ bill, step, person }: Props) {
     case "waitAnswer":
       return (
         <Card className="flex flex-col gap-2.5 px-6 py-[22px]">
-          <Kicker tone="ask">Waiting for {owner}’s answer</Kicker>
+          <Kicker tone="ask" icon={Hourglass}>Waiting for {owner}’s answer</Kicker>
           <p className="text-[17px] font-bold leading-6">{step.question.text}</p>
           <span className="text-ink-3">CargoOS asked {owner}. The lines move here as soon as {owner} answers. Only {owner} can answer it.</span>
         </Card>
@@ -52,7 +53,7 @@ export function NextStepCard({ bill, step, person }: Props) {
     case "waitDecision":
       return (
         <Card className="flex flex-col gap-1.5 px-6 py-[22px]">
-          <Kicker>Waiting for {owner}</Kicker>
+          <Kicker icon={Clock}>Waiting for {owner}</Kicker>
           <span className="text-[17px] font-bold">You asked {owner} to approve a {money(step.draft.totalDisputedCents)} dispute{requestedAt(bill) ? ` at ${requestedAt(bill)}` : ""}.</span>
           <span className="text-ink-3">{owner}’s decision shows on the track above. Nothing goes to {bill.forwarder} unless {owner} accepts and sends the letter.</span>
         </Card>
@@ -63,7 +64,7 @@ export function NextStepCard({ bill, step, person }: Props) {
       return (
         <Card tone="pay" className="flex flex-wrap items-center justify-between gap-4 px-6 py-[22px]">
           <div className="flex flex-col gap-1">
-            <Kicker tone="pay">Accepted{decidedAt(bill, "approved") ? ` · ${decidedAt(bill, "approved")}` : ""}</Kicker>
+            <Kicker tone="pay" icon={BadgeCheck}>Accepted{decidedAt(bill, "approved") ? ` · ${decidedAt(bill, "approved")}` : ""}</Kicker>
             <span className="text-[17px] font-bold">
               {canAct(person.roles, "approve") ? `Dispute ${money(step.draft.totalDisputedCents)}. Now write to ${bill.forwarder}.` : `${owner} accepted the ${money(step.draft.totalDisputedCents)} dispute.`}
             </span>
@@ -79,7 +80,7 @@ export function NextStepCard({ bill, step, person }: Props) {
     case "clear":
       return (
         <Card tone="pay" className="flex flex-col gap-1 px-6 py-[22px]">
-          <Kicker tone="pay">Nothing to dispute</Kicker>
+          <Kicker tone="pay" icon={CircleCheck}>Nothing to dispute</Kicker>
           <span className="text-[17px] font-bold">Every line matches what was agreed, or you accepted it.</span>
           <span className="text-ink-3">Pay it in your bank. CargoOS never pays anything itself.</span>
         </Card>
@@ -122,7 +123,7 @@ function RequestCard({ bill }: { bill: Bill }) {
   const owner = firstName(OWNER);
   return (
     <Card focus className="flex flex-col gap-3.5 px-5 py-[22px] sm:px-6">
-      <Kicker tone="hold">Ready to dispute</Kicker>
+      <Kicker tone="hold" icon={Scale}>Ready to dispute</Kicker>
       <p className="text-[19px] font-bold leading-7 sm:text-[20px]">Dispute <span className="text-hold">{money(total)}</span> with {bill.forwarder}?</p>
       <HoldLines rows={rows} />
       <div className="flex flex-wrap items-center gap-2.5">
@@ -141,7 +142,7 @@ function WaitRequestCard({ bill }: { bill: Bill }) {
   const asker = bookkeeperName();
   return (
     <Card className="flex flex-col gap-3 px-5 py-[22px] sm:px-6">
-      <Kicker tone="hold">Ready to dispute</Kicker>
+      <Kicker tone="hold" icon={Scale}>Ready to dispute</Kicker>
       <p className="text-[19px] font-bold leading-7 sm:text-[20px]">
         <span className="text-hold">{money(totalsOf(bill.x).atStakeCents)}</span> is on hold with {bill.forwarder}.
       </p>
@@ -175,7 +176,7 @@ function DecideCard({ bill, draft }: { bill: Bill; draft: Draft }) {
   return (
     <Card focus className="flex flex-col gap-3.5 px-5 py-[22px] sm:px-6">
       <div className="flex flex-wrap justify-between gap-3">
-        <Kicker tone="hold">{asker ? `${asker} asks you to approve` : "Approve the dispute"}</Kicker>
+        <Kicker tone="hold" icon={Stamp}>{asker ? `${asker} asks you to approve` : "Approve the dispute"}</Kicker>
         {requestedAt(bill) && <span className="text-[13px] text-ink-3">Today, {requestedAt(bill)}</span>}
       </div>
       <p className="text-[19px] font-bold leading-7 sm:text-[20px]">Dispute <span className="text-hold">{money(draft.totalDisputedCents)}</span> with {bill.forwarder}.</p>
@@ -212,7 +213,7 @@ function SelfBlockedCard({ bill, draft }: { bill: Bill; draft: Draft }) {
   const [tried, setTried] = useState(false);
   return (
     <Card className="flex flex-col gap-3 border-2 border-dashed border-line-strong px-6 py-[22px]">
-      <Kicker>You asked for this dispute{requestedAt(bill) ? ` · ${requestedAt(bill)}` : ""}</Kicker>
+      <Kicker icon={Ban}>You asked for this dispute{requestedAt(bill) ? ` · ${requestedAt(bill)}` : ""}</Kicker>
       <p className="text-[19px] font-bold leading-7">You requested this, so another owner decides.</p>
       <span className="text-ink-2">Nobody approves a dispute they asked for. CargoOS checks this on the server, not just on this screen.</span>
       <div className="flex flex-wrap gap-2.5">
@@ -230,7 +231,7 @@ function RejectedCard({ bill, draft, person }: { bill: Bill; draft: Draft; perso
   const at = decidedAt(bill, "draft_rejected");
   return (
     <Card tone="hold" className="flex flex-col gap-3 px-6 py-[22px]">
-      <Kicker tone="hold">{mine ? `${owner} rejected this${at ? ` · ${at}` : ""}` : `You sent it back${at ? ` · ${at}` : ""}`}</Kicker>
+      <Kicker tone="hold" icon={Undo2}>{mine ? `${owner} rejected this${at ? ` · ${at}` : ""}` : `You sent it back${at ? ` · ${at}` : ""}`}</Kicker>
       <span className="text-[17px] font-bold">{mine ? `${owner} rejected the ${money(draft.totalDisputedCents)} dispute.` : `You rejected the ${money(draft.totalDisputedCents)} dispute.`}</span>
       {draft.rejectionReason && <blockquote className="rounded-[12px] bg-hold-tint px-3.5 py-3 text-ink">“{draft.rejectionReason}”</blockquote>}
       <span className="text-ink-3">{mine ? `The lines stay in Hold. Nothing was sent to ${bill.forwarder}. Mark a line as not an issue or ask again.` : `${draft.requestedBy ? firstName(personById(draft.requestedBy) ?? OWNER) : bookkeeperName()} sees your reason. Nothing was sent.`}</span>
@@ -253,7 +254,7 @@ export function ReadingCard({ bill, person, onCorrect }: { bill: Bill; person: P
   return (
     <Card className="flex flex-col gap-3 px-5 py-5 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Kicker tone="ink">How CargoOS read {canAct(person.roles, "reply") ? "your" : `${firstName(OWNER)}’s`} answer</Kicker>
+        <Kicker tone="ink" icon={MessageSquareText}>How CargoOS read {canAct(person.roles, "reply") ? "your" : `${firstName(OWNER)}’s`} answer</Kicker>
         {last.at && <span className="text-[13px] text-ink-3">{timeOf(last.at)}</span>}
       </div>
       {last.text && <p className="text-ink-2">“{last.text}”</p>}

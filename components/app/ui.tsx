@@ -39,11 +39,15 @@ export function Card({ focus, tone = "plain", className, ...rest }: CardProps) {
   );
 }
 
-export function Kicker({ tone = "muted", children, className }: { tone?: "muted" | "pay" | "hold" | "ask" | "ink" | "lime"; children: ReactNode; className?: string }) {
+/** A small uppercase label; `icon` goes before the words, same color, never instead of them. */
+export function Kicker({ tone = "muted", icon: Icon, children, className }: {
+  tone?: "muted" | "pay" | "hold" | "ask" | "ink" | "lime"; icon?: LucideIcon; children: ReactNode; className?: string;
+}) {
   return (
-    <span className={cx("text-[12px] font-semibold uppercase tracking-[0.04em]",
+    <span className={cx("text-[12px] font-semibold uppercase tracking-[0.04em]", Icon && "inline-flex items-center gap-1.5",
       tone === "muted" && "text-ink-3", tone === "pay" && "text-pay", tone === "hold" && "text-hold",
       tone === "ask" && "text-ask", tone === "ink" && "text-ink", tone === "lime" && "text-lime", className)}>
+      {Icon && <Icon aria-hidden="true" strokeWidth={2.2} className="size-3.5 shrink-0" />}
       {children}
     </span>
   );
