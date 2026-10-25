@@ -540,15 +540,18 @@ These settle details the rules above left open. Agents building against the engi
 | R4 | the clause's cap if it has one, else none | billed − cap, only when over |
 | R5 | billed (excluded but billable at cost; `A-excl` answer key) | none |
 | R8 | approved amount, or billed if the approval has no amount | billed − approved, only when over |
-| R10 (pending) | billed | none |
+| R10 | billed | none |
 
 *Findings (`reconcile.ts`)*
 - New findings get `revision = case.revision + 1` (the seeded case starts at 0, so the first revision is 1). `key = chargeId`. Lines come back in `lineNo` order.
 - `billedCents` = the charge's `amountCents` as billed, even when it is not USD (`A-cny` line 3 is 461500).
 - `evidence` = the cited facts' spans in `factIds` order, plus for R1 the earlier duplicate line's span. It never contains text the engine wrote, so every evidence quote is a document substring.
-- Optional fields (`expectedCents`, `deltaCents`, `missing`, `routeTo`, `userVerdict`, `userVerdictBy`) are **left off**, never set to `undefined` (Convex rejects `undefined` values).
+- Optional fields (`expectedCents`, `deltaCents`, `missing`, `routeTo`, `userVerdict`, `userVerdictBy`, `learnedRuleId`) are **left off**, never set to `undefined` (Convex rejects `undefined` values).
 - "Unchanged `factIds`" for carrying a user verdict compares them as a **set** (order doesn't matter).
 - Known gap: the valid-until fallback to the invoice `sentAt` (when there is no booking fact) is not wired yet. `reconcile` could read it from `documents`, but doesn't. No current fixture needs it.
+
+*Pipeline (`convex/pipeline.ts`)*
+- A waiting line counts as **covered** (so `planQuestion` is not scheduled) when a question that is **open or `closed_unresolved`** lists it. Without the second, A-ambig would ask again forever after its one follow-up closes unresolved. Only `answered` questions stop covering a line.
 
 *Why lines (`explain.ts`)*
 - The verdict-cleared sentence is appended **after** the rule's template.
@@ -560,14 +563,16 @@ These settle details the rules above left open. Agents building against the engi
 - A quote that already ends in `.`, `!` or `?` gets no second full stop after the closing quotation mark.
 - Without `documents`, sources read "(Sep 2)" instead of "(quote, Sep 2)". `explain` never throws: if a cited fact is missing, it falls back to the numbers it has ("Billed $4,800. Over by $300.").
 
-**Learned rules (R10, decided Oct 24 evening; not implemented yet, Dev):**
+**Learned rules (R10, decided Oct 24 evening; engine and pipeline side implemented in `lib/engine/rules.ts` and `convex/pipeline.ts`, Dev):**
 
 - A rule is saved when someone marks a line **Not an issue**: `{ forwarder: case.forwarder, chargeType, maxAmountCents: billedCents, createdBy: person, createdAt, sourceCaseId, sourceChargeId }`. One rule per forwarder + charge type; a new one replaces the old.
-- `reconcile` receives the rules as input (`learnedRules`) and never reads a database or clock. Matching: same forwarder (exact, case-insensitive), same `chargeType`, billed ≤ `maxAmountCents` when set, and `sourceCaseId` is not this case (the source line is already handled by its verdict).
+- `reconcile` receives the rules as input (`learnedRules`) and never reads a database or clock. Matching: same forwarder (exact apart from letter case and surrounding spaces), same `chargeType`, billed ≤ `maxAmountCents` when set, and `sourceCaseId` is not this case (the source line is already handled by its verdict).
+- If more than one rule matches (normally impossible, since a new rule replaces the old), the **newest `createdAt` wins**.
+- A case with **no `forwarder`** never uses learned rules.
 - R10 finding: `status` `supported`, `ruleId` `R10_LEARNED`, `expectedCents` = billed, no `deltaCents`, `factIds` `[]`, `evidence` `[]`, `learnedRuleId` = the rule's id. Totals count it like any supported line.
-- Explanation: "You accepted this charge from {forwarder} on {date}." `{date}` is the rule's `createdAt` as `Oct 24`.
+- Explanation: "You accepted this charge from {forwarder} on {date}." `{date}` is the rule's `createdAt` as `Oct 24`, read as written, so store `createdAt` with the local offset (`-07:00`): a UTC `…Z` time after 5 PM Pacific would show the next day.
 - **Undo** deletes the rule (`undoLearnedRule`, writes `rule_undone`) and recomputes; the line goes back to whatever the other rules say (usually R6).
-- Saving or undoing a rule recomputes every open case of that forwarder, so the other tab updates live.
+- Saving or undoing a rule recomputes every open case of that forwarder, so the other tab updates live: `saveLearnedRule` / `undoLearnedRule` schedule `internal.pipeline.recomputeForwarder({ forwarder, eventId })` with their `rule_learned` / `rule_undone` event. Approved cases are left alone.
 - This is a stored rule, not machine learning: same input, same output, unit-tested.
 
 ## 7. Scenario A, variations and eval
