@@ -32,9 +32,13 @@ export function caseLine(x: CaseInput, viewer: Person = DEFAULT_PERSON): CaseLin
   return { needs: false, text: "Nothing to dispute", tone: "muted" };
 }
 
-/** How many things in this case's thread wait on `viewer`: questions to answer, disputes to decide. */
+/**
+ * How many things in this case's thread wait on `viewer`: questions to answer, disputes to decide,
+ * and a dispute ready to draft or send for approval (the thread's next step for whoever reviews).
+ */
 export function pendingFor(x: CaseInput, viewer: Person = DEFAULT_PERSON): number {
-  return (asks(viewer) ? openQuestions(x) : 0) + x.drafts.filter((d) => decidable(viewer, d)).length;
+  const ready = reviews(viewer) && !openQuestions(x) && !latestDraft(x) && !isRechecking(x) && totalsOf(x).atStakeCents > 0;
+  return (asks(viewer) ? openQuestions(x) : 0) + x.drafts.filter((d) => decidable(viewer, d)).length + (ready ? 1 : 0);
 }
 
 /** "Pacific Crest Logistics", from the case or the shell's fallback until every case carries it. */

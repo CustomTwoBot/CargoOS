@@ -49,6 +49,13 @@ describe("pendingFor: what waits on this person in the thread", () => {
     expect(pendingFor(requested, maya)).toBe(0);
     expect(pendingFor({ ...after, drafts: [{ ...draft, status: "pending_approval" as const, requestedBy: "sam" }] }, sam)).toBe(0);
   });
+
+  it("counts a dispute ready to draft or send for approval for whoever reviews, until it is drafted", () => {
+    expect(pendingFor(after, maya)).toBe(1);
+    expect(pendingFor(after, sam)).toBe(1);
+    expect(pendingFor(after, leo)).toBe(0);
+    expect(pendingFor(requested, maya)).toBe(0);
+  });
 });
 
 describe("case names", () => {
