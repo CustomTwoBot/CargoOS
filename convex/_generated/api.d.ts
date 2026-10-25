@@ -13,6 +13,7 @@ import type * as cases from "../cases.js";
 import type * as files from "../files.js";
 import type * as pipeline from "../pipeline.js";
 import type * as seed from "../seed.js";
+import type * as uploads from "../uploads.js";
 
 import type {
   ApiFromModules,
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   files: typeof files;
   pipeline: typeof pipeline;
   seed: typeof seed;
+  uploads: typeof uploads;
 }>;
 
 /**
