@@ -9,7 +9,9 @@ import { AppendOnly, Who } from "./bits";
 
 type Filter = "all" | WhoKind;
 const FILTERS: Filter[] = ["all", "you", "rules", "agent"];
-const COLS = "grid grid-cols-[132px_172px_minmax(0,1fr)_150px] gap-x-4";
+// The event code is for whoever checks the log against the database: a quiet fourth column from 1280px only.
+const COLS = "grid grid-cols-[120px_150px_minmax(0,1fr)] gap-x-4 xl:grid-cols-[132px_172px_minmax(0,1fr)_150px]";
+const EVENT_COL = "hidden xl:block";
 /** Below this many entries the table fits a screen or two and a search box would only add noise. */
 export const SEARCH_FROM = 25;
 
@@ -48,15 +50,14 @@ export function HistoryLedger({ entries, rounds }: { entries: Entry[]; rounds?: 
       <div role="table" aria-label="Events" className="text-[13px] leading-5">
         <div role="row" className={cx(COLS, "border-b border-line px-4 py-1.5 text-[11.5px] font-medium text-ink-3")}>
           <span role="columnheader">When</span><span role="columnheader">Who</span>
-          <span role="columnheader">What happened</span><span role="columnheader">Event</span>
+          <span role="columnheader">What happened</span><span role="columnheader" className={EVENT_COL}>Event</span>
         </div>
         {groups.map((g) => (
           <div role="rowgroup" key={g.key} aria-label={g.label || undefined}>
             {g.label && (
               <div role="row" data-testid="history-round"
                 className={cx(COLS, "sticky top-0 z-[1] items-baseline border-b border-line bg-sunken px-4 py-1 text-meta")}>
-                <span role="cell" className="col-span-3 min-w-0 truncate font-semibold text-ink-2">{g.label}</span>
-                <span role="cell" className="text-xs text-ink-3">{g.revision ? `revision ${g.revision}` : ""}</span>
+                <span role="cell" className="col-span-3 min-w-0 truncate font-semibold text-ink-2 xl:col-span-4">{g.label}</span>
               </div>
             )}
             {g.shown.map((e) => <EntryRow key={e.id} e={e} />)}
@@ -109,7 +110,7 @@ function EntryRow({ e }: { e: Entry }) {
           </ul>
         )}
       </span>
-      <code role="cell" className={cx("truncate font-sans text-xs text-ink-3", e.blocked && "text-dispute")}>{e.code}</code>
+      <code role="cell" className={cx("truncate font-sans text-xs text-ink-3", EVENT_COL, e.blocked && "text-dispute")}>{e.code}</code>
     </div>
   );
 }

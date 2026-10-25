@@ -13,8 +13,9 @@ export const metadata: Metadata = {
   description: "Checks a freight invoice against what was agreed before you pay it.",
 };
 
-// Sets the theme class before first paint so the page doesn't flash (docs/design.md §3.2).
-const themeScript = `try{if(localStorage.getItem("cargoos.theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+// Sets the theme class before first paint so the page doesn't flash (docs/design.md §3.2). "system"
+// follows the OS (Settings → Appearance, §0.3).
+const themeScript = `try{var t=localStorage.getItem("cargoos.theme");if(t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

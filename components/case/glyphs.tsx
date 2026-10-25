@@ -7,19 +7,22 @@ const Line = ({ size = 18, children }: { size?: number; children: ReactNode }) =
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="block flex-none">{children}</svg>
 );
 
-export function StatusGlyph({ group }: { group: UiGroup }) {
-  const p = { viewBox: "0 0 14 14", width: 14, height: 14, "aria-hidden": true, className: "block flex-none" } as const;
+/** The status by shape (§5): ⊗ to dispute, dashed ? waiting, ✓ cleared. 14px in rows and tabs; larger in the
+ * evidence chain, with the same 1.5px line. Never filled. */
+export function StatusGlyph({ group, size = 14 }: { group: UiGroup; size?: number }) {
+  const w = (px: number) => (px * 14) / size;
+  const p = { viewBox: "0 0 14 14", width: size, height: size, "aria-hidden": true, className: "block flex-none" } as const;
   if (group === "dispute") return (
-    <svg {...p}><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+    <svg {...p}><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" strokeWidth={w(1.5)} />
+      <path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" fill="none" stroke="currentColor" strokeWidth={w(1.5)} strokeLinecap="round" /></svg>
   );
   if (group === "waiting") return (
-    <svg {...p}><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2.1 1.7" />
-      <path d="M5.5 5.6a1.6 1.6 0 1 1 2.3 1.45c-.5.27-.8.6-.8 1.1v.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="7" cy="10.2" r=".85" fill="currentColor" /></svg>
+    <svg {...p}><circle cx="7" cy="7" r="5.75" fill="none" stroke="currentColor" strokeWidth={w(1.4)} strokeDasharray="2.1 1.7" />
+      <path d="M5.5 5.6a1.6 1.6 0 1 1 2.3 1.45c-.5.27-.8.6-.8 1.1v.3" fill="none" stroke="currentColor" strokeWidth={w(1.4)} strokeLinecap="round" />
+      <circle cx="7" cy="10.2" r={size > 14 ? 0.6 : 0.85} fill="currentColor" /></svg>
   );
   return (
-    <svg {...p}><path d="M3.2 7.4l2.6 2.6 5-5.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    <svg {...p}><path d="M3.2 7.4l2.6 2.6 5-5.4" fill="none" stroke="currentColor" strokeWidth={w(1.6)} strokeLinecap="round" strokeLinejoin="round" /></svg>
   );
 }
 
@@ -31,10 +34,10 @@ export const Logo = () => (
 );
 
 export const CasesIcon = () => <Line><rect x="3" y="4" width="14" height="5" rx="1.5" /><rect x="3" y="11" width="14" height="5" rx="1.5" /></Line>;
-export const ListIcon = () => <Line><path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9M3.6 5.5h.01M3.6 10h.01M3.6 14.5h.01" /></Line>;
+export const ListIcon = ({ size }: { size?: number }) => <Line size={size}><path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9M3.6 5.5h.01M3.6 10h.01M3.6 14.5h.01" /></Line>;
 export const QuestionsIcon = () => <Line><path d="M3.5 4.5h13v8.5H9.5l-4 3v-3h-2z" /></Line>;
-export const DocumentsIcon = () => <Line><path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2" /></Line>;
-export const HistoryIcon = () => <Line><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5V10l2.5 1.6" /></Line>;
+export const DocumentsIcon = ({ size }: { size?: number }) => <Line size={size}><path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2" /></Line>;
+export const HistoryIcon = ({ size }: { size?: number }) => <Line size={size}><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5V10l2.5 1.6" /></Line>;
 export const SunIcon = () => (
   <Line size={15}><circle cx="10" cy="10" r="3.2" />
     <path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3L6 14M14 6l1.3-1.3" /></Line>

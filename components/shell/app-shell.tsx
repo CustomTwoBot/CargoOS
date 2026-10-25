@@ -2,8 +2,9 @@
 // in the page, expanded from 1280 and a rail below that unless the operator chose otherwise.
 // Below 1024px a slim top bar holds a menu button that opens the sidebar as a drawer.
 // CSS classes give the right first paint; the width store only switches what React renders.
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Logo } from "@/components/case/glyphs";
+import { followSystemTheme } from "@/components/case/theme-toggle";
 import { Drawer } from "./drawer";
 import { MenuIcon } from "./icons";
 import { sidebarMode, useShellWidth, useSidebarPref, type SidebarMode } from "./layout";
@@ -29,6 +30,7 @@ export function AppShell({ title, waiting, sidebar, children }: Props) {
   // Widening the window past 1024px puts the sidebar back in the page, so the drawer goes.
   if (open && !narrow) setOpen(false);
   const close = () => setOpen(false);
+  useEffect(() => followSystemTheme(), []);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-bg text-ink">
