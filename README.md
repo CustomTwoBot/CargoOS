@@ -6,9 +6,9 @@ CargoOS checks a freight invoice against what was actually agreed (the quote, th
 
 Built at **Cal Hacks 13.0** (San Francisco, Oct 24–25, 2026).
 
-**Live demo:** https://cargo-os-fawn.vercel.app
+**Live demo:** https://cargo-os-ahl4.vercel.app
 
-> **What the live site shows today:** the deployed page runs in **Replay** mode. It plays a recorded run of Scenario A through the real UI and is labeled "Replay" on screen. The backend described below (Convex pipeline, rules engine, Claude extraction and questions, approvals, learned rules) is merged on `main` and covered by tests, and runs locally with `npm run dev`. See [Real vs simulated](#real-vs-simulated).
+> The deployed site runs **live**: Scenario A is read from the production Convex backend, and replies, verdicts, line edits and approvals go through the real pipeline and Claude. A recorded run of the same case is the fallback: it plays at https://cargo-os-ahl4.vercel.app/?replay=1, is labeled "Replay" on screen, and is also what you see for a moment while the live case loads. See [Real vs simulated](#real-vs-simulated).
 
 ---
 
@@ -129,14 +129,14 @@ npm install
 npm run dev:next
 ```
 
-Open http://localhost:3000. This is the same Replay mode as the live demo: no Convex, no Claude.
+Open http://localhost:3000. Without a Convex URL the app runs the recorded Replay: no Convex, no Claude.
 
 ### Run the full stack
 
 ```bash
 npx convex dev                                    # first run: log in and create a project; writes .env.local
 npx convex env set ANTHROPIC_API_KEY sk-ant-...   # stored in Convex only, never in the repo
-npx convex run seed:resetDemo                     # load the Scenario A demo case (the three people are in lib/people.ts)
+npx convex run seed:resetLiveDemo                 # load Scenario A and run the pipeline once (findings + the first question)
 npm run dev                                       # Next.js + Convex dev servers together
 ```
 
@@ -146,7 +146,8 @@ npm run dev                                       # Next.js + Convex dev servers
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Convex environment (`npx convex env set`) | you | Every Claude call. Never put it in `.env.local`, code or commits |
 | `CONVEX_DEPLOYMENT` | `.env.local` | `npx convex dev` | Which Convex deployment the CLI talks to |
-| `NEXT_PUBLIC_CONVEX_URL` | `.env.local`, and the Vercel project settings for deploys | `npx convex dev` | The Convex URL the Next.js app connects to |
+| `NEXT_PUBLIC_CONVEX_URL` | `.env.local` locally; on Vercel it is set during the build (see `CONVEX_DEPLOY_KEY`) | `npx convex dev` / `npx convex deploy` | The Convex URL the browser connects to. It is built into the JavaScript, so changing it needs a redeploy. Without it the app runs the Replay |
+| `CONVEX_DEPLOY_KEY` | Vercel project settings (Production) | you, from the Convex dashboard | Lets the Vercel build run `npx convex deploy`, which pushes the Convex functions and provides `NEXT_PUBLIC_CONVEX_URL` to the build |
 | `E2E_BASE_URL` | your shell (optional) | you | Run Playwright against a deployed URL instead of starting a local server |
 
 ### Scripts
@@ -154,13 +155,13 @@ npm run dev                                       # Next.js + Convex dev servers
 | Command | What it does |
 |---|---|
 | `npm run dev` | Next.js and Convex dev servers together |
-| `npm run dev:next` | Next.js only (Replay mode) |
+| `npm run dev:next` | Next.js only (Replay mode, unless `.env.local` has a Convex URL) |
 | `npm run test` | Unit, component and Convex tests (Vitest). No API calls: Claude is tested with recorded responses |
 | `npm run eval` | Engine-only eval on every fixture (runs in CI) |
 | `npm run eval:full` | Eval with real Claude extraction (manual; uses API credits) |
 | `npm run test:e2e` | Playwright end-to-end journey |
 | `npm run typecheck` / `npm run lint` | Type and lint checks |
-| `npx convex run seed:resetDemo` | Restore the Scenario A demo case to its starting state |
+| `npx convex run seed:resetLiveDemo` | Restore the Scenario A demo case to its starting state and run the pipeline once |
 
 ## Testing and evaluation
 
@@ -183,7 +184,7 @@ These numbers measure the rules engine on extracted facts from our **synthetic**
 
 - All shipments, companies, people and documents are **synthetic**, with answer keys we wrote. The live sample files were written by us to match Scenario A.
 - The three people (Maya the bookkeeper, Sam the owner, Leo the uploader) are **seeded**. Each screen is set to one of them, and there is no real login, so access limits are screen settings, not security.
-- The deployed site currently runs the **recorded Replay**, labeled on screen. The live backend runs locally (see above).
+- The deployed site runs **live** against the production Convex backend. If the network or Claude is slow during a demo we switch to the **recorded Replay** of the same case (`?replay=1`), which is labeled "Replay" on screen, and we say so.
 - Learned rules are **stored rules, not machine learning**: same input, same output.
 - Photo uploads are transcribed by Claude, and quotes are checked against that transcription, not against the image.
 - No real customer validation beyond the conversations we actually had.
