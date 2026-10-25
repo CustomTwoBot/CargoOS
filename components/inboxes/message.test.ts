@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scenarioADraft } from "@/components/case/fixture";
-import { lockedValues, plainMessage, printPage, splitLocked } from "./message";
+import { lockedGroups, lockedValues, plainMessage, printPage, signedBy, splitLocked } from "./message";
 
 describe("splitLocked", () => {
   it("locks amounts and line numbers, keeps the words around them", () => {
@@ -34,5 +34,33 @@ describe("export and copy", () => {
 
   it("copied text is the subject, a blank line, then the body", () => {
     expect(plainMessage({ subject: "S", body: "B" })).toBe("Subject: S\n\nB");
+  });
+});
+
+describe("lockedGroups", () => {
+  it("keeps the punctuation touching a value with it, so it never wraps apart", () => {
+    const flat = (t: string) => lockedGroups(t).map((g) => (Array.isArray(g) ? `[${g.map((p) => p.text).join("")}]` : g.text));
+    expect(flat("2 disputed lines ($700)")).toEqual(["2 disputed lines ", "[($700)]"]);
+    expect(flat("Over by $400.\nLine 6, rush")).toEqual(["Over by ", "[$400.]", "\n", "[Line 6,]", " rush"]);
+    expect(flat("says “drayage comes to $5,550”.")).toEqual(["says “drayage comes to ", "[$5,550”.]"]);
+    expect(flat("the quote says “$4,500 flat”")).toEqual(["the quote says ", "[“$4,500]", " flat”"]);
+    expect(flat("no numbers")).toEqual(["no numbers"]);
+  });
+
+  it("joins back to the same text", () => {
+    const body = scenarioADraft().body;
+    expect(lockedGroups(body).flat().map((p) => p.text).join("")).toBe(body);
+  });
+});
+
+describe("signedBy", () => {
+  it("puts the name on the line after the sign-off, keeping the company", () => {
+    expect(signedBy("Hi Derek,\n\nThanks,\nMaya\nBayline Home Goods", "Sam")).toBe("Hi Derek,\n\nThanks,\nSam\nBayline Home Goods");
+    expect(signedBy("Best regards,\nPriya", "Sam")).toBe("Best regards,\nSam");
+  });
+
+  it("leaves a message without a sign-off as it is", () => {
+    expect(signedBy("Hi Derek,\nThanks for the invoice.", "Sam")).toBe("Hi Derek,\nThanks for the invoice.");
+    expect(signedBy("Thanks,", "Sam")).toBe("Thanks,");
   });
 });

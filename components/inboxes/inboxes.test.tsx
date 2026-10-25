@@ -47,8 +47,10 @@ describe("QuestionsInbox", () => {
     const q = screen.getByRole("region", { name: "Question" });
     expect(within(q).getByText(/Did anyone agree to either charge\?/)).toBeInTheDocument();
     expect(screen.getByText("Asked today at 1:55 PM · $600 is waiting on this answer")).toBeInTheDocument();
+    // Both lines have no agreement: said once above the rows, not as a chip on each.
+    expect(within(q).getByText("No agreement for all 2 charges")).toBeInTheDocument();
     const lines = within(q).getByRole("list", { name: "Charges it covers" });
-    expect([...lines.querySelectorAll("li")].map((l) => l.textContent)).toEqual(["4Port congestion feeNo agreement$200", "6Rush handlingNo agreement$400"]);
+    expect([...lines.querySelectorAll("li")].map((l) => l.textContent)).toEqual(["4Port congestion fee$200", "6Rush handling$400"]);
     expect(within(q).getByText(/Your answer becomes evidence and lines 4 and 6 are rechecked\. Nothing is paid or sent\./)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
@@ -171,15 +173,15 @@ describe("QuestionsInbox", () => {
     fireEvent.change(screen.getByLabelText("Your answer"), { target: { value: "approved congestion" } });
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     rerender(<QuestionsInbox items={after} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
-    expect(screen.getByText("Nothing waiting.")).toBeInTheDocument();
+    expect(screen.queryByText("No questions waiting.")).not.toBeInTheDocument();
     expect(items("Answered")[0]).toHaveAttribute("aria-current", "true");
     expect(screen.getByText(/“approved the \$200 congestion fee/, { selector: "blockquote" })).toBeInTheDocument();
   });
 
-  it("empty: says why there is nothing to answer (in the detail pane when wide, the list just says nothing waits)", () => {
+  it("empty: says once why there is nothing to answer, with no count in the header", () => {
     render(<QuestionsInbox items={[]} onOpen={vi.fn()} onReply={vi.fn()} now={NOW} />);
-    expect(screen.getByText("None waiting")).toBeInTheDocument();
-    expect(screen.getByText("Nothing waiting.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Questions$/);
+    expect(screen.getAllByText(/waiting/i)).toHaveLength(1);
     expect(screen.getByText("No questions waiting.")).toBeInTheDocument();
     expect(screen.getByText("CargoOS asks only when the documents can't settle a charge.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Question" })).not.toBeInTheDocument();
@@ -246,11 +248,13 @@ describe("ApprovalsInbox", () => {
     render(<ApprovalsInbox items={requested()} {...props} onAccept={onAccept} onOpen={onOpen} viewer={SAM} />);
     fireEvent.click(items("Waiting for a decision")[1]);
     const lines = screen.getByRole("region", { name: "Lines to dispute" });
-    expect(within(lines).getByText("Agreed $4,500 → Billed $4,800 (+$300)")).toBeInTheDocument();
-    expect(within(lines).getByText("You said it was never agreed · $400")).toBeInTheDocument();
+    // One chip per line (the agreement, or the reason), the delta in the amount column.
+    expect([...within(lines).getByRole("list").querySelectorAll("li")].map((l) => l.textContent)).toEqual([
+      "1Ocean freight 40HC Ningbo-Long BeachAgreed $4,500 → Billed $4,800+$300", "6Rush handlingYou said it was never agreed+$400",
+    ]);
     const decision = screen.getByRole("complementary", { name: "Decision" });
-    expect(within(decision).getByText("$700")).toBeInTheDocument();
-    expect(within(decision).getByText("Requested by Maya, 2:07 PM.")).toBeInTheDocument();
+    expect(within(decision).getByText("$700")).not.toHaveClass("text-hero");
+    expect(within(decision).getByText("Requested by Maya at 2:07 PM.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Message to the seller" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(onAccept).toHaveBeenCalledWith("case_A", "draft_1");
@@ -288,7 +292,7 @@ describe("ApprovalsInbox", () => {
     const accept = screen.getByRole("button", { name: "Accept" });
     expect(accept).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("You requested this. Another owner decides.")).toBeInTheDocument();
-    expect(screen.getByText("Requested by you, 2:07 PM.")).toBeInTheDocument();
+    expect(screen.getByText("Requested by you at 2:07 PM.")).toBeInTheDocument();
     fireEvent.click(accept);
     expect(onAccept).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
@@ -299,7 +303,7 @@ describe("ApprovalsInbox", () => {
     expect(screen.getByText("Waiting for Sam to decide.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
-    expect(screen.getByText("Requested by you, 11:40 AM.")).toBeInTheDocument();
+    expect(screen.getByText("Requested by you at 11:40 AM.")).toBeInTheDocument();
   });
 
   it("Maya sees only the requests she made, waiting for Sam", () => {
@@ -315,7 +319,7 @@ describe("ApprovalsInbox", () => {
     render(<ApprovalsInbox items={approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft("accepted"))])} {...props} viewer={MAYA} />);
     unfold(/^Decided \(1\)$/);
     fireEvent.click(items("Decided")[0]);
-    expect(screen.getByText("Accepted by Sam, 2:10 PM. Nothing was sent.")).toBeInTheDocument();
+    expect(screen.getByText("Accepted by Sam at 2:10 PM.")).toBeInTheDocument();
     const msg = screen.getByRole("region", { name: "Message to the seller" });
     expect(within(msg).queryByRole("textbox")).not.toBeInTheDocument();
     expect(within(msg).getByText(/^Hi Derek,/)).toBeInTheDocument();
@@ -339,13 +343,20 @@ describe("ApprovalsInbox", () => {
     const done = items("Decided");
     expect(done[0]).toHaveTextContent("Bayline 40HC Ningbo-LB$700 · 2 lines · accepted 2:10 PM");
     fireEvent.click(done[0]);
-    expect(screen.getByText("Accepted by you, 2:10 PM. Nothing was sent.")).toBeInTheDocument();
+    // The stamp says when; "nothing is sent" is said once, under Export PDF.
+    expect(screen.getByText("Accepted by you at 2:10 PM.")).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Decision" })).queryByText(/never sends|Nothing (is|was) sent/)).not.toBeInTheDocument();
     const msg = screen.getByRole("region", { name: "Message to the seller" });
     expect(within(msg).getByRole("textbox", { name: "Message" })).toHaveAttribute("contenteditable", "true");
     const locked = [...msg.querySelectorAll("[data-locked]")].map((c) => c.textContent);
     expect(locked).toEqual(expect.arrayContaining(["$700", "Line 1", "$4,800", "$300", "Line 6", "$400"]));
     msg.querySelectorAll("[data-locked]").forEach((c) => expect(c).toHaveAttribute("contenteditable", "false"));
     expect(within(msg).getByText("CargoOS never sends this. You send it yourself.")).toBeInTheDocument();
+    // Signed by the owner who accepted it, not by whoever drafted it.
+    expect(within(msg).getByRole("textbox", { name: "Message" }).textContent).toMatch(/Thanks,\nSam\nBayline Home Goods$/);
+    // Punctuation stays with its number: "$400." can't wrap apart.
+    const over = [...msg.querySelectorAll("[data-locked]")].find((c) => c.textContent === "$400" && c.nextSibling?.textContent === ".");
+    expect(over?.parentElement).toHaveClass("whitespace-nowrap");
     expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Export PDF" }));

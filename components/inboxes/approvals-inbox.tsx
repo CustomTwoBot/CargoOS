@@ -5,9 +5,10 @@
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { capitalize, timeOf, whenAt } from "@/components/case/format";
+import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
 import { ago, type ApprovalItem, type InboxLine } from "./items";
-import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, NothingWaiting, PRIMARY, SECONDARY, useNow, useWide } from "./parts";
+import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, SECONDARY, useNow, useWide } from "./parts";
 import { DECIDER, firstName, SAM, who, type Person } from "./people";
 import { SellerMessage } from "./seller-message";
 
@@ -28,13 +29,13 @@ type Props = {
 
 export const APPROVALS_EMPTY = {
   title: "No requests waiting.",
-  text: "A dispute shows up here when someone requests approval. Accepting one sends nothing.",
+  text: "A dispute shows up here when someone requests approval.",
 };
 
 /** For a bookkeeper: their own requests. */
 export const REQUESTS_EMPTY = {
   title: "Nothing waiting for a decision.",
-  text: "When you request approval for a dispute, it shows up here with the owner's decision. Nothing is sent either way.",
+  text: "When you request approval for a dispute, it shows up here with the owner's decision.",
 };
 
 /** For a screen that only uploads documents. */
@@ -50,9 +51,12 @@ const lines = (n: number) => `${n} ${n === 1 ? "line" : "lines"}`;
 /** "2:07 PM" today, "Oct 23 at 2:07 PM" before. */
 const at = (iso: string, now: Date) => (whenAt(iso, now).startsWith("today") ? timeOf(iso) : whenAt(iso, now));
 
-/** "Agreed $4,500 → Billed $4,800 (+$300)", or "No agreement · $400" (SPEC §8 chips). Numbers come from the findings. */
-export const lineChip = (l: InboxLine) =>
-  l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed} (${l.delta})` : `${l.reason ?? "No agreement"} · ${l.billed}`;
+/** " at 2:07 PM" today, " on Oct 23 at 2:07 PM" before: for "Accepted by you at 2:07 PM". */
+const atTime = (iso: string | undefined, now: Date | null) =>
+  !iso || !now ? "" : whenAt(iso, now).startsWith("today") ? ` at ${timeOf(iso)}` : ` on ${whenAt(iso, now)}`;
+
+/** One chip per line, like the Overview rows: "Agreed $4,500 → Billed $4,800", or the plain reason. The delta sits in the amount column. */
+export const lineChip = (l: InboxLine) => (l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed}` : l.reason);
 
 export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageChange, viewer = SAM, now: fixed, print }: Props) {
   const clock = useNow();
@@ -88,7 +92,7 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
   return (
     <InboxFrame
       title="Approvals"
-      count={canDecide ? (pending.length ? `${pending.length} to decide` : "None to decide") : pending.length ? `${pending.length} waiting for ${decider}` : "None waiting"}
+      count={!pending.length ? "" : canDecide ? `${pending.length} to decide` : `${pending.length} waiting for ${decider}`}
       sub={canDecide ? "Requests to approve a dispute, across your cases. Nothing is sent, even after you accept."
         : `Disputes you asked ${decider} to approve, and how each was decided. Nothing is sent.`}
       reading={reading} backLabel="Back to approvals" onBack={() => setReading(false)}
@@ -96,7 +100,7 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
         <>
           {pending.length ? (
             <ItemList label={canDecide ? "Waiting for a decision" : `Waiting for ${decider}`}>{pending.map(row)}</ItemList>
-          ) : wide ? <NothingWaiting>{canDecide ? "Nothing to decide." : "Nothing waiting."}</NothingWaiting> : <InboxEmpty {...empty} />}
+          ) : !wide && <InboxEmpty {...empty} />}
           {decided.length > 0 && (
             <Fold label="Decided" count={decided.length} open={showDecided} onToggle={() => setFold(!showDecided)}>
               <ItemList label="Decided" quiet>{decided.map(row)}</ItemList>
@@ -128,7 +132,7 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
   const canDecide = canAct(viewer.roles, "approve");
   const ownRequest = !!d.requestedBy && d.requestedBy === viewer.id;
   // One operator drafts and decides; nobody requested it, so there is no requester to name (docs/design.md §0).
-  const requested = `${d.requestedBy ? `Requested by ${who(d.requestedBy, viewer)}` : "Drafted by you"}${d.requestedAt && now ? `, ${at(d.requestedAt, now)}` : ""}`;
+  const requested = `${d.requestedBy ? `Requested by ${who(d.requestedBy, viewer)}` : "Drafted by you"}${atTime(d.requestedAt, now)}`;
   // Side by side when the container has room; stacked with the decision first when it doesn't.
   return (
     <div className="@container flex min-h-0 flex-1 flex-col gap-3">
@@ -144,20 +148,22 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
           <section aria-label="Lines to dispute" className={cx(CARD, "px-5 py-5 md:px-6")}>
             <h3 className="text-meta font-medium text-ink-3">{lines(d.lineCount)} to dispute with {d.forwarder}</h3>
             <div className="mt-1">
-              <LineRows label="Lines" rows={d.lines.map((l) => ({ ...l, chip: lineChip(l) }))} />
+              <LineRows label="Lines" rows={d.lines.map((l) => ({ ...l, chip: lineChip(l), amount: l.delta }))} />
             </div>
           </section>
         </div>
         <aside aria-label="Decision" className={cx(CARD, "order-first flex flex-col gap-3 px-5 py-5 @3xl:order-none")}>
           <div className="text-meta font-medium text-ink-3">Total disputed</div>
-          <div className="-mt-2 text-hero font-[650] text-dispute">{d.total}</div>
+          <div className="-mt-2 text-[32px] font-[650] leading-[38px] tracking-[-0.015em] text-dispute">{d.total}</div>
           <p className="text-[13px] text-ink-2">{capitalize(requested)}.</p>
           {d.status === "pending" && (canDecide
             ? <Decide ownRequest={ownRequest} requester={who(d.requestedBy, viewer)} onAccept={onAccept} onReject={onReject} />
             : <p className="text-[13.5px] font-semibold text-waiting">Waiting for {firstName(DECIDER)} to decide.</p>)}
+          {/* Neutral box, green ✓ only (green means ✓, docs/design.md §3.1). "Nothing is sent" lives once, under Export PDF. */}
           {d.status === "accepted" && (
-            <p className="rounded-lg border border-cleared px-3 py-2 text-[13.5px] font-semibold">
-              Accepted by {who(d.decidedBy, viewer)}{d.decidedAt && now ? `, ${at(d.decidedAt, now)}` : ""}. Nothing was sent.
+            <p className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13.5px] font-semibold">
+              <span className="text-cleared"><StatusGlyph group="cleared" /></span>
+              Accepted by {who(d.decidedBy, viewer)}{atTime(d.decidedAt, now)}.
             </p>
           )}
           {d.status === "rejected" && (
@@ -166,11 +172,12 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
               {d.rejectionReason && <p className="mt-0.5 text-ink-2">“{d.rejectionReason}”</p>}
             </div>
           )}
-          <p className="text-xs text-ink-3">
-            {d.status === "rejected" ? `${d.requestedBy ? `It went back to ${who(d.requestedBy, viewer)}. ` : "Change the lines and draft it again. "}Nothing went to the seller.`
-              : d.status === "pending" ? (canDecide ? "Accepting drafts a message to the seller. Nothing is sent." : "Nothing is sent either way.")
-              : "CargoOS never sends email."}
-          </p>
+          {d.status !== "accepted" && (
+            <p className="text-xs text-ink-3">
+              {d.status === "rejected" ? `${d.requestedBy ? `It went back to ${who(d.requestedBy, viewer)}. ` : "Change the lines and draft it again. "}Nothing went to the seller.`
+                : canDecide ? "Accepting drafts a message to the seller. Nothing is sent." : "Nothing is sent either way."}
+            </p>
+          )}
         </aside>
       </div>
     </div>
