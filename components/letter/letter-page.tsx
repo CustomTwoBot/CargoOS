@@ -14,6 +14,7 @@ import { canAct } from "@/components/case/roles";
 import { latestDraft } from "@/components/case/view-model";
 import { lockedValues, plainMessage, printPage, signedBy } from "@/components/inboxes/message";
 import { OWNER, firstName, isUploaderOnly } from "@/components/shell/person";
+import { draftWriteFailed } from "./draft-status";
 import { LockedEditor, LockedParts, printInFrame } from "./locked-editor";
 
 /** A number from the checked bill: bold forest on a light green, never editable. */
@@ -95,8 +96,17 @@ export function LetterPage({ id, print = printInFrame }: { id: string; print?: (
         right={accepted && <span className="text-meta text-ink-3">Accepted by {firstName(accepted)}. Nothing was sent.</span>} />
       {(draft.editedBody ?? draft.body).trim()
         ? <Letter key={`${draft._id}:${person.id}`} bill={bill} draft={draft} person={person} sender={accepted ?? OWNER} print={print} />
-        : <Writing />}
+        : draftWriteFailed(bill.x, draft._id) ? <WriteFailed /> : <Writing />}
     </div>
+  );
+}
+
+/** Claude couldn't write the words (extraction_failed, stage draftDispute): say so instead of waiting forever. */
+function WriteFailed() {
+  return (
+    <section aria-label="Message" className="max-w-[760px] rounded-[6px] border border-line bg-surface px-6 py-10 shadow-float sm:px-14">
+      <p role="alert" className="font-semibold text-hold">Couldn&apos;t write the message. Reset the demo to try again.</p>
+    </section>
   );
 }
 

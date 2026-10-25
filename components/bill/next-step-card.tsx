@@ -1,12 +1,13 @@
 // The one card that says what happens next on this bill, for the person on this screen
 // (docs/design.md §0.5). Which card is decided by `nextStep`; the server still checks every action.
+import Link from "next/link";
 import { useState } from "react";
 import type { Draft } from "@/lib/types";
 import { personById } from "@/lib/people";
 import { delta, money, timeOf } from "@/components/case/format";
 import { canAct } from "@/components/case/roles";
 import { instant, toRows, totalsOf, type Row } from "@/components/case/view-model";
-import type { Step } from "@/components/app/next-step";
+import { bookkeeperName, type Step } from "@/components/app/next-step";
 import type { Bill } from "@/components/app/bills-provider";
 import { Button, Card, Kicker, LinkButton } from "@/components/app/ui";
 import { OWNER, firstName } from "@/components/shell/person";
@@ -26,7 +27,7 @@ export function NextStepCard({ bill, step, person }: Props) {
         <Card className="flex flex-col gap-2.5 px-6 py-[22px]">
           <Kicker tone="ask">Waiting for {owner}’s answer</Kicker>
           <p className="text-[17px] font-bold leading-6">{step.question.text}</p>
-          <span className="text-ink-3">CargoOS asked {owner}. The lines move here as soon as he answers; you can’t answer for him.</span>
+          <span className="text-ink-3">CargoOS asked {owner}. The lines move here as soon as {owner} answers. Only {owner} can answer it.</span>
         </Card>
       );
     case "reading":
@@ -43,7 +44,9 @@ export function NextStepCard({ bill, step, person }: Props) {
         </Card>
       );
     case "request":
-      return <RequestCard bill={bill} person={person} />;
+      return <RequestCard bill={bill} />;
+    case "waitRequest":
+      return <WaitRequestCard bill={bill} />;
     case "decide":
       return <DecideCard bill={bill} draft={step.draft} />;
     case "waitDecision":
@@ -51,7 +54,7 @@ export function NextStepCard({ bill, step, person }: Props) {
         <Card className="flex flex-col gap-1.5 px-6 py-[22px]">
           <Kicker>Waiting for {owner}</Kicker>
           <span className="text-[17px] font-bold">You asked {owner} to approve a {money(step.draft.totalDisputedCents)} dispute{requestedAt(bill) ? ` at ${requestedAt(bill)}` : ""}.</span>
-          <span className="text-ink-3">His decision shows on the track above. Nothing goes to {bill.forwarder} until he accepts and sends it himself.</span>
+          <span className="text-ink-3">{owner}’s decision shows on the track above. Nothing goes to {bill.forwarder} unless {owner} accepts and sends the letter.</span>
         </Card>
       );
     case "selfBlocked":
@@ -112,24 +115,43 @@ function HoldLines({ rows }: { rows: Row[] }) {
 const holdRows = (bill: Bill, keys?: string[]) =>
   toRows(bill.x).filter((r) => (keys ? keys.includes(r.key) : r.group === "dispute") && r.finding.userVerdict !== "false_positive");
 
-function RequestCard({ bill, person }: { bill: Bill; person: Person }) {
+/** The bookkeeper's step: ask the owner to approve. Only people who can't approve see it (nextStep). */
+function RequestCard({ bill }: { bill: Bill }) {
   const rows = holdRows(bill);
   const total = totalsOf(bill.x).atStakeCents;
   const owner = firstName(OWNER);
-  const decides = canAct(person.roles, "approve");
   return (
     <Card focus className="flex flex-col gap-3.5 px-5 py-[22px] sm:px-6">
       <Kicker tone="hold">Ready to dispute</Kicker>
       <p className="text-[19px] font-bold leading-7 sm:text-[20px]">Dispute <span className="text-hold">{money(total)}</span> with {bill.forwarder}?</p>
       <HoldLines rows={rows} />
       <div className="flex flex-wrap items-center gap-2.5">
-        <Button onClick={() => bill.actions.draftDispute()}>{decides && !bill.live ? "Start the dispute" : `Ask ${owner} to approve`}</Button>
-        <span className="text-[12.5px] text-ink-3">
-          {decides
-            ? bill.live ? `Maya usually asks from her screen. If you ask yourself, another owner has to decide.` : "You decide next. Nothing is sent."
-            : `${owner} decides. You can't approve a dispute you asked for.`}
-        </span>
+        <Button onClick={() => bill.actions.draftDispute()}>Ask {owner} to approve</Button>
+        <span className="text-[12.5px] text-ink-3">{owner} decides. You can&apos;t approve a dispute you asked for.</span>
       </div>
+    </Card>
+  );
+}
+
+/**
+ * The owner's view of the same moment: the bookkeeper asks, the owner decides. No button, because whoever
+ * asks can never approve (CLAUDE.md rule 8). On one screen, switching it to the bookkeeper in Settings plays both parts.
+ */
+function WaitRequestCard({ bill }: { bill: Bill }) {
+  const asker = bookkeeperName();
+  return (
+    <Card className="flex flex-col gap-3 px-5 py-[22px] sm:px-6">
+      <Kicker tone="hold">Ready to dispute</Kicker>
+      <p className="text-[19px] font-bold leading-7 sm:text-[20px]">
+        <span className="text-hold">{money(totalsOf(bill.x).atStakeCents)}</span> is on hold with {bill.forwarder}.
+      </p>
+      <HoldLines rows={holdRows(bill)} />
+      <span className="text-ink-3">
+        {asker} reviews these lines and asks you to approve the dispute; you accept or reject it here. Whoever asks can&apos;t approve, so you don&apos;t ask yourself.
+      </span>
+      <Link href="/settings" className="w-fit text-[13px] font-semibold text-link underline underline-offset-4">
+        Using one screen? Set it to {asker} in Settings to ask
+      </Link>
     </Card>
   );
 }
@@ -207,7 +229,7 @@ function RejectedCard({ bill, draft, person }: { bill: Bill; draft: Draft; perso
       <Kicker tone="hold">{mine ? `${owner} rejected this${at ? ` · ${at}` : ""}` : `You sent it back${at ? ` · ${at}` : ""}`}</Kicker>
       <span className="text-[17px] font-bold">{mine ? `${owner} rejected the ${money(draft.totalDisputedCents)} dispute.` : `You rejected the ${money(draft.totalDisputedCents)} dispute.`}</span>
       {draft.rejectionReason && <blockquote className="rounded-[12px] bg-hold-tint px-3.5 py-3 text-ink">“{draft.rejectionReason}”</blockquote>}
-      <span className="text-ink-3">{mine ? `The lines stay in Hold. Nothing was sent to ${bill.forwarder}. Mark a line as not an issue or ask again.` : "Maya sees your reason. Nothing was sent."}</span>
+      <span className="text-ink-3">{mine ? `The lines stay in Hold. Nothing was sent to ${bill.forwarder}. Mark a line as not an issue or ask again.` : `${draft.requestedBy ? firstName(personById(draft.requestedBy) ?? OWNER) : bookkeeperName()} sees your reason. Nothing was sent.`}</span>
       {mine && canAct(person.roles, "requestApproval") && (
         <div><Button variant="secondary" onClick={() => bill.actions.draftDispute()}>Ask {owner} again</Button></div>
       )}

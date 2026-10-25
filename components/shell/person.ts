@@ -13,7 +13,7 @@ export const DEFAULT_PERSON: Person = personById(DEFAULT_PERSON_ID)!;
 export const PERSON_COPY: Record<string, { first: string; title: string; can: string[]; cant: string[] }> = {
   sam: {
     first: "Sam", title: "Owner",
-    can: ["Answers CargoOS's questions", "Drafts disputes", "Accepts or rejects disputes"],
+    can: ["Answers CargoOS's questions", "Accepts or rejects disputes", "Reviews charges and edits lines"],
     cant: ["Can't accept a dispute they requested"],
   },
   maya: {

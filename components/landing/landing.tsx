@@ -3,13 +3,15 @@
 // and who uses it. No app frame. The preview is a static picture of the recorded case, not live data.
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Card, Kicker, Logo, PersonAvatar, SplitBar } from "@/components/app/ui";
+import { Card, HOME_FOCUS, Kicker, Logo, PersonAvatar, SplitBar } from "@/components/app/ui";
 import { cx } from "@/components/case/cx";
 import { delta, money } from "@/components/case/format";
 import { PERSON_COPY, displayName } from "@/components/shell/person";
 import { personById } from "@/lib/people";
 import type { Person } from "@/lib/types";
 import { GetStarted } from "./get-started";
+import { HeroBackdrop } from "./hero-backdrop";
+import { ProcessFlow } from "./process-flow";
 
 const SHELL = "mx-auto w-full max-w-[1240px] px-4 sm:px-8";
 
@@ -18,9 +20,11 @@ const A = { total: 750000, pay: 660000, hold: 30000, ask: 60000 } as const;
 
 export function Landing() {
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-ink">
+    // isolate: the fixed backdrop (-z-10) paints above this page's background but behind everything on it.
+    <div className="relative isolate flex min-h-screen flex-col bg-bg text-ink">
+      <HeroBackdrop />
       <header className={cx(SHELL, "flex h-16 items-center gap-3")}>
-        <Link href="/" aria-label="CargoOS home" className="mr-auto"><Logo /></Link>
+        <Link href="/" aria-label="CargoOS home" className={cx("mr-auto", HOME_FOCUS)}><Logo /></Link>
         <nav aria-label="Page" className="flex items-center gap-1 sm:gap-3">
           <a href="#how" className="inline-flex h-9 items-center rounded-full px-3 text-[13.5px] font-semibold text-ink-2 hover:text-ink">How it works</a>
           <GetStarted variant={null} className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-[10px] bg-brand px-3.5 text-[13px] font-semibold text-brand-ink hover:opacity-90">Open the demo</GetStarted>
@@ -62,11 +66,13 @@ export function Landing() {
               Each line lands in <span className="font-semibold text-pay">Pay</span>, <span className="font-semibold text-hold">Hold</span> or{" "}
               <span className="font-semibold text-ask">Ask</span>, next to the words it was checked against.
             </Step>
-            <Step n={3} title="The owner approves the dispute and sends the letter himself">
+            <Step n={3} title="The owner approves the dispute and sends the letter">
               CargoOS drafts the words and puts in the numbers. Nothing is sent or paid.
             </Step>
           </ol>
         </section>
+
+        <ProcessFlow className={cx(SHELL, "pb-16 lg:pb-24")} />
 
         <section aria-labelledby="who-title" className={cx(SHELL, "pb-16 lg:pb-24")}>
           <div className="mb-6 flex flex-col gap-1">
@@ -125,7 +131,8 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 function Preview() {
   return (
     <figure className="flex min-w-0 flex-col gap-3">
-      <Card className="flex flex-col gap-5 p-5 sm:p-7">
+      {/* Hover lights the card in the same lime as the safe-to-pay amount. */}
+      <Card className="flex flex-col gap-5 p-5 transition-[box-shadow,border-color] duration-300 ease-out hover:border-lime hover:shadow-[0_0_0_1px_var(--lime),0_0_36px_-6px_var(--lime)] motion-reduce:transition-none sm:p-7">
         <div className="flex items-center gap-3">
           <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border border-line bg-sunken text-[13px] font-bold">PC</span>
           <div className="flex min-w-0 flex-col">

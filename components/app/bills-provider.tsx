@@ -5,15 +5,17 @@
 // on this device (/bills/new) are remembered in localStorage and read by id. Live values flow down
 // through nested sources, so no hook runs outside a Convex provider and nothing is copied into state.
 import { Tooltip } from "@base-ui/react/tooltip";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Person } from "@/lib/types";
+import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useHasConvex } from "@/components/convex-provider";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { useCaseStore, type CaseActions, type CaseLocal, type Toast } from "@/components/case/case-store";
 import type { DemoCase } from "@/components/case/demo-case";
 import { SCENARIO_A } from "@/components/case/fixture";
-import { useLiveCase, useLiveCaseById, type LiveCase } from "@/components/case/live-store";
+import { errorText, useLiveCase, useLiveCaseById, type LiveCase } from "@/components/case/live-store";
 import type { CaseInput } from "@/components/case/view-model";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
@@ -42,6 +44,10 @@ export type BillsValue = {
   resetAll: () => void;
   /** Remember a case created on this device so it shows in the list. */
   rememberBill: (caseId: string) => void;
+  /** Live, but the backend has no Scenario A case (never seeded): its slot shows the recorded run. */
+  demoMissing?: boolean;
+  /** Live only: seed the demo case (api.seed.resetLiveDemo). */
+  setupDemo?: () => void;
 };
 
 const Ctx = createContext<BillsValue | null>(null);
@@ -87,15 +93,25 @@ const useRememberedBills = () => useSyncExternalStore(subscribeBills, readBills,
 let clientNow: Date | undefined;
 const useNow = () => useSyncExternalStore(() => () => {}, () => (clientNow ??= new Date()), () => null);
 
-/** ?replay=1 keeps every case a replay even with a backend, for the rest of the tab's session. Client only. */
+/**
+ * ?replay=1 keeps every case a replay even with a backend, for the rest of the tab's session; ?replay=0
+ * turns that off again. Client only.
+ */
+const REPLAY_KEY = "cargoos.replay";
 let replaySticky = false;
-const readReplay = () => {
+export const readReplay = () => {
+  const param = new URLSearchParams(window.location.search).get("replay");
+  if (param === "0") {
+    replaySticky = false;
+    try { sessionStorage.removeItem(REPLAY_KEY); } catch { /* private mode */ }
+    return false;
+  }
   if (replaySticky) return true;
   let stored = false;
-  try { stored = sessionStorage.getItem("cargoos.replay") === "1"; } catch { /* private mode */ }
-  if (stored || new URLSearchParams(window.location.search).get("replay") === "1") {
+  try { stored = sessionStorage.getItem(REPLAY_KEY) === "1"; } catch { /* private mode */ }
+  if (stored || param === "1") {
     replaySticky = true;
-    try { sessionStorage.setItem("cargoos.replay", "1"); } catch { /* not remembered */ }
+    try { sessionStorage.setItem(REPLAY_KEY, "1"); } catch { /* not remembered */ }
   }
   return replaySticky;
 };
@@ -119,9 +135,23 @@ function useToasts() {
 // ---- live sources --------------------------------------------------------
 
 type Lives = { demo?: LiveCase; created: LiveCase[] };
+type DemoSetup = { missing: boolean; setup?: () => void };
 
-function LiveDemo({ person, toast, render }: { person: Person; toast: Toast; render: (l?: LiveCase) => ReactNode }) {
-  return render(useLiveCase(person, toast));
+function LiveDemo({ person, toast, render }: { person: Person; toast: Toast; render: (l: LiveCase | undefined, d: DemoSetup) => ReactNode }) {
+  // getDemoCase is null (not undefined, which is loading) when the backend was never seeded.
+  const caseId = useQuery(api.cases.getDemoCase);
+  const reset = useMutation(api.seed.resetLiveDemo);
+  const setup = useCallback(() => {
+    reset({ personId: person.id }).then(() => toast("Demo set up. The Pacific Crest bill is live."), (e: unknown) => toast(errorText(e)));
+  }, [reset, person.id, toast]);
+  return render(useLiveCase(person, toast), { missing: caseId === null, setup });
+}
+
+/** A remembered id the backend rejects (a link to something that isn't a case) is skipped, not fatal. */
+class SkipOnError extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? null : this.props.children; }
 }
 
 /**
@@ -151,15 +181,17 @@ export function BillsProvider({ children, cases }: { children: ReactNode; cases?
     setReported((m) => (m[id] === l ? m : { ...m, [id]: l })), []);
   const created = live ? ids.flatMap((id) => reported[id] ?? []) : [];
 
-  const body = (demo?: LiveCase) => (
-    <Bills person={person} toast={toast} lives={{ demo, created }} live={live} given={cases ?? DEMO_CASES}>
+  const body = (demo?: LiveCase, setup: DemoSetup = { missing: false }) => (
+    <Bills person={person} toast={toast} lives={{ demo, created }} live={live} given={cases ?? DEMO_CASES} demoSetup={setup}>
       {children}
     </Bills>
   );
 
   return (
     <Tooltip.Provider delay={150}>
-      {live && ids.map((id) => <LiveReporter key={id} id={id} person={person} toast={toast} onReport={onReport} />)}
+      {live && ids.map((id) => (
+        <SkipOnError key={id}><LiveReporter id={id} person={person} toast={toast} onReport={onReport} /></SkipOnError>
+      ))}
       {live ? <LiveDemo person={person} toast={toast} render={body} /> : body()}
       <ToastRegion>
         {items.map((t) => (
@@ -172,8 +204,8 @@ export function BillsProvider({ children, cases }: { children: ReactNode; cases?
   );
 }
 
-function Bills({ person, toast, lives, live, given, children }: {
-  person: Person; toast: Toast; lives: Lives; live: boolean; given: DemoCase[]; children: ReactNode;
+function Bills({ person, toast, lives, live, given, demoSetup, children }: {
+  person: Person; toast: Toast; lives: Lives; live: boolean; given: DemoCase[]; demoSetup: DemoSetup; children: ReactNode;
 }) {
   const now = useNow();
   // The replay store keeps every recorded case but the one the live demo case stands in for.
@@ -207,6 +239,8 @@ function Bills({ person, toast, lives, live, given, children }: {
       toast("Demo reset. Every bill is back to before the answers.");
     },
     rememberBill: rememberBillId,
+    demoMissing: live && demoSetup.missing,
+    setupDemo: live ? demoSetup.setup : undefined,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

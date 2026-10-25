@@ -7,7 +7,7 @@ import { openQuestions } from "@/components/case/issues";
 import { isRechecking, latestDraft, totalsOf, type CaseInput } from "@/components/case/view-model";
 import { decisionBlocked } from "@/components/case/case-store";
 import { OWNER, firstName, isUploaderOnly } from "@/components/shell/person";
-import { personById } from "@/lib/people";
+import { PEOPLE, personById } from "@/lib/people";
 
 export type Step =
   | { kind: "reading"; total: number; read: number }
@@ -15,6 +15,8 @@ export type Step =
   | { kind: "answer"; question: Question }
   | { kind: "waitAnswer"; question: Question }
   | { kind: "request"; draft?: Draft }
+  /** An owner, with money on hold and nothing requested yet: the bookkeeper asks, the owner decides. */
+  | { kind: "waitRequest" }
   | { kind: "waitDecision"; draft: Draft }
   | { kind: "decide"; draft: Draft }
   | { kind: "selfBlocked"; draft: Draft }
@@ -27,6 +29,10 @@ export type BillGroup = "check" | "waiting" | "done";
 
 const holds = (p: Person, role: Person["roles"][number]) => p.roles.includes(role);
 const nameOf = (id?: string) => (id ? firstName(personById(id) ?? OWNER) : firstName(OWNER));
+
+/** Who asks for approval: the seeded person who reviews lines but can't approve ("Maya"). */
+const BOOKKEEPER = PEOPLE.find((p) => p.roles.includes("clerk") && !p.roles.includes("controller"));
+export const bookkeeperName = () => (BOOKKEEPER ? firstName(BOOKKEEPER) : "The bookkeeper");
 
 /** The one thing that happens next on this bill, seen by `viewer`. */
 export function nextStep(x: CaseInput, viewer: Person): Step {
@@ -47,6 +53,8 @@ export function nextStep(x: CaseInput, viewer: Person): Step {
   if (d?.status === "approved") return { kind: "accepted", draft: d };
   const atStake = totalsOf(x).atStakeCents;
   if (d?.status === "rejected" && atStake > 0) return { kind: "rejected", draft: d };
+  // Whoever asks can never approve (CLAUDE.md rule 8), so an owner doesn't ask themselves: they wait for the bookkeeper.
+  if (atStake > 0 && holds(viewer, "controller")) return { kind: "waitRequest" };
   if (atStake > 0 && holds(viewer, "clerk")) return { kind: "request", draft: d };
   return { kind: "clear" };
 }
@@ -57,7 +65,7 @@ export function groupOf(step: Step, viewer: Person): BillGroup {
     case "answer": case "decide": case "request": case "reading": case "rechecking": case "documents": return "check";
     case "rejected": return step.draft.requestedBy === viewer.id || holds(viewer, "clerk") ? "check" : "waiting";
     case "accepted": return holds(viewer, "controller") ? "check" : "done";
-    case "waitAnswer": case "waitDecision": case "selfBlocked": return "waiting";
+    case "waitAnswer": case "waitDecision": case "selfBlocked": case "waitRequest": return "waiting";
     case "clear": return "done";
   }
 }
@@ -74,6 +82,7 @@ export function statusOf(x: CaseInput, step: Step): { label: string; sub: string
     case "answer": return { label: questionLabel(x), sub: `CargoOS asked you about ${linesOf(step.question)}`, tone: "ask", action: "Answer" };
     case "waitAnswer": return { label: `Waiting for ${firstName(OWNER)}’s answer`, sub: `${linesOf(step.question)} · ${money(t.waitingCents)}`, tone: "muted", action: "Open" };
     case "request": return { label: `Ready to dispute ${money(t.atStakeCents)}`, sub: `Ask ${firstName(OWNER)} to approve`, tone: "hold", action: "Review" };
+    case "waitRequest": return { label: `Waiting for ${bookkeeperName()} to ask`, sub: `${money(t.atStakeCents)} on hold`, tone: "muted", action: "Open" };
     case "decide": return { label: `${nameOf(step.draft.requestedBy)} asks you to approve`, sub: `Dispute ${money(step.draft.totalDisputedCents)}`, tone: "hold", action: "Decide" };
     case "waitDecision": return { label: `Waiting for ${firstName(OWNER)}`, sub: `You asked to dispute ${money(step.draft.totalDisputedCents)}`, tone: "muted", action: "Open" };
     case "selfBlocked": return { label: "Another owner decides", sub: `You asked to dispute ${money(step.draft.totalDisputedCents)}`, tone: "muted", action: "Open" };
