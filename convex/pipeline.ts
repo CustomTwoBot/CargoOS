@@ -38,6 +38,17 @@ function toRow(f: Finding): Omit<Doc<"findings">, "_id" | "_creationTime"> {
   };
 }
 
+const sameForwarder = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The learned rules for a forwarder (R10). Matching is case-insensitive (SPEC §6), which the
+ * by_forwarder_type index can't do, so this scans the table; it holds one row per forwarder + charge type.
+ */
+async function rulesFor(ctx: MutationCtx, forwarder: string | undefined) {
+  if (!forwarder) return [];
+  return (await ctx.db.query("learnedRules").collect()).filter((r) => sameForwarder(r.forwarder, forwarder));
+}
+
 /**
  * Steps 3-5 of the SPEC §4 pipeline: reconcile -> findings revision N+1 -> diff in a `recomputed`
  * event -> schedule planQuestion if a waiting line has no question yet. Runs inside the caller's
@@ -53,8 +64,8 @@ async function recompute(ctx: MutationCtx, caseId: Id<"cases">, causeEventId?: I
   const prior = await ctx.db.query("findings")
     .withIndex("by_case_rev", (q) => q.eq("caseId", caseId).eq("revision", c.revision)).collect();
 
-  // TODO(Dev): W1 step 8 passes the forwarder's learned rules here (R10).
-  const next = reconcile({ case: c, facts, charges, prior, documents });
+  const learnedRules = await rulesFor(ctx, c.forwarder);
+  const next = reconcile({ case: c, facts, charges, prior, documents, learnedRules });
   const revision = c.revision + 1;
   for (const f of next) await ctx.db.insert("findings", toRow(f));
   await ctx.db.patch(caseId, { revision });
@@ -81,6 +92,22 @@ export const processChange = internalMutation({
   args: { caseId: v.id("cases"), eventId: v.optional(v.id("events")) },
   returns: recomputeResult,
   handler: async (ctx, { caseId, eventId }) => await recompute(ctx, caseId, eventId),
+});
+
+/**
+ * SPEC §4 step 6: a learned rule saved or undone recomputes every open case of that forwarder, so the
+ * other tab updates live. saveLearnedRule / undoLearnedRule (convex/learnedRules.ts) call this with their
+ * rule_learned / rule_undone event. Approved cases are closed and left alone.
+ */
+export const recomputeForwarder = internalMutation({
+  args: { forwarder: v.string(), eventId: v.optional(v.id("events")) },
+  returns: v.number(),
+  handler: async (ctx, { forwarder, eventId }) => {
+    const open = (await ctx.db.query("cases").collect())
+      .filter((c) => c.status !== "approved" && c.forwarder !== undefined && sameForwarder(c.forwarder, forwarder));
+    for (const c of open) await recompute(ctx, c._id, eventId);
+    return open.length;
+  },
 });
 
 // ---- Agree / Not an issue (SPEC §6 verdicts, §8 item 4) ----

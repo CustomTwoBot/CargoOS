@@ -1,6 +1,6 @@
 // reconcile(): facts + charges -> one findings revision (SPEC.md §5.3, §6, §9 W1 step 3).
 // Pure: same input, same output; no network, no database, no clock.
-import type { Case, Charge, Fact, Finding, SourceDoc } from "../types";
+import type { Case, Charge, Fact, Finding, LearnedRule, SourceDoc } from "../types";
 import { explain } from "./explain";
 import { evaluateCharge, type RuleContext, type RuleResult } from "./rules";
 
@@ -14,6 +14,7 @@ export interface ReconcileInput {
   prior?: Finding[];  // the previous revision, for carrying user verdicts
   // Optional beyond SPEC §5.3: lets why-lines name the source type ("email, Sep 5"). Without it they read "(Sep 5)".
   documents?: SourceDoc[];
+  learnedRules?: LearnedRule[];  // SPEC §5.3: the pipeline passes the rules for the case's forwarder (R10)
 }
 
 const sameIds = (a: string[], b: string[]) =>
@@ -25,11 +26,11 @@ function unchanged(prev: Finding, next: RuleResult): boolean {
 }
 
 export function reconcile(input: ReconcileInput): Finding[] {
-  const { case: c, facts, charges, prior = [], documents } = input;
+  const { case: c, facts, charges, prior = [], documents, learnedRules } = input;
   const revision = c.revision + 1;
-  // TODO(Dev): reconcile's §5.3 input has no documents, so the invoice date (valid-until fallback
-  // when there is no booking date) is not available here. Raise with the team if a scenario needs it.
-  const ctx: RuleContext = { baseCurrency: c.baseCurrency, facts, charges };
+  // TODO(Dev): the valid-until fallback to the invoice sentAt (no booking fact) isn't wired; it could
+  // come from `documents`. No current fixture needs it (SPEC §6 "Engine decisions", known gap).
+  const ctx: RuleContext = { baseCurrency: c.baseCurrency, facts, charges, caseId: c._id, forwarder: c.forwarder, learnedRules };
   const factById = new Map(facts.map((f) => [f._id, f]));
   const priorByKey = new Map(prior.map((f) => [f.key, f]));
 
@@ -56,7 +57,8 @@ export function reconcile(input: ReconcileInput): Finding[] {
     if (r.deltaCents !== undefined) finding.deltaCents = r.deltaCents;
     if (r.missing) finding.missing = r.missing;
     if (r.routeTo) finding.routeTo = r.routeTo;
-    finding.explanation = explain(finding, facts, { documents, charge });
+    if (r.learnedRuleId) finding.learnedRuleId = r.learnedRuleId;
+    finding.explanation = explain(finding, facts, { documents, charge, learnedRules });
 
     const prev = priorByKey.get(charge._id);
     if (prev?.userVerdict) {
