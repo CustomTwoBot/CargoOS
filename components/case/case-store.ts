@@ -45,13 +45,14 @@ export type Toast = (text: string, undo?: () => void) => void;
 
 export type CaseActions = {
   reset: (stage: string) => void;
-  reply: (questionId: string) => void;
+  /** Replay plays the recorded answer and ignores `text`; live mode sends it. */
+  reply: (questionId: string, text: string) => void;
   verdict: (key: string, v: Verdict) => void;
   draftDispute: () => Draft | undefined;
   accept: (draftId: string) => void;
   reject: (draftId: string, reason: string) => void;
   editMessage: (draftId: string, text: { subject: string; body: string }) => void;
-  addEvidence: (e: NewEvidence) => { kind: "replay" };
+  addEvidence: (e: NewEvidence) => { kind: "replay" } | { kind: "live" };
   saveLine: (key: string, change: LineChange) => void;
 };
 
