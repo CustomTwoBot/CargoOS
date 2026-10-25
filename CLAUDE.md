@@ -83,3 +83,17 @@ Secrets: `ANTHROPIC_API_KEY` lives in Convex environment variables only. Never p
 - Pull `main` before starting each task; small PRs; merge every 1–2 hours.
 - `main` must always build and deploy. If you break it, fixing it is your top priority.
 - Commit messages say what changed and why, in one line.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

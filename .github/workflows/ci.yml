@@ -1,0 +1,44 @@
+# CI: typecheck, lint, unit tests, engine-only eval (SPEC.md 4, 9 W4 step 1).
+# Needs no secrets and makes no calls to Claude or Convex; typecheck uses the committed convex/_generated.
+# No deploy step: Vercel deploys main.
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Eval (engine-only)
+        run: npm run eval
