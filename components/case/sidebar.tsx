@@ -32,6 +32,8 @@ export type SidebarProps = {
   inbox: { questions: number; approvals: number };
   /** Set in the drawer: shows a close button instead of collapse. */
   onClose?: () => void;
+  /** True while the screen runs the recorded replay (no Convex URL, still loading, or ?replay=1). Only then is "Replay" shown. */
+  replay: boolean;
 };
 
 const REPLAY = "Replay of a recorded run. Synthetic data. Nothing is sent or paid.";
@@ -70,7 +72,7 @@ const Count = ({ n }: { n: number }) => (
   ) : null
 );
 
-function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClose, className }: SidebarProps & { className?: string }) {
+function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClose, replay, className }: SidebarProps & { className?: string }) {
   const plain = isUploaderOnly(person);
   const place = (name: string, icon: ReactNode, on: boolean, onClick: () => void, n = 0) => (
     <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} aria-label={label(name, n)}
@@ -129,7 +131,7 @@ function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClos
       </div>
 
       <div className="flex-none border-t border-line p-2">
-        <p title={REPLAY} className="px-2.5 pb-1.5 pt-0.5 text-[11.5px] font-medium leading-4 text-ink-3">Replay</p>
+        {replay && <p title={REPLAY} className="px-2.5 pb-1.5 pt-0.5 text-[11.5px] font-medium leading-4 text-ink-3">Replay</p>}
         <button type="button" onClick={() => onView("settings")} aria-label={settingsLabel(person)} aria-current={view === "settings" ? "page" : undefined}
           className={cx("group relative flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left", view === "settings" ? CURRENT : HOVER)}>
           <Avatar person={person} size={32} />
@@ -167,7 +169,7 @@ function RailItem({ name, tip, on, onClick, children }: { name: string; tip?: Re
 const Dot = () => <b aria-hidden="true" className="absolute right-[7px] top-[7px] size-2 rounded-full bg-waiting-fill ring-2 ring-surface" />;
 const Rule = () => <span aria-hidden="true" className="my-2 h-px w-7 flex-none bg-line" />;
 
-function Rail({ person, view, onView, cases, activeId, onOpenCase, inbox, className }: SidebarProps & { className?: string }) {
+function Rail({ person, view, onView, cases, activeId, onOpenCase, inbox, replay, className }: SidebarProps & { className?: string }) {
   const plain = isUploaderOnly(person);
   return (
     <div className={cx("flex min-h-0 w-full flex-col items-center", className)}>
@@ -202,7 +204,7 @@ function Rail({ person, view, onView, cases, activeId, onOpenCase, inbox, classN
         })}
         <RailItem name="New case" on={view === "new"} onClick={() => onView("new")}><PlusIcon /></RailItem>
       </div>
-      <span title={REPLAY} className="flex-none pb-2 text-[10.5px] font-medium text-ink-3">Replay</span>
+      {replay && <span title={REPLAY} className="flex-none pb-2 text-[10.5px] font-medium text-ink-3">Replay</span>}
       <div className="flex-none border-t border-line py-2">
         <RailItem name={settingsLabel(person)} on={view === "settings"} onClick={() => onView("settings")}
           tip={<><b className="block font-semibold">{displayName(person)}</b>{WORKSPACE.name} · Settings</>}>
