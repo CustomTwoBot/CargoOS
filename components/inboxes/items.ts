@@ -3,9 +3,10 @@
 // counts, the lists and the case tabs always agree. Amounts come from the case, never from here.
 import type { DemoCase } from "@/components/case/demo-case";
 import { capitalize, delta, inCurrency, money } from "@/components/case/format";
+import { openQuestions, questionTitle } from "@/components/case/issues";
 import { groupTotals } from "@/components/case/totals";
 import { currencyOf, instant, toRows, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
-import type { CaseEvent, Party, SourceSpan } from "@/lib/types";
+import type { CaseEvent, DocType, Party, SourceSpan } from "@/lib/types";
 import { decisionOf } from "./people";
 
 /** One case as the inboxes read it. `forwarder` names the party a dispute goes to, when known. */
@@ -18,18 +19,33 @@ export type InboxLine = {
   agreed?: string;
   /** The plain reason when nothing was agreed above zero: "Billed twice", "You said it was never agreed". */
   reason: string;
+  /** The engine rule's short code: "R6" (nobody agreed), "R7" (sources disagree). */
+  code: string;
 };
+
+/** A quote CargoOS cites in a question, with the document it comes from. */
+export type Mention = SourceSpan & { docTitle?: string; docType?: DocType };
 
 export type QuestionItem = {
   /** Unique across cases: `${caseId}:${questionId}`. */
   id: string; caseId: string; caseTitle: string; questionId: string;
   status: "open" | "answered";
   text: string; askedAt: string; citations: SourceSpan[];
+  /** The citations with their documents, in the same order. */
+  mentions: Mention[];
+  /** The sources disagree (a covered line is R7, or the quotes come from two documents or more). */
+  conflict: boolean;
   lines: InboxLine[];
+  /** Billed total of every covered line, "$600". */
+  total: string;
   /** Billed total of the covered lines still waiting, "$600"; "$0" once answered. */
   waiting: string;
   /** The operator's answer, word for word, and when it came in. */
   answer?: { text: string; at?: string };
+  /** For a follow-up: the earlier answer it follows up on, word for word. */
+  followUpOf?: { answer?: string };
+  /** Replay only: what happens to a reply, and why the answer box is closed when it is. */
+  replay?: { note: string; blocked?: string };
 };
 
 /** pending_approval → pending, approved → accepted, rejected → rejected. Drafts nobody requested yet stay out. */
@@ -58,7 +74,7 @@ const line = (r: Row): InboxLine => ({
   key: r.key, lineNo: r.lineNo, description: r.description, group: r.group,
   billed: inCurrency(r.billedCents, r.currency), delta: delta(r.deltaCents),
   agreed: r.finding.expectedCents ? inCurrency(r.finding.expectedCents, r.currency) : undefined,
-  reason: r.reason.plain,
+  reason: r.reason.plain, code: r.reason.code,
 });
 
 const eventAt = (events: CaseEvent[], type: CaseEvent["type"], match: (p: Record<string, unknown>) => boolean) =>
@@ -75,16 +91,24 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
       const waiting = covered.filter((r) => r.group === "waiting").map((r) => r.finding);
       const reply = q.status === "answered" ? x.replies.find((r) => r.questionId === q._id) : undefined;
       const doc = reply && x.documents.find((d) => d._id === reply.docId);
+      const mentions = q.citations.map((c): Mention => {
+        const from = x.documents.find((d) => d._id === c.docId);
+        return { ...c, docTitle: from?.title, docType: from?.type };
+      });
       return {
         id: `${demo.id}:${q._id}`, caseId: demo.id, caseTitle: demo.title, questionId: q._id,
         status: q.status === "open" ? "open" : "answered",
-        text: q.text, askedAt: q.createdAt, citations: q.citations,
+        text: q.text, askedAt: q.createdAt, citations: q.citations, mentions,
+        conflict: covered.some((r) => r.finding.ruleId === "R7_CONFLICT") || new Set(q.citations.map((c) => c.docId)).size > 1,
         lines: covered.map(line),
+        total: money(groupTotals(covered.map((r) => r.finding), currencyOf(x)).billedCents),
         waiting: money(groupTotals(waiting, currencyOf(x)).billedCents),
         answer: doc && {
           text: doc.text,
           at: eventAt(x.events, "reply_received", (p) => p.questionId === q._id) ?? doc.sentAt,
         },
+        followUpOf: q.followupOf ? { answer: answerText(x, q.followupOf) } : undefined,
+        replay: q.status === "open" ? replayOf(demo, x, q._id) : undefined,
       };
     });
   });
@@ -93,6 +117,26 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
   const answered = all.filter((q) => q.status === "answered")
     .sort((a, b) => byTime(b.answer?.at ?? b.askedAt, a.answer?.at ?? a.askedAt));
   return [...open, ...answered];
+}
+
+const answerText = (x: CaseInput, questionId: string) => {
+  const reply = x.replies.find((r) => r.questionId === questionId);
+  return reply && x.documents.find((d) => d._id === reply.docId)?.text;
+};
+
+/**
+ * A replay reads the recorded answer whatever you type, and plays answers in the order they were
+ * recorded (answering a later one first would jump to a snapshot that already holds the earlier one).
+ */
+function replayOf(demo: DemoCase, x: CaseInput, questionId: string): QuestionItem["replay"] {
+  if (!demo.answers[questionId]) return { note: "This replay has no recorded answer for this question." };
+  const open = new Set(openQuestions(x).map((q) => q._id));
+  const next = Object.keys(demo.answers).find((id) => open.has(id));
+  const nextQ = next && next !== questionId ? x.questions.find((q) => q._id === next) : undefined;
+  return {
+    note: "Replay of a recorded run: CargoOS reads the recorded answer.",
+    blocked: nextQ && `Answer ${questionTitle(x, nextQ)} in this case first. In this replay the answers play in the order they were recorded.`,
+  };
 }
 
 const STATUS: Partial<Record<string, ApprovalStatus>> = { pending_approval: "pending", approved: "accepted", rejected: "rejected" };

@@ -5,10 +5,9 @@
 import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { capitalize, timeOf, whenAt } from "@/components/case/format";
-import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
 import { ago, type ApprovalItem, type InboxLine } from "./items";
-import { CARD, InboxEmpty, InboxFrame, Item, ItemList, PRIMARY, SECONDARY, SectionLabel, useNow } from "./parts";
+import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, SECONDARY, useNow } from "./parts";
 import { ASKED, OPERATOR, personName, type Person } from "./people";
 import { SellerMessage } from "./seller-message";
 
@@ -53,61 +52,43 @@ export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageCha
   const decided = items.filter((d) => d.status !== "pending");
   const [picked, setPicked] = useState<string | undefined>();
   const selected = items.find((d) => d.id === picked) ?? pending[0];
+  const [reading, setReading] = useState(false);
+  const [fold, setFold] = useState<boolean | undefined>();
+  // Decided stays folded unless you open it, or the selected request sits in it.
+  const showDecided = fold ?? (!!selected && selected.status !== "pending");
 
-  const row = (d: ApprovalItem) => (
-    <Item key={d.id} selected={d.id === selected?.id} onSelect={() => setPicked(d.id)}>
-      {d.status === "pending" ? (
-        <>
-          <span className="flex items-baseline justify-between gap-3">
-            <span className="truncate text-row font-semibold">{d.caseTitle}</span>
-            <b className="flex-none text-row font-semibold text-dispute">{d.total}</b>
-          </span>
-          <span className="mt-0.5 block truncate text-meta text-ink-2">{d.forwarder} · {lines(d.lineCount)}</span>
-          <span className="mt-0.5 block text-meta text-ink-3">
-            Requested by {who(d.requestedBy, viewer)}{d.requestedAt && now ? `, ${ago(d.requestedAt, now)}` : ""}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="flex items-baseline justify-between gap-3 text-meta">
-            <span className="truncate font-medium text-ink-3">{d.caseTitle}</span>
-            <span className="flex-none font-semibold text-ink-2">{d.total}</span>
-          </span>
-          {d.status === "accepted" ? (
-            <span className="mt-0.5 flex items-center gap-1 text-[13px] text-ink-2 [&_svg]:text-cleared">
-              <StatusGlyph group="cleared" />Accepted by {who(d.decidedBy, viewer)}{d.decidedAt && now ? `, ${at(d.decidedAt, now)}` : ""}
-            </span>
-          ) : (
-            <span className="mt-0.5 line-clamp-1 text-[13px] text-ink-2">
-              Rejected by {who(d.decidedBy, viewer)}{d.rejectionReason ? `: ${d.rejectionReason}` : ""}
-            </span>
-          )}
-        </>
-      )}
-    </Item>
-  );
+  const row = (d: ApprovalItem) => {
+    const when = now && (d.status === "pending" ? d.requestedAt && `requested ${ago(d.requestedAt, now)}`
+      : d.decidedAt ? `${d.status} ${at(d.decidedAt, now)}` : d.status);
+    return (
+      <Item key={d.id} selected={d.id === selected?.id} onSelect={() => { setPicked(d.id); setReading(true); }}
+        dot={d.status === "pending" ? "To decide" : undefined} title={d.caseTitle}
+        meta={[d.total, lines(d.lineCount), when].filter(Boolean).join(" · ")} />
+    );
+  };
 
   return (
     <InboxFrame
       title="Approvals"
       count={pending.length ? `${pending.length} to decide` : "None to decide"}
       sub="Requests to approve a dispute, across your cases. Nothing is sent, even after you accept."
+      reading={reading} backLabel="Back to approvals" onBack={() => setReading(false)}
       list={
         <>
           {pending.length ? <ItemList label="Waiting for a decision">{pending.map(row)}</ItemList> : <InboxEmpty {...APPROVALS_EMPTY} />}
           {decided.length > 0 && (
-            <>
-              <SectionLabel>Decided</SectionLabel>
+            <Fold label="Decided" count={decided.length} open={showDecided} onToggle={() => setFold(!showDecided)}>
               <ItemList label="Decided" quiet>{decided.map(row)}</ItemList>
-            </>
+            </Fold>
           )}
         </>
       }
       detail={selected && (
         <ApprovalDetail key={selected.id} d={selected} now={now} viewer={viewer} print={print}
           onOpen={() => onOpen(selected.caseId, selected.draftId)}
-          onAccept={() => onAccept(selected.caseId, selected.draftId)}
-          onReject={(reason) => onReject(selected.caseId, selected.draftId, reason)}
+          // Keep it selected once it moves to Decided, so you see the outcome (and, after Accept, the message).
+          onAccept={() => { setPicked(selected.id); onAccept(selected.caseId, selected.draftId); }}
+          onReject={(reason) => { setPicked(selected.id); onReject(selected.caseId, selected.draftId, reason); }}
           onMessageChange={onMessageChange && ((t) => onMessageChange(selected.caseId, selected.draftId, t))} />
       )}
     />
@@ -127,33 +108,26 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
   const ownRequest = !!d.requestedBy && d.requestedBy === viewer.id;
   // One operator drafts and decides; nobody requested it, so there is no requester to name (docs/design.md §0).
   const requested = `${d.requestedBy ? `Requested by ${who(d.requestedBy, viewer)}` : "Drafted by you"}${d.requestedAt && now ? `, ${at(d.requestedAt, now)}` : ""}`;
+  // Side by side when the container has room; stacked with the decision first when it doesn't.
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
-        {onOpen && <h2 className="truncate text-panel font-[650]">{d.caseTitle}</h2>}
-        {onOpen && <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>}
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] items-start gap-4">
-        <div className="flex max-h-full min-h-0 flex-col gap-4 overflow-auto">
+    <div className="@container flex min-h-0 flex-1 flex-col gap-3">
+      {onOpen && <DetailHead title={d.caseTitle} meta={`${d.total} · ${lines(d.lineCount)} · ${d.forwarder}`} onOpen={onOpen} />}
+      <div className="grid min-h-0 flex-1 items-start gap-4 @3xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-h-0 flex-col gap-4 @3xl:max-h-full @3xl:overflow-auto">
           {d.status === "accepted" && (d.message ? (
             <SellerMessage key={d.id} to={d.forwarder} subject={d.subject} message={d.message}
               readOnly={!canDecide} onChange={onMessageChange} print={print} />
           ) : (
             <p className={cx(CARD, "px-6 py-5 text-why text-ink-2")}>CargoOS is drafting the message to the seller.</p>
           ))}
-          <section aria-label="Lines to dispute" className={cx(CARD, "px-6 py-5")}>
+          <section aria-label="Lines to dispute" className={cx(CARD, "px-5 py-5 md:px-6")}>
             <h3 className="text-meta font-medium text-ink-3">{lines(d.lineCount)} to dispute with {d.forwarder}</h3>
-            <ul className="mt-2">
-              {d.lines.map((l) => (
-                <li key={l.key} className="border-b border-line py-2.5 last:border-0">
-                  <span className="block text-row font-semibold"><span className="mr-2 text-xs font-normal text-ink-3">{l.lineNo}</span>{l.description}</span>
-                  <span className="mt-1 inline-block rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2">{lineChip(l)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-1">
+              <LineRows label="Lines" rows={d.lines.map((l) => ({ ...l, chip: lineChip(l) }))} />
+            </div>
           </section>
         </div>
-        <aside aria-label="Decision" className={cx(CARD, "flex flex-col gap-3 px-5 py-5")}>
+        <aside aria-label="Decision" className={cx(CARD, "order-first flex flex-col gap-3 px-5 py-5 @3xl:order-none")}>
           <div className="text-meta font-medium text-ink-3">Total disputed</div>
           <div className="-mt-2 text-hero font-[650] text-dispute">{d.total}</div>
           <p className="text-[13px] text-ink-2">{capitalize(requested)}.</p>
