@@ -4,6 +4,7 @@
     "_id": "case_A-no",
     "title": "Bayline 40HC Ningbo-LB (A-no)",
     "shipmentRef": "PCL-INV-1012",
+    "forwarder": "Pacific Crest Logistics",
     "incoterm": "FOB Ningbo",
     "baseCurrency": "USD",
     "revision": 0,

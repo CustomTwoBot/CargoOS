@@ -8,7 +8,7 @@ const cents = z.int();
 const isoDate = z.union([z.iso.date(), z.iso.datetime({ offset: true, local: true })]);
 const confidence = z.number().min(0).max(1);
 
-export const RoleSchema = z.enum(["clerk", "controller", "ops_lead"]);
+export const RoleSchema = z.enum(["clerk", "controller", "ops_lead", "uploader"]);
 export const PartySchema = z.enum(["supplier", "forwarder", "carrier", "buyer"]);
 export const DocTypeSchema = z.enum(["quote", "email", "chat", "proforma", "freight_invoice", "reply", "other"]);
 
@@ -26,7 +26,7 @@ export const StatusSchema = z.enum([
 export const RuleIdSchema = z.enum([
   "R0_MATCH", "R1_DUPLICATE", "R2_RATE_MISMATCH", "R3_MATH_CURRENCY",
   "R4_PERMITTED_SURCHARGE", "R5_EXCLUDED_SCOPE", "R6_NO_EVIDENCE", "R7_CONFLICT",
-  "R8_APPROVED", "R9_REJECTED",
+  "R8_APPROVED", "R9_REJECTED", "R10_LEARNED",
 ]);
 
 export const CaseSchema = z.object({
@@ -37,6 +37,7 @@ export const CaseSchema = z.object({
   baseCurrency: z.literal("USD"),
   revision: z.int().nonnegative(),
   status: z.enum(["open", "awaiting_answer", "ready_for_approval", "approved"]),
+  forwarder: z.string().min(1).optional(),
 });
 
 export const SourceDocSchema = z.object({
@@ -111,6 +112,7 @@ export const FindingSchema = z.object({
   explanation: z.string(),
   userVerdict: z.enum(["confirmed", "false_positive"]).optional(),
   userVerdictBy: RoleSchema.optional(),
+  learnedRuleId: z.string().optional(),
 });
 
 const FindingStateSchema = z.object({ status: StatusSchema, deltaCents: cents.optional() });
@@ -158,13 +160,18 @@ export const DraftSchema = z.object({
   totalDisputedCents: cents,
   status: z.enum(["draft", "pending_approval", "approved", "rejected"]),
   createdBy: RoleSchema,
-  approvedBy: RoleSchema.optional(),
+  requestedBy: z.string().optional(),
+  approvedBy: z.string().optional(),
+  rejectedBy: z.string().optional(),
+  rejectionReason: z.string().min(1).optional(),
+  editedBody: z.string().optional(),
 });
 
 export const EventTypeSchema = z.enum([
   "doc_added", "charge_edited", "facts_extracted", "extraction_failed", "recomputed",
   "question_asked", "reply_received", "finding_confirmed", "finding_dismissed",
   "draft_created", "approval_requested", "approval_blocked", "approved",
+  "draft_rejected", "rule_learned", "rule_undone", "document_uploaded",
 ]);
 
 export const CaseEventSchema = z.object({
@@ -174,6 +181,23 @@ export const CaseEventSchema = z.object({
   actor: z.union([RoleSchema, z.literal("system"), z.literal("agent")]),
   type: EventTypeSchema,
   payload: z.record(z.string(), z.unknown()),
+});
+
+export const PersonSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  roles: z.array(RoleSchema).min(1),
+});
+
+export const LearnedRuleSchema = z.object({
+  _id: z.string(),
+  forwarder: z.string().min(1),
+  chargeType: ChargeTypeSchema,
+  maxAmountCents: cents.nonnegative().optional(),
+  createdBy: z.string().min(1),
+  createdAt: isoDate,
+  sourceCaseId: z.string(),
+  sourceChargeId: z.string(),
 });
 
 // SPEC.md 5.3: NewFact / NewCharge = the type without _id, caseId, supersedes (code fills those).

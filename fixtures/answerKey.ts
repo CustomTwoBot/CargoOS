@@ -33,6 +33,7 @@ export const AnswerKeySchema = z.strictObject({
   case: z.strictObject({
     title: z.string(),
     shipmentRef: z.string(),
+    forwarder: z.string().min(1).optional(),
     incoterm: z.string().optional(),
     baseCurrency: z.literal("USD"),
   }),

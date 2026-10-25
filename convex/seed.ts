@@ -8,7 +8,7 @@ import extracted from "../fixtures/scenarioA.facts.json";
 import { NewChargeSchema, NewFactSchema, SourceDocSchema } from "../lib/schemas";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
-import { role } from "./schema";
+import { personId, role } from "./schema";
 
 // Scenario A is identified by its invoice ref; the cases table has no scenario key.
 export const SCENARIO_A_REF = answerKey.case.shipmentRef;
@@ -81,7 +81,7 @@ export const seedScenarioA = internalMutation({
 // Deletes everything for the Scenario A case and re-seeds the starting state.
 // `npx convex run seed:resetDemo` works without a role; the UI reset button passes the current one.
 export const resetDemo = mutation({
-  args: { role: v.optional(role) },
+  args: { role: v.optional(role), personId },
   handler: async (ctx) => {
     for (const c of await findScenarioCases(ctx)) await deleteCase(ctx, c._id);
     return await insertScenarioA(ctx);

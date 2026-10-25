@@ -3,7 +3,9 @@
 Every AI coding agent working in this repo must follow this file. The full product spec is in `SPEC.md` (build spec; summary plan in `HACK.md`). This file holds the rules; when in doubt, read the matching `SPEC.md` section instead of guessing.
 
 ## What we're building
-CargoOS checks a freight invoice against what was actually agreed (quotes, emails, chats) before the AP clerk pays it. It sorts each invoice line into To dispute / Waiting on answers / Cleared, asks the ops lead when evidence is missing, recomputes when the answer arrives, and drafts a dispute that only the controller can approve. Nothing is ever sent or paid.
+CargoOS checks a freight invoice against what was actually agreed (quotes, emails, chats) before the bookkeeper pays it. It sorts each invoice line into To dispute / Waiting on answers / Cleared, asks the owner when evidence is missing, and recomputes when the answer arrives. The bookkeeper requests approval; the owner accepts or rejects (with a reason), and after accepting drafts the message to the seller, edits the words and exports a PDF or copies it. "Not an issue" is remembered per forwarder as a learned rule (R10). Documents can be uploaded from a phone. Nothing is ever sent or paid.
+
+Each screen is set to one seeded person (no login): Sam — owner (clerk, ops_lead, controller, uploader), Maya — bookkeeper (clerk, uploader), Leo — uploader (uploader). Decisions of Oct 24 evening and the pending type changes: `SPEC.md` "Changes on Oct 24 evening" and §5.5.
 
 ## Stack (nothing else without asking)
 - Next.js (App Router) + TypeScript + Tailwind + shadcn/ui, deployed on Vercel
@@ -15,10 +17,11 @@ CargoOS checks a freight invoice against what was actually agreed (quotes, email
 ## Who owns what
 | Owner | Folders |
 |---|---|
-| Dev | `lib/engine/`, `convex/pipeline.ts` |
-| Arpan | Claude extraction (`lib/ai/extract.ts`, its Convex action); coordinate with Pranav, who now owns the rest of `lib/ai/` |
-| Dzhamal | `app/`, `components/` |
-| Pranav | `convex/schema.ts`, `convex/seed.ts`, `convex/ai.ts`, `lib/ai/` (except `extract.ts`), `fixtures/`, `scripts/`, `.github/`, `CLAUDE.md` |
+| Dev | `lib/engine/` (incl. the R10_LEARNED step in `reconcile`), `convex/pipeline.ts` (`processChange`, `confirmFinding`, `dismissFinding`, `editCharge`) |
+| Dzhamal | `app/` (owner, bookkeeper and `/upload/[caseId]` pages, case tabs, documents, owner message editor + PDF export), `components/` |
+| Pranav | `lib/ai/` (incl. `extract.ts`), `convex/ai.ts`, `convex/uploads.ts` (upload backend), `convex/learnedRules.ts` (learned-rule storage), `convex/drafts.ts` (`requestApproval`, `approveDraft`, `rejectDraft`, requester check), `convex/schema.ts`, `convex/seed.ts` (incl. extra seeded cases), `lib/people.ts`, `fixtures/`, `scripts/`, `.github/`, `CLAUDE.md` |
+
+Arpan is out (Oct 24 evening); his work moved to Pranav.
 
 Only edit files in your own area. If you need a change elsewhere, stop and leave a note (TODO comment + tell the owner) instead of editing it.
 
@@ -33,8 +36,8 @@ Never "improve", rename, or duplicate a shared type. Import it.
 
 ### Convex functions (PROPOSED — confirm before relying on them)
 - Queries: `getCase`, `listDocuments`, `listFacts`, `listCharges`, `listFindings` (by revision), `listQuestions`, `listEvents`, `getDraft`
-- Mutations: `addDocument`, `editCharge`, `confirmFinding`, `dismissFinding`, `submitReply`, `createDraft`, `requestApproval`, `approveDraft`, `resetDemo`
-- Every mutation takes the acting `role` ("clerk" | "controller" | "ops_lead") as an argument.
+- Mutations: `addDocument`, `generateUploadUrl`, `editCharge`, `confirmFinding`, `dismissFinding`, `submitReply`, `requestApproval`, `approveDraft`, `rejectDraft`, `createDraft` (owner, after accepting), `undoLearnedRule`, `resetDemo`
+- Every mutation takes the acting `role` ("clerk" | "controller" | "ops_lead"; "uploader" after the SPEC §5.5 PR) as an argument. With the §5.5 PR it also takes the acting `personId`, and the server checks the role is one that person holds.
 
 ## Non-negotiables
 1. Money is **integer cents** everywhere. Format only in the UI.
@@ -44,10 +47,12 @@ Never "improve", rename, or duplicate a shared type. Import it.
 5. "Why" lines (finding explanations) come from **code templates** in `lib/engine/explain.ts`, not the LLM.
 6. Draft emails: the LLM writes words; **code inserts every number**.
 7. **Nothing is sent or paid.** Drafts only.
-8. Approval is checked **on the server**: only `controller` can approve; a clerk attempt writes `approval_blocked`.
+8. Approval is checked **on the server**: only a person holding `controller` can approve or reject, and **never the person who requested that dispute**; any other attempt writes `approval_blocked`. Reject needs a reason. (Until the SPEC §5.5 PR, the check is by role only.)
 9. Every state change writes an append-only `CaseEvent`.
 10. On any Claude failure or invalid JSON: retry once, then log `extraction_failed`, leave affected lines `needs_review`, show a banner. Never crash, never guess.
-11. `lib/engine/*` functions are pure: no network, no database, no clock.
+11. `lib/engine/*` functions are pure: no network, no database, no clock. Learned rules are passed into `reconcile` as input; they never override written evidence.
+12. Pages respect the screen's person: Maya can't open the owner page; Leo (uploader) sees no findings, amounts or disputes.
+13. Don't code against the pending types in SPEC §5.5 until that PR merges.
 
 ## Testing (required for everything)
 - Every new function ships with tests. A task isn't done until its tests pass locally and in CI.
@@ -75,7 +80,7 @@ Secrets: `ANTHROPIC_API_KEY` lives in Convex environment variables only. Never p
 - No new frameworks or services (no LangGraph, Supabase, Firebase, other LLM providers).
 - No reformatting or refactoring files you didn't need to change.
 - No `any` in shared code; no disabling type checks or lint rules to get green.
-- No general chatbot, login/OAuth, email sending, payments, or scraping (out of scope).
+- No general chatbot, login/OAuth, email or message sending, payments, native mobile app, machine learning, or scraping (out of scope).
 - Don't delete or rewrite someone else's tests.
 
 ## Git
