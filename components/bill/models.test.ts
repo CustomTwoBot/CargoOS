@@ -139,3 +139,10 @@ describe("trackOf: who does what (P3)", () => {
     expect(t.find((s) => s.key === "decide")).toMatchObject({ title: "Rejected", state: "bad", sub: "Sam · back to Maya" });
   });
 });
+
+describe("trackOf: the bookkeeper's step comes from lib/people", () => {
+  it("before anyone asks, the ask step names the seeded bookkeeper, now on her screen", () => {
+    const t = trackOf(after, nextStep(after, MAYA), "Pacific Crest Logistics");
+    expect(t.find((s) => s.key === "ask")).toMatchObject({ who: "M", whoId: "maya", title: "Ask to approve", sub: "Maya · now", state: "now" });
+  });
+});
