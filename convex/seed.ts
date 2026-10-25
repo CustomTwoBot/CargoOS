@@ -1,11 +1,12 @@
 // Scenario A seed and demo reset (SPEC.md 9, W4 step 2).
 // Loads the starting state only: case, documents, facts, charges, and one doc_added event per document.
-// No findings: Dev's pipeline computes those.
+// No findings: Dev's pipeline computes those. resetLiveDemo also schedules that first run.
 import { v } from "convex/values";
 import { z } from "zod";
 import answerKey from "../fixtures/scenarioA.json";
 import extracted from "../fixtures/scenarioA.facts.json";
 import { NewChargeSchema, NewFactSchema, SourceDocSchema } from "../lib/schemas";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
 import { personId, role } from "./schema";
@@ -86,5 +87,17 @@ export const resetDemo = mutation({
   handler: async (ctx) => {
     for (const c of await findScenarioCases(ctx)) await deleteCase(ctx, c._id);
     return await insertScenarioA(ctx);
+  },
+});
+
+// The reset the live UI and the presenter use: resetDemo, then the first pipeline run (findings
+// revision 1 and the question). A run still queued from an earlier reset finds its case deleted and does nothing.
+export const resetLiveDemo = mutation({
+  args: { personId: v.optional(v.string()) },
+  handler: async (ctx) => {
+    for (const c of await findScenarioCases(ctx)) await deleteCase(ctx, c._id);
+    const caseId = await insertScenarioA(ctx);
+    await ctx.scheduler.runAfter(0, internal.pipeline.processChange, { caseId });
+    return caseId;
   },
 });
