@@ -63,7 +63,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
   const issues = issuesOf(x);
   const draft = latestDraft(x);
   const current: Issue | undefined = issues.find((i) => i.id === tab);
-  const rechecking = isRechecking(x);
+  // Live, the wait starts when you reply or paste, before the backend's events arrive (live-store.ts).
+  const rechecking = isRechecking(x) || (!!demo.live && local.replaying);
   const ready = demo.draft(x);
   const approval = draft && approvalItems([inbox]).find((a) => a.draftId === draft._id);
   const asked = ASKED ? firstName(ASKED) : "the owner";
@@ -73,15 +74,15 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
   const open = openQuestions(x).length;
   const blocked = rechecking ? { why: "CargoOS is rechecking. Wait a moment.", short: "Rechecking…" }
     : totals.atStakeCents === 0 ? { why: "Nothing to dispute. At stake is $0.", short: "Nothing to dispute" }
-    : !ready ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
+    : !ready && !demo.live ? { why: "In this replay, answer the open questions first.", short: !canAct(roles, "reply") ? `Waiting for ${asked}'s answer`
         : open ? `Answer ${open} ${open === 1 ? "question" : "questions"} first` : "Answer the questions first" }
     : undefined;
   const onDispute = view === "case" && tab === "dispute";
-  const pill = casePill(x);
+  const pill = rechecking ? { label: "Rechecking", tone: "neutral" as const } : casePill(x);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <CaseHeader title={x.case.title} facts={headerFacts(x, inbox.forwarder)} replay
+      <CaseHeader title={x.case.title} facts={headerFacts(x, inbox.forwarder)} replay={!demo.live}
         pill={!reviews ? undefined : pill.label === "Waiting for your answer" && !canAct(roles, "reply") ? { ...pill, label: `Waiting for ${asked}` } : pill}
         actions={reviews ? (
           <>
@@ -122,8 +123,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
             ) : current.kind === "question" ? (
               <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
                 canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)} asked={asked}
-                replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
-                onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
+                replyNote={demo.live ? undefined : demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
+                onReply={(qid, text) => { actions.reply(qid, text); onTab("overview"); }} />
             ) : approval ? (
               <ApprovalDetail d={approval} now={clock} viewer={inboxViewer(viewer ?? { ...SAM, roles: [...roles] })}
                 onAccept={() => actions.accept(approval.draftId)}
@@ -145,7 +146,8 @@ export function CaseWorkspace({ demo, x, local, actions, viewer, roles: legacy, 
         </div>
       )}
 
-      <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
+      {/* The live case has no snapshots to step through; Settings → Demo data resets it. */}
+      {!demo.live && <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />}
     </div>
   );
 }

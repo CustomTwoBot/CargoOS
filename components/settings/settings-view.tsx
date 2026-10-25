@@ -27,13 +27,15 @@ type Props = {
   caseCount: number;
   onReset: () => void;
   initial?: SettingsSection;
+  /** Live when Scenario A comes from Convex (components/case/live-store.ts); replay otherwise. */
+  mode?: "live" | "replay";
 };
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
 const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7px] text-[13.5px] font-semibold text-ink hover:bg-sunken";
 const DemoTag = () => <span className="rounded-[6px] border border-line-strong px-1.5 text-[11.5px] font-semibold leading-[18px] text-ink-2">Demo</span>;
 
-export function SettingsView({ person, caseCount, onReset, initial = "device" }: Props) {
+export function SettingsView({ person, caseCount, onReset, initial = "device", mode = "replay" }: Props) {
   const [section, setSection] = useState<SettingsSection>(initial);
   const current = SECTIONS.find((s) => s.id === section)!;
   return (
@@ -62,7 +64,7 @@ export function SettingsView({ person, caseCount, onReset, initial = "device" }:
           {section === "workspace" && <Workspace person={person} />}
           {section === "appearance" && <Appearance />}
           {section === "billing" && <Billing caseCount={caseCount} />}
-          {section === "demo" && <DemoData onReset={onReset} />}
+          {section === "demo" && <DemoData onReset={onReset} mode={mode} />}
         </section>
       </div>
     </div>
@@ -198,21 +200,28 @@ function Billing({ caseCount }: { caseCount: number }) {
   );
 }
 
-function DemoData({ onReset }: { onReset: () => void }) {
+function DemoData({ onReset, mode }: { onReset: () => void; mode: "live" | "replay" }) {
+  const live = mode === "live";
   return (
     <>
       <Lead>What this screen shows and how to start over.</Lead>
       <div className={CARD}>
         <Row label="Mode">
           <span className="flex flex-wrap items-center gap-2">
-            Replay
-            <span className="font-normal text-ink-2">Recorded runs. Nothing reaches the backend or Claude.</span>
+            {live ? "Live" : "Replay"}
+            <span className="font-normal text-ink-2">
+              {live ? "Bayline 40HC is checked by the backend and Claude. The other cases are recorded runs."
+                : "Recorded runs. Nothing reaches the backend or Claude."}
+            </span>
           </span>
         </Row>
         <Row label="Data"><span className="font-normal text-ink-2">Synthetic data. Nothing is sent or paid automatically.</span></Row>
         <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-3">
           <button type="button" onClick={onReset} className={SECONDARY}>Reset demo</button>
-          <span className="text-[13px] text-ink-2">Every case goes back to before the answers. Your person and theme stay.</span>
+          <span className="text-[13px] text-ink-2">
+            {live ? "The live case goes back to its first check and question; the others go back to before the answers."
+              : "Every case goes back to before the answers."} Your person and theme stay.
+          </span>
         </div>
       </div>
     </>

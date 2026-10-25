@@ -111,7 +111,7 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
           at: eventAt(x.events, "reply_received", (p) => p.questionId === q._id) ?? doc.sentAt,
         },
         followUpOf: q.followupOf ? { answer: answerText(x, q.followupOf) } : undefined,
-        replay: q.status === "open" ? replayOf(demo, x, q._id) : undefined,
+        replay: q.status === "open" && !demo.live ? replayOf(demo, x, q._id) : undefined,
       };
     });
   });
