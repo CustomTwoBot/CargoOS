@@ -10,7 +10,9 @@
 
 import type * as ai from "../ai.js";
 import type * as cases from "../cases.js";
+import type * as drafts from "../drafts.js";
 import type * as files from "../files.js";
+import type * as learnedRules from "../learnedRules.js";
 import type * as pipeline from "../pipeline.js";
 import type * as seed from "../seed.js";
 import type * as uploads from "../uploads.js";
@@ -24,7 +26,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   cases: typeof cases;
+  drafts: typeof drafts;
   files: typeof files;
+  learnedRules: typeof learnedRules;
   pipeline: typeof pipeline;
   seed: typeof seed;
   uploads: typeof uploads;
