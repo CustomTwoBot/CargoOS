@@ -2,7 +2,8 @@
 // Audit log (every event of the case, in a sheet) and Reset demo. The theme lives in Settings.
 import { Menu } from "@base-ui/react/menu";
 import { useState } from "react";
-import { HistoryView } from "@/components/history/history-view";
+import type { Person } from "@/lib/types";
+import { AuditLog } from "@/components/history/audit-log";
 import { EVIDENCE_COPY, useEvidenceForm, type AddEvidence } from "@/components/inputs/evidence-input";
 import { EvidenceResult, EvidenceText, PrimaryButton, TypePicker } from "@/components/inputs/fields";
 import { MoreIcon } from "@/components/shell/icons";
@@ -13,12 +14,14 @@ const ITEM = "flex cursor-default items-center gap-2 rounded-[6px] px-2.5 py-1.5
 
 type Props = {
   x: CaseInput;
+  /** Whose words the audit log uses ("you" vs "Sam"). */
+  viewer: Person;
   /** Left out when this person doesn't add evidence. */
   onAddEvidence?: AddEvidence;
   onReset: () => void;
 };
 
-export function CaseMenu({ x, onAddEvidence, onReset }: Props) {
+export function CaseMenu({ x, viewer, onAddEvidence, onReset }: Props) {
   const [sheet, setSheet] = useState<"evidence" | "audit">();
   const close = () => setSheet(undefined);
   return (
@@ -40,8 +43,7 @@ export function CaseMenu({ x, onAddEvidence, onReset }: Props) {
         </Menu.Portal>
       </Menu.Root>
       {sheet === "evidence" && onAddEvidence && <EvidenceSheet onClose={close} onAdd={onAddEvidence} />}
-      {/* TODO(inbox-calm): swap HistoryView for the thread's AuditLog once it lands. */}
-      {sheet === "audit" && <Sheet title="Audit log" onClose={close} wide><HistoryView x={x} /></Sheet>}
+      {sheet === "audit" && <Sheet title="Audit log" onClose={close} wide><AuditLog x={x} viewer={viewer} /></Sheet>}
     </>
   );
 }

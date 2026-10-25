@@ -1,5 +1,5 @@
 // Message to the seller after the owner accepts a dispute (SPEC §8 owner page). The owner edits
-// the words; amounts and line numbers are locked chips taken from the findings. Export PDF prints
+// the words; amounts and line numbers are locked chips taken from the findings. Save PDF prints
 // the message; Copy text puts it on the clipboard. CargoOS never sends it.
 import { memo, useEffect, useRef, useState } from "react";
 import { cx } from "@/components/case/cx";
@@ -138,7 +138,7 @@ export function SellerMessage({ to, subject, message, onChange, readOnly, print 
           : <LockedEditor initial={message} label="Message" onText={(b) => update({ body: b })} />}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-        <button type="button" className={PRIMARY} onClick={() => print(printPage({ to, ...text.current }))}>Export PDF</button>
+        <button type="button" className={PRIMARY} onClick={() => print(printPage({ to, ...text.current }))}>Save PDF</button>
         <button type="button" className={SECONDARY} onClick={copy}>Copy text</button>
         {copied && <span role="status" className="text-meta text-ink-2">Copied.</span>}
       </div>

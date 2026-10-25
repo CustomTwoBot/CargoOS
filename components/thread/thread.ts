@@ -7,6 +7,7 @@ import type { DemoCase } from "@/components/case/demo-case";
 import { inCurrency, money, timeOf } from "@/components/case/format";
 import { questionTitle } from "@/components/case/issues";
 import { canAct } from "@/components/case/roles";
+import { chargeName } from "@/components/canvas/model";
 import { resultWord, type Tone } from "@/components/case/words";
 import { instant, isRechecking, toRows, totalsOf, type CaseInput, type Row } from "@/components/case/view-model";
 import { docRows } from "@/components/documents/documents";
@@ -42,9 +43,7 @@ export type ThreadItem =
 const text = (s: string): Seg => ({ t: "text", text: s });
 const lineLink = (r: Pick<Row, "key" | "lineNo">): Seg => ({ t: "line", key: r.key, text: `Line ${r.lineNo}` });
 
-// TODO(merge): use chargeName from components/canvas/model.ts once the canvas branch lands, so both panes print a charge alike.
 /** A charge as the invoice means it: "Drayage Oakland → Reno NV 3×40HC" (typed "->" and "3x40HC"). */
-const chargeName = (d: string) => d.replace(/\s->\s/g, " → ").replace(/(\d)( ?)x( ?)(\d)/g, "$1$2×$3$4");
 
 /**
  * The engine's why-line without the numbers the canvas already shows next to the line: "Billed $4,800."

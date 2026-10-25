@@ -1,95 +1,84 @@
 import { Profiler } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setDevicePerson } from "@/components/shell/person";
 import { CaseScreen } from "./case-screen";
 import { SCENARIO_A } from "./fixture";
 
-const atStake = () => screen.getByTestId("at-stake").textContent;
-const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
-const tabNames = () => within(screen.getByRole("tablist", { name: "Case tabs" })).getAllByRole("tab").map((t) => t.textContent);
+// The amount counts up to its new value; its label is the value it lands on.
+const atStake = () => screen.getByTestId("at-stake").getAttribute("aria-label");
 
-// TODO(rework §0.4): journeys of the old tabbed layout; rewritten against the canvas + thread at integration.
-describe.skip("CaseScreen (replay, tabs per issue)", () => {
-  afterEach(() => { cleanup(); vi.useRealTimers(); });
+// The demo journey on the new layout (docs/design.md §0.4): invoice on the left, CargoOS on the right.
+describe("CaseScreen: the demo journey", () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); act(() => setDevicePerson("sam")); });
 
-  it("Overview: $300 at stake, one tab per thing to decide, no role switcher", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    expect(atStake()).toBe("$300");
-    expect(screen.getByText("1 to dispute · 2 waiting on answers · 5 cleared")).toBeInTheDocument();
-    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Your answer$600"]);
-    expect(screen.getByTestId("case-facts")).toHaveTextContent(/^Invoice PCL-INV-1012 · Pacific Crest Logistics · Replay · /);
-    expect(screen.queryByText("Ops lead")).not.toBeInTheDocument();
-  });
-
-  it("a line's tab shows its evidence and opens the email with the quote highlighted", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(tab(/Ocean freight/));
-    expect(screen.getByText("What the forwarder promised")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ocean freight reduced to $4,500 if booked by Sep 10" }));
-    expect(screen.getByRole("button", { name: "Back to evidence" })).toBeInTheDocument();
-    expect(document.querySelector("mark")?.textContent).toBe("Ocean freight reduced to $4,500 if booked by Sep 10");
-  });
-
-  it("Not an issue clears the line, lowers At stake, and Undo puts it back", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(tab(/Ocean freight/));
-    fireEvent.click(screen.getByRole("button", { name: "Not an issue" }));
-    expect(atStake()).toBe("$0");
-    expect(screen.getByText("Marked as not an issue. Saved to case history.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(atStake()).toBe("$300");
-  });
-
-  it("answering replays the recorded run: recheck, then $700, a change banner and a new tab", () => {
+  const thread = () => screen.getByRole("complementary", { name: "CargoOS" });
+  const answer = (text: string) => {
+    fireEvent.change(within(thread()).getByLabelText("Your answer"), { target: { value: text } });
+    fireEvent.click(within(thread()).getByRole("button", { name: "Send answer" }));
+  };
+  /** Sam answers and the recorded recheck plays out. */
+  const answered = () => {
     vi.useFakeTimers();
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(tab(/Your answer/));
-    fireEvent.change(screen.getByLabelText("Your answer"), { target: { value: "approved congestion, not rush handling" } });
-    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
-    act(() => { vi.advanceTimersByTime(0); });
-    expect(screen.getByText("Rechecking 8 charges with your answer…")).toBeInTheDocument();
-    act(() => { vi.advanceTimersByTime(1600); });
-    expect(screen.getByText("1 to dispute · 1 waiting on answers · 6 cleared")).toBeInTheDocument();
-    act(() => { vi.advanceTimersByTime(2600); });
+    answer("approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling");
+    act(() => { vi.advanceTimersByTime(6000); });
+  };
+
+  it("opens on the verdict, the marked-up invoice and Sam's question", () => {
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    expect(atStake()).toBe("$300");
+    expect(screen.getByTestId("verdict-sentence")).toHaveTextContent("$300 is more than agreed, and $600 waits for your answer.");
+    const lines = screen.getByRole("region", { name: "Invoice lines" });
+    expect(within(lines).getByText("$300 over")).toBeInTheDocument();
+    expect(within(lines).getAllByText("Asked you")).toHaveLength(2);
+    expect(within(thread()).getByText("Question for you")).toBeInTheDocument();
+    expect(within(thread()).getByLabelText("Your answer")).toBeInTheDocument();
+  });
+
+  it("Sam's answer rechecks the case: $700, was $300, and the thread says what changed", () => {
+    answered();
     expect(atStake()).toBe("$700");
-    expect(screen.getByText("Your answer changed 2 charges")).toBeInTheDocument();
-    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400New"]);
+    expect(screen.getByTestId("was")).toHaveTextContent("was $300");
+    expect(within(thread()).getByText(/Your answer changed 2 charges/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Invoice lines" })).getByText("$400 over")).toBeInTheDocument();
   });
 
-  it("one operator drafts and accepts; the message to the seller is drafted and nothing is sent", () => {
+  it("Maya asks Sam to approve; Sam accepts and the message to the seller opens, nothing sent", () => {
+    answered();
+    act(() => setDevicePerson("maya"));
+    fireEvent.click(within(thread()).getByRole("button", { name: "Ask Sam to approve" }));
+    expect(screen.getByText("Approval requested from Sam. Nothing was sent.")).toBeInTheDocument();
+    expect(within(thread()).queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+
+    act(() => setDevicePerson("sam"));
+    fireEvent.click(within(thread()).getByRole("button", { name: "Accept" }));
+    fireEvent.click(within(thread()).getByRole("button", { name: "Open the message" }));
+    const msg = screen.getByRole("region", { name: "Message to the seller" });
+    expect(within(msg).getByText("CargoOS never sends this. You send it yourself.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^send$/i })).not.toBeInTheDocument();
+  });
+
+  it("Sam can't reject without a reason, and a rejection goes back to Maya with it", () => {
+    answered();
+    act(() => setDevicePerson("maya"));
+    fireEvent.click(within(thread()).getByRole("button", { name: "Ask Sam to approve" }));
+    act(() => setDevicePerson("sam"));
+    fireEvent.click(within(thread()).getByRole("button", { name: "Reject" }));
+    const form = within(thread()).getByRole("form", { name: "Reject the dispute" });
+    fireEvent.click(within(form).getByRole("button", { name: "Reject" }));
+    expect(within(thread()).getByRole("form", { name: "Reject the dispute" })).toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText("Why are you rejecting it?"), { target: { value: "They really did expedite it. Pay it this time." } });
+    fireEvent.click(within(form).getByRole("button", { name: "Reject" }));
+    act(() => setDevicePerson("maya"));
+    expect(within(thread()).getAllByText(/They really did expedite it\. Pay it this time\./).length).toBeGreaterThan(0);
+  });
+
+  it("Not an issue clears line 1 and lowers At stake", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    expect(tab(/Dispute/)).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/Drafted by you/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    // "you" once the workspace passes its `viewer` (Sam) to the approval detail instead of the old operator.
-    expect(screen.getByText(/Accepted by (you|Sam)/)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Message to the seller" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Send/ })).not.toBeInTheDocument();
-  });
-
-  it("reject needs a reason and leaves the dispute ready to draft again", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    fireEvent.change(screen.getByLabelText("Why are you rejecting it?"), { target: { value: "They did expedite it. Pay it this time." } });
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    expect(screen.getByText("“They did expedite it. Pay it this time.”")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draft dispute" })).not.toHaveAttribute("aria-disabled");
-  });
-  // Documents and History moved from the sidebar into the case's own tab strip (docs/design.md §0.2);
-  // their tests live with the case (workspace / case tabs).
-
-  it("a screen holding only ops lead can answer but sees no dispute, verdict, evidence or approve controls", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} roles={["ops_lead"]} />);
-    expect(screen.queryByRole("button", { name: "Draft dispute" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add evidence" })).not.toBeInTheDocument();
-    fireEvent.click(tab(/Ocean freight/));
-    expect(screen.queryByRole("button", { name: "Not an issue" })).not.toBeInTheDocument();
-    fireEvent.click(tab(/Your answer/));
-    expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("region", { name: "Invoice lines" })).getByText(/^Ocean freight 40HC/));
+    fireEvent.click(screen.getByRole("button", { name: "Not an issue" }));
+    expect(atStake()).toBe("$0");
   });
 });
 

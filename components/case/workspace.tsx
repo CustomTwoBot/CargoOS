@@ -68,9 +68,9 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
           <p className="truncate text-meta text-ink-3">{[caseSubline(x), TRUST].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex flex-none items-center gap-1.5">
-          <span title={demo.live ? "Live: read from the backend." : "Replay of a recorded run. Nothing here reaches the backend or Claude."}
+          <span title={demo.live ? "Live: read from the backend." : "Replay of a recorded run: CargoOS reads the recorded answer. Nothing here reaches the backend or Claude."}
             className="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">{demo.live ? "Live" : "Replay"}</span>
-          <CaseMenu x={x} onAddEvidence={canAct(person.roles, "addEvidence") ? actions.addEvidence : undefined}
+          <CaseMenu x={x} viewer={person} onAddEvidence={canAct(person.roles, "addEvidence") ? actions.addEvidence : undefined}
             onReset={resetAll} />
         </div>
       </header>
