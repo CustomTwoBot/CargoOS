@@ -23,12 +23,28 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
   const reply = (questionId: string, text: string) => { setSent(questionId); actions.reply(questionId, text); };
   const list = useRef<HTMLOListElement>(null);
   const last = items.at(-1)?.id;
+  // Whether the list was scrolled to its end: then it stays there when the list gets shorter.
+  const pinned = useRef(true);
 
   // Keep the newest item in view, as a chat does.
   useBrowserLayoutEffect(() => {
     const el = list.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) { el.scrollTop = el.scrollHeight; pinned.current = true; }
   }, [last, items.length, dock.kind]);
+
+  // The list also gets shorter without a new item: a smaller window, or a taller dock (the reject
+  // reason, a wrapped line). If it was at its end, keep it there; if the person scrolled up, leave it.
+  useEffect(() => {
+    const el = list.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { if (pinned.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const onScroll = () => {
+    const el = list.current;
+    if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
 
   return (
     // Fills the workspace's thread column (420px from 1280, 360px from 1024, the whole pane below); the
@@ -40,7 +56,7 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
         </p>
         <p className="mt-0.5 text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
       </header>
-      <ol ref={list} aria-label="What CargoOS did" aria-live="polite"
+      <ol ref={list} aria-label="What CargoOS did" aria-live="polite" onScroll={onScroll}
         className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto px-[18px] py-4">
         {items.map((it) => <Item key={it.id} it={it} onFocus={onFocus} />)}
       </ol>

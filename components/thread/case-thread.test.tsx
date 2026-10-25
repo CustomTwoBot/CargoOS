@@ -104,6 +104,28 @@ describe("CaseThread", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  it("stays at its end when the list gets shorter (smaller window, taller dock), not after the person scrolled up", () => {
+    let resized = () => {};
+    const observe = vi.fn();
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { resized = cb; } observe = observe; disconnect() {} });
+    const height = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(900);
+    const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(400);
+    render(<CaseThread {...ctxFor(SAM, "after")} onFocus={vi.fn()} />);
+    const el = thread();
+    expect(observe).toHaveBeenCalledWith(el);
+    // At the end (900 - 500 - 400 = 0); the window gets shorter, so the end moves: follow it.
+    el.scrollTop = 500; fireEvent.scroll(el);
+    client.mockReturnValue(260); el.scrollTop = 500;
+    resized();
+    expect(el.scrollTop).toBe(900);
+    // Scrolled up to read: a resize leaves it where it is.
+    el.scrollTop = 100; fireEvent.scroll(el);
+    client.mockReturnValue(200);
+    resized();
+    expect(el.scrollTop).toBe(100);
+    height.mockRestore(); client.mockRestore(); vi.unstubAllGlobals();
+  });
+
   it("keeps the newest item in view", () => {
     const height = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(900);
     render(<CaseThread {...ctxFor(SAM, "after")} onFocus={vi.fn()} />);
