@@ -14,17 +14,17 @@ export const PERSON_COPY: Record<string, { first: string; title: string; can: st
   sam: {
     first: "Sam", title: "Owner",
     can: ["Answers CargoOS's questions", "Drafts disputes", "Accepts or rejects disputes"],
-    cant: ["Accept a dispute they requested"],
+    cant: ["Can't accept a dispute they requested"],
   },
   maya: {
     first: "Maya", title: "Bookkeeper",
     can: ["Reviews charges and edits lines", "Adds evidence", "Requests approval for a dispute"],
-    cant: ["Accept or reject disputes", "Answer CargoOS's questions"],
+    cant: ["Can't accept or reject disputes", "Can't answer CargoOS's questions"],
   },
   leo: {
     first: "Leo", title: "Uploader",
     can: ["Uploads invoices, quotes, emails and chats"],
-    cant: ["See amounts, findings or disputes"],
+    cant: ["Doesn't see amounts, findings or disputes"],
   },
 };
 

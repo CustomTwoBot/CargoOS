@@ -22,13 +22,6 @@ export const who = (id: string | undefined, viewer: Person) => {
   return p ? firstName(p) : "someone";
 };
 
-/**
- * Reason words say "you" for whoever answered CargoOS (the ops lead). On another person's screen
- * they name that person: "You said it was never agreed" → "Sam said it was never agreed".
- */
-export const reasonFor = (reason: string, viewer: Person) =>
-  viewer.roles.includes("ops_lead") ? reason : reason.replace(/^You\b/, firstName(ASKED)).replace(/\byou\b/, firstName(ASKED));
-
 /** The seeded person with this id; the old one-operator id reads as Sam (who held every role). */
 export const personOf = (id: string | undefined): Person | undefined =>
   id === LEGACY_SELF ? SAM : id ? personById(id) : undefined;

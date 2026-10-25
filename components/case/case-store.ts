@@ -45,8 +45,7 @@ export type Toast = (text: string, undo?: () => void) => void;
 
 export type CaseActions = {
   reset: (stage: string) => void;
-  /** `text` is what the person typed: the live case sends it; a replay plays the recorded answer instead. */
-  reply: (questionId: string, text?: string) => void;
+  reply: (questionId: string) => void;
   verdict: (key: string, v: Verdict) => void;
   draftDispute: () => Draft | undefined;
   accept: (draftId: string) => void;

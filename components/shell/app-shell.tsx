@@ -3,10 +3,11 @@
 // Below 1024px a slim top bar holds a menu button that opens the sidebar as a drawer.
 // CSS classes give the right first paint; the width store only switches what React renders.
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Logo } from "@/components/case/glyphs";
+import { followSystemTheme } from "@/components/case/theme-toggle";
 import { Drawer } from "./drawer";
-import { Logo, MenuIcon } from "./icons";
+import { MenuIcon } from "./icons";
 import { sidebarMode, useShellWidth, useSidebarPref, type SidebarMode } from "./layout";
-import { followSystemTheme } from "./theme";
 
 type Props = {
   /** Where you are, for the top bar below 1024px: the case title, "Questions", … */

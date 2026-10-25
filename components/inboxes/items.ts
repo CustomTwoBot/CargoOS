@@ -49,8 +49,6 @@ export type QuestionItem = {
   followUpOf?: { answer?: string };
   /** Replay only: what happens to a reply, and why the answer box is closed when it is. */
   replay?: { note: string; blocked?: string };
-  /** The case's latest event: the replay's clock reads from it (see replayNow). */
-  caseAt?: string;
 };
 
 /** pending_approval → pending, approved → accepted, rejected → rejected. Drafts nobody requested yet stay out. */
@@ -69,8 +67,6 @@ export type ApprovalItem = {
   rejectionReason?: string;
   /** The message to the seller, once accepted: CargoOS's draft, or the owner's edit of it. Empty until drafted. */
   subject: string; message: string;
-  /** The case's latest event: the replay's clock reads from it (see replayNow). */
-  caseAt?: string;
 };
 
 /** What the sidebar shows: open questions, requests waiting for a decision, rejections sent back. */
@@ -85,20 +81,6 @@ const line = (r: Row): InboxLine => ({
 
 const eventAt = (events: CaseEvent[], type: CaseEvent["type"], match: (p: Record<string, unknown>) => boolean) =>
   events.filter((e) => e.type === type && match(e.payload)).sort((a, b) => instant(a.at) - instant(b.at)).at(-1)?.at;
-
-/** The latest time the case shows: its events and when its questions were asked (a question can postdate the last event). */
-const latestAt = (x: CaseInput) => [...x.events.map((e) => e.at), ...x.questions.map((q) => q.createdAt)]
-  .reduce<string | undefined>((m, t) => (!m || instant(t) > instant(m) ? t : m), undefined);
-
-/**
- * The replay's "now": a minute after the latest event of any case listed, the same way the case
- * store stamps what you do. Ages then read "12 minutes ago" next to "Asked today at 1:41 PM",
- * not hours on the wall clock. Undefined when no item carries a time.
- */
-export function replayNow(items: { caseAt?: string }[]): Date | undefined {
-  const times = items.flatMap((i) => (i.caseAt ? [instant(i.caseAt)] : [])).filter((t) => !Number.isNaN(t));
-  return times.length ? new Date(Math.max(...times) + 60_000) : undefined;
-}
 
 const byTime = (a?: string, b?: string) => (a && b ? instant(a) - instant(b) : a ? -1 : b ? 1 : 0);
 
@@ -130,7 +112,6 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
         },
         followUpOf: q.followupOf ? { answer: answerText(x, q.followupOf) } : undefined,
         replay: q.status === "open" ? replayOf(demo, x, q._id) : undefined,
-        caseAt: latestAt(x),
       };
     });
   });
@@ -197,7 +178,6 @@ export function approvalItems(cases: InboxCase[]): ApprovalItem[] {
         subject: status === "accepted" ? d.subject : "",
         // The owner who accepted writes to the seller, so CargoOS's draft is signed with their name.
         message: status === "accepted" ? d.editedBody ?? signedAs(d.body, d.approvedBy ?? legacy.acceptedBy) : "",
-        caseAt: latestAt(x),
       }];
     });
   });

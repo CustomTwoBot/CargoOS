@@ -39,20 +39,23 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Settings", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Person on this device" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /^Sam · Owner/ })).toBeChecked();
-    expect(screen.getByText("Accept a dispute they requested")).toBeInTheDocument();
+    expect(screen.getByText("Can't accept a dispute they requested")).toBeInTheDocument();
   });
 
-  it("marks only the account block as where you are, coming from a case, in the sidebar and the rail", () => {
+  it("marks only the account block as where you are, coming from Approvals, in the sidebar and the rail", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
-    const raised = (el: HTMLElement) => el.className.split(" ").includes("bg-surface");
+    const solid = (el: HTMLElement) => el.className.split(" ").includes("bg-sunken");
     const check = () => {
       const current = within(nav()).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page");
       expect(current).toEqual([settings()]);
-      const item = within(nav()).getByRole("button", { name: /^Pacific Crest/ });
-      expect(item).not.toHaveAttribute("aria-current");
-      expect(raised(item)).toBe(false);
-      expect(raised(settings())).toBe(true);
+      for (const name of [/^Approvals/, /^Questions/]) {
+        const item = within(nav()).getByRole("button", { name });
+        expect(item).not.toHaveAttribute("aria-current");
+        expect(solid(item)).toBe(false);
+      }
+      expect(solid(settings())).toBe(true);
     };
+    fireEvent.click(within(nav()).getByRole("button", { name: /^Approvals/ }));
     fireEvent.click(settings());
     check();
     fireEvent.click(within(nav()).getByRole("button", { name: "Collapse sidebar" }));
@@ -65,18 +68,22 @@ describe("Settings", () => {
     fireEvent.click(settings());
     pick("Maya · Bookkeeper");
     expect(settings()).toHaveAccessibleName("Settings. This device: Maya · Bookkeeper");
-    expect(within(nav()).getByText("Nothing waits on you.")).toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: "Pacific Crest · PCL-INV-1012. Waiting for Sam" })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Questions" })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Bayline 40HC Ningbo-LB, $300 at stake, Waiting for Sam" })).toBeInTheDocument();
   });
 
-  it("an uploader sees only the cases, with no amounts or statuses to act on, and New case", () => {
+  it("an uploader sees only the cases, with no amounts or statuses, and New case", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(settings());
     pick("Leo · Uploader");
-    expect(within(nav()).queryByRole("region", { name: "Needs you" })).not.toBeInTheDocument();
-    expect(within(nav()).queryByText(/\$/)).not.toBeInTheDocument();
-    expect(within(nav()).getByRole("button", { name: "Pacific Crest · PCL-INV-1012. 4 documents" })).toBeInTheDocument();
+    expect(within(nav()).queryByRole("region", { name: "Waiting on you" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByText("$300")).not.toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Bayline 40HC Ningbo-LB" })).toBeInTheDocument();
     expect(within(nav()).getByRole("button", { name: "New case" })).toBeInTheDocument();
+    fireEvent.click(within(nav()).getByRole("button", { name: "All cases" }));
+    const list = screen.getByRole("region", { name: "Cases" });
+    expect(within(list).queryByText("$300")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Show cases" })).not.toBeInTheDocument();
   });
 
   it("lists the workspace's members with their roles; Invite says why it is off", () => {
@@ -109,13 +116,13 @@ describe("Settings", () => {
   it("Billing has no payment buttons, and Demo data resets every case", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    expect(within(nav()).getByRole("button", { name: /Ready to dispute \$700/ })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: /\$700 at stake/ })).toBeInTheDocument();
     fireEvent.click(settings());
     fireEvent.click(screen.getByRole("button", { name: "Billing" }));
     expect(within(screen.getByRole("region", { name: "Billing" })).queryAllByRole("button")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Demo data" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
-    expect(within(nav()).getByRole("button", { name: /Answer 1 question/ })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: /\$300 at stake/ })).toBeInTheDocument();
     expect(screen.getByText("Demo reset. Every case is back to before the answers.")).toBeInTheDocument();
   });
 });

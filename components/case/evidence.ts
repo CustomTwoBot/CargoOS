@@ -19,17 +19,8 @@ const ICON: Record<SourceDoc["type"], ChainIcon> = {
   quote: "quote", email: "mail", chat: "chat", proforma: "quote", freight_invoice: "invoice", reply: "answer", other: "quote",
 };
 
-/**
- * Who answered CargoOS, as this screen names them: "you" on the screen of the person who answers,
- * their first name ("Sam") elsewhere (docs/design.md §0.3, §0.4).
- */
-export type Asked = string;
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const answerKind = (asked: Asked) => (asked === "you" ? "Your answer" : `${asked}'s answer`);
-
-/** "Email, Sep 5": the document kind and the day the fact was stated. An answer reads "Sam's answer" off the answerer's screen. */
-export const whereLabel = (doc: SourceDoc | undefined, at: string, asked: Asked = "you") =>
-  `${!doc ? "Document" : doc.type === "reply" ? answerKind(asked) : KIND[doc.type]}, ${formatShortDate(at)}`;
+/** "Email, Sep 5": the document kind and the day the fact was stated. */
+export const whereLabel = (doc: SourceDoc | undefined, at: string) => `${doc ? KIND[doc.type] : "Document"}, ${formatShortDate(at)}`;
 
 /** Older agreed rates for the same charge that a newer agreed rate replaced, mapped to the replacement. */
 export function replacedBy(facts: Fact[]): Map<string, Fact> {
@@ -46,7 +37,7 @@ export function replacedBy(facts: Fact[]): Map<string, Fact> {
   return out;
 }
 
-export function chainOf(x: CaseInput, row: Row, asked: Asked = "you"): Chain {
+export function chainOf(x: CaseInput, row: Row): Chain {
   const docs = new Map(x.documents.map((d) => [d._id, d]));
   const facts = new Map(x.facts.map((f) => [f._id, f]));
   const charge = x.charges.find((c) => c._id === row.finding.chargeId);
@@ -82,7 +73,7 @@ export function chainOf(x: CaseInput, row: Row, asked: Asked = "you"): Chain {
 
   for (const f of used) {
     const doc = docs.get(f.span.docId);
-    const base = { icon: doc ? ICON[doc.type] : "quote" as ChainIcon, where: whereLabel(doc, f.effectiveAt, asked), quote: f.span };
+    const base = { icon: doc ? ICON[doc.type] : "quote" as ChainIcon, where: whereLabel(doc, f.effectiveAt), quote: f.span };
     if (f.kind === "agreed_rate" && rule === "R7_CONFLICT") steps.push({ ...base, title: `The ${KIND[doc?.type ?? "other"].toLowerCase()} says ${f.amountCents !== undefined ? inCurrency(f.amountCents, f.currency) : "another amount"}` });
     else if (f.kind === "agreed_rate") steps.push({ ...base, title: doc?.type === "quote" ? "What the quote says" : "What the forwarder promised" });
     else if (f.kind === "permitted_surcharge") steps.push({ ...base, title: "What the quote allows",
@@ -95,9 +86,9 @@ export function chainOf(x: CaseInput, row: Row, asked: Asked = "you"): Chain {
           ? `${formatShortDate(booked)} is before ${formatShortDate(by)}, so the lower price applies.`
           : `${formatShortDate(booked)} is after ${formatShortDate(by)}, so the lower price doesn't apply.`) : undefined });
     }
-    else if (f.kind === "approval") steps.push({ ...base, title: `${capital(asked)} approved it`,
+    else if (f.kind === "approval") steps.push({ ...base, title: "You approved it",
       text: f.amountCents !== undefined ? `Up to ${inCurrency(f.amountCents, f.currency)}.` : undefined });
-    else if (f.kind === "rejection") steps.push({ ...base, title: `${capital(asked)} said it wasn't agreed` });
+    else if (f.kind === "rejection") steps.push({ ...base, title: "You said it wasn't agreed" });
     else steps.push({ ...base, title: "Also in the documents" });
   }
 
@@ -114,14 +105,13 @@ export function chainOf(x: CaseInput, row: Row, asked: Asked = "you"): Chain {
           text: "This isn't an agreement to pay it." });
       }
     }
-    if (q?.status === "open") steps.push({ icon: "answer", title: `CargoOS asked ${asked}`,
-      text: asked === "you" ? "Answer its question to settle this line." : `${capital(asked)}'s answer settles this line.` });
+    if (q?.status === "open") steps.push({ icon: "answer", title: "CargoOS asked you", text: "Answer its question to settle this line." });
   }
 
   const result: Chain["result"] =
     row.group === "dispute" ? { tone: "dispute", text: DISPUTE_RESULT[rule] ?? "Charged more than agreed", amount: delta(row.deltaCents) }
     : row.group === "waiting" ? { tone: "waiting", text: rule === "R3_MATH_CURRENCY" && !questionFor(x, row.key) ? "Waiting for an agreed exchange rate"
-      : rule === "R7_CONFLICT" ? `Sources disagree, waiting for ${asked === "you" ? "your" : `${asked}'s`} answer` : `Waiting for ${asked === "you" ? "your" : `${asked}'s`} answer` }
+      : rule === "R7_CONFLICT" ? "Sources disagree, waiting for your answer" : "Waiting for your answer" }
     : { tone: "cleared", text: row.tag === "Dismissed by clerk" ? "You marked it as not an issue" : "Matches what was agreed" };
 
   return { steps, result };
