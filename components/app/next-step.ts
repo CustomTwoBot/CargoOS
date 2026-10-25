@@ -11,6 +11,8 @@ import { PEOPLE, personById } from "@/lib/people";
 
 export type Step =
   | { kind: "reading"; total: number; read: number }
+  /** Every document is read but none gave invoice lines: no invoice yet, or it was saved as another kind. */
+  | { kind: "noLines" }
   | { kind: "rechecking" }
   | { kind: "answer"; question: Question }
   | { kind: "waitAnswer"; question: Question }
@@ -38,9 +40,12 @@ export const bookkeeperName = () => (BOOKKEEPER ? firstName(BOOKKEEPER) : "The b
 export function nextStep(x: CaseInput, viewer: Person): Step {
   if (isUploaderOnly(viewer)) return { kind: "documents" };
   const reading = x.documents.filter((d) => d.readStatus === "reading").length;
-  if (reading > 0 || (x.documents.length > 0 && x.findings.length === 0)) {
+  // Still reading, or the invoice's charges are in and the first check hasn't landed yet: keep the spinner.
+  if (reading > 0 || (x.charges.length > 0 && x.findings.length === 0)) {
     return { kind: "reading", total: x.documents.length, read: x.documents.length - reading };
   }
+  // Everything is read and nothing gave a charge: waiting would never end, so say what's missing.
+  if (x.documents.length > 0 && x.charges.length === 0) return { kind: "noLines" };
   if (isRechecking(x)) return { kind: "rechecking" };
   const q = openQuestions(x)[0];
   if (q) return holds(viewer, "ops_lead") ? { kind: "answer", question: q } : { kind: "waitAnswer", question: q };
@@ -62,7 +67,7 @@ export function nextStep(x: CaseInput, viewer: Person): Step {
 /** Where the bill sits in the list's tabs for `viewer`. */
 export function groupOf(step: Step, viewer: Person): BillGroup {
   switch (step.kind) {
-    case "answer": case "decide": case "request": case "reading": case "rechecking": case "documents": return "check";
+    case "answer": case "decide": case "request": case "reading": case "noLines": case "rechecking": case "documents": return "check";
     case "rejected": return step.draft.requestedBy === viewer.id || holds(viewer, "clerk") ? "check" : "waiting";
     case "accepted": return holds(viewer, "controller") ? "check" : "done";
     case "waitAnswer": case "waitDecision": case "selfBlocked": case "waitRequest": return "waiting";
@@ -78,6 +83,7 @@ export function statusOf(x: CaseInput, step: Step): { label: string; sub: string
   switch (step.kind) {
     case "documents": return { label: `${x.documents.length} documents`, sub: "Add what was agreed from your phone or laptop", tone: "muted", action: "Add documents" };
     case "reading": return { label: "Reading documents", sub: `${step.read} of ${step.total} read`, tone: "muted", action: "Open" };
+    case "noLines": return { label: "No invoice lines yet", sub: "Add the invoice, or check it's marked as Invoice", tone: "muted", action: "Add documents" };
     case "rechecking": return { label: "Rechecking", sub: "Lines move when the check finishes", tone: "muted", action: "Open" };
     case "answer": return { label: questionLabel(x), sub: `CargoOS asked you about ${linesOf(step.question)}`, tone: "ask", action: "Answer" };
     case "waitAnswer": return { label: `Waiting for ${firstName(OWNER)}’s answer`, sub: `${linesOf(step.question)} · ${money(t.waitingCents)}`, tone: "muted", action: "Open" };

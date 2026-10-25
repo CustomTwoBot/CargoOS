@@ -121,7 +121,7 @@ function PastePanel({ onAdd, onCancel }: { onAdd: (text: string, docType: Upload
         <span className="text-meta tabular-nums text-ink-3">{chars ? `${chars.toLocaleString("en-US")} ${chars === 1 ? "character" : "characters"}` : "Kept word for word"}</span>
       </div>
       <textarea id={`${id}-text`} rows={7} value={text} autoFocus
-        placeholder="Paste an email, a chat or a quote exactly as written."
+        placeholder="Paste an invoice, an email, a chat or a quote exactly as written."
         onChange={(e) => {
           setText(e.target.value);
           const guess = chosen ? undefined : pasteTypeOf(e.target.value);

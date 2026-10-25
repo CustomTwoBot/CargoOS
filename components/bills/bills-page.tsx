@@ -26,7 +26,7 @@ const PRIMARY_SMALL = "inline-flex h-9 items-center justify-center whitespace-no
 const STEP_ICON: Record<Step["kind"], LucideIcon> = {
   answer: CircleHelp, waitAnswer: Hourglass, request: Scale, waitRequest: Hourglass, decide: Stamp, waitDecision: Clock,
   selfBlocked: Ban, accepted: BadgeCheck, rejected: CircleX, clear: CircleCheck, reading: LoaderCircle, rechecking: LoaderCircle,
-  documents: Files,
+  noLines: CircleAlert, documents: Files,
 };
 
 function StepIcon({ kind }: { kind: Step["kind"] }) {
