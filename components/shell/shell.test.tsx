@@ -15,7 +15,7 @@ function atWidth(w: number) {
 const nav = () => screen.getByRole("navigation", { name: "Sections" });
 const BAYLINE = "Bayline 40HC Ningbo-LB";
 
-beforeEach(() => { localStorage.removeItem("cargoos.sidebar"); });
+beforeEach(() => { localStorage.removeItem("cargoos.sidebar"); localStorage.removeItem("cargoos.person"); });
 afterEach(() => { cleanup(); Reflect.deleteProperty(window, "matchMedia"); });
 
 describe("sidebar: places shared by every case", () => {

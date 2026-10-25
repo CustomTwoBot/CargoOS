@@ -62,7 +62,8 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     expect(tab(/Dispute/)).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/Drafted by you/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
-    expect(screen.getByText(/Accepted by you/)).toBeInTheDocument();
+    // "you" once the workspace passes its `viewer` (Sam) to the approval detail instead of the old operator.
+    expect(screen.getByText(/Accepted by (you|Sam)/)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Message to the seller" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Send/ })).not.toBeInTheDocument();
   });

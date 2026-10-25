@@ -3,10 +3,11 @@
 // the operator did on top of it (verdicts, drafts, added evidence, line edits, the event log).
 // Live Convex data replaces this in SPEC W3 step 8; the actions keep the same names as the mutations.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CaseEvent, Charge, Draft, Finding, SourceDoc } from "@/lib/types";
+import type { CaseEvent, Charge, Draft, Finding, Person, SourceDoc } from "@/lib/types";
 import type { NewEvidence } from "@/components/inputs/evidence-input";
 import type { LineChange } from "@/components/inputs/line-edit";
 import type { DraftDecision } from "@/components/inboxes/people";
+import { DEFAULT_PERSON, OWNER, firstName } from "@/components/shell/person";
 import type { DemoCase } from "./demo-case";
 import { ACTION_ROLE, type Action } from "./roles";
 import type { CaseInput } from "./view-model";
@@ -39,7 +40,6 @@ export function buildInput(demo: DemoCase, l: CaseLocal): CaseInput {
 }
 
 const KIND_TITLE: Record<NewEvidence["type"], string> = { email: "Email", chat: "Chat", other: "Note" };
-const ME = "you"; // the one operator (inboxes/people.ts OPERATOR)
 
 export type Toast = (text: string, undo?: () => void) => void;
 
@@ -55,7 +55,21 @@ export type CaseActions = {
   saveLine: (key: string, change: LineChange) => void;
 };
 
-export function useCaseStore(cases: DemoCase[], toast: Toast) {
+/**
+ * Why `viewer` may not accept or reject this draft, or undefined when they may. Mirrors the server
+ * rule (CLAUDE.md non-negotiable 8): only a controller decides, and never on their own request.
+ */
+export function decisionBlocked(viewer: Person, d: Pick<Draft, "requestedBy">): string | undefined {
+  if (!viewer.roles.includes("controller")) return `Only ${firstName(OWNER)} can accept or reject a dispute.`;
+  if (d.requestedBy === viewer.id) return "You requested this dispute. Another owner decides.";
+  return undefined;
+}
+
+/**
+ * Every case's replay state, acted on as `viewer` (the person this device is set to). Drafting by
+ * someone who can't decide becomes a request for approval; decisions carry the viewer's id.
+ */
+export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = DEFAULT_PERSON) {
   const [state, setState] = useState<Record<string, CaseLocal>>(() => Object.fromEntries(cases.map((c) => [c.id, fresh(c)])));
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
   useEffect(() => () => Object.values(timers.current).flat().forEach(clearTimeout), []);
@@ -72,6 +86,15 @@ export function useCaseStore(cases: DemoCase[], toast: Toast) {
 
   const actionsFor = (demo: DemoCase): CaseActions => {
     const id = demo.id, caseId = inputs[id].case._id;
+    /** Refuses a decision the server would refuse: writes approval_blocked and says why. */
+    const blocked = (draftId: string): boolean => {
+      const d = inputs[id].drafts.find((x) => x._id === draftId);
+      const reason = d && decisionBlocked(viewer, d);
+      if (!reason) return false;
+      patch(id, (l) => ({ ...l, log: event(l, caseId, "approve", "approval_blocked", { draftId, personId: viewer.id, reason }) }));
+      toast(reason);
+      return true;
+    };
     return {
       reset: (stage) => { clear(id); setState((s) => ({ ...s, [id]: { ...fresh(demo), stage } })); },
 
@@ -102,32 +125,36 @@ export function useCaseStore(cases: DemoCase[], toast: Toast) {
           }));
       },
 
-      // One operator holds controller, so drafting puts the dispute straight up for a decision.
+      // An owner's draft goes straight up for their own decision (one person, as before). Anyone
+      // else's draft is a request: it carries their id, and an owner decides.
       draftDispute: () => {
         const d = demo.draft(inputs[id]);
         if (!d) return undefined;
-        const draft = { ...d, status: "pending_approval" as const };
+        const decides = viewer.roles.includes("controller");
+        const draft: Draft = { ...d, status: "pending_approval", ...(!decides && { requestedBy: viewer.id }) };
         patch(id, (l) => {
           const log1 = event(l, caseId, "draftDispute", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents });
-          const log2 = event({ ...l, log: log1 }, caseId, "requestApproval", "approval_requested", { draftId: d._id });
+          const log2 = event({ ...l, log: log1 }, caseId, "requestApproval", "approval_requested", { draftId: d._id, personId: viewer.id });
           return { ...l, drafts: [...l.drafts.filter((x) => x._id !== d._id), draft], log: log2 };
         });
-        toast("Dispute drafted. Nothing was sent.");
+        toast(decides ? "Dispute drafted. Nothing was sent." : `Approval requested from ${firstName(OWNER)}. Nothing was sent.`);
         return draft;
       },
 
       accept: (draftId) => {
+        if (blocked(draftId)) return;
         patch(id, (l) => ({ ...l,
-          drafts: l.drafts.map((d) => (d._id === draftId ? { ...d, status: "approved", approvedBy: ME, acceptedBy: ME } : d)),
-          log: event(l, caseId, "approve", "approved", { draftId }) }));
+          drafts: l.drafts.map((d) => (d._id === draftId ? { ...d, status: "approved", approvedBy: viewer.id, acceptedBy: viewer.id } : d)),
+          log: event(l, caseId, "approve", "approved", { draftId, personId: viewer.id }) }));
         toast("Accepted. Nothing was sent.");
       },
 
       reject: (draftId, reason) => {
+        if (blocked(draftId)) return;
         patch(id, (l) => ({ ...l,
           drafts: l.drafts.map((d) => (d._id === draftId
-            ? { ...d, status: "rejected", rejectedBy: ME, rejectedAt: new Date().toISOString(), rejectionReason: reason } : d)),
-          log: event(l, caseId, "approve", "draft_rejected", { draftId, reason }) }));
+            ? { ...d, status: "rejected", rejectedBy: viewer.id, rejectedAt: new Date().toISOString(), rejectionReason: reason } : d)),
+          log: event(l, caseId, "approve", "draft_rejected", { draftId, reason, personId: viewer.id }) }));
         toast("Rejected. Nothing went to the seller.");
       },
 
