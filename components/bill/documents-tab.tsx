@@ -3,23 +3,22 @@
 // in full on the right with every quote CargoOS used marked and the line it was used for. A person
 // holding clerk adds evidence here (and rechecks); anyone can add from a phone via /upload/[caseId].
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type RefObject } from "react";
 import type { SourceDoc } from "@/lib/types";
 import type { Bill } from "@/components/app/bills-provider";
 import { useBills } from "@/components/app/bills-provider";
+import { ArrowLeft, CircleAlert, CircleCheck, Clock, DocIcon, FileX, Inbox, LoaderCircle, type LucideIcon } from "@/components/app/icons";
+import { useReducedMotion } from "@/components/app/motion";
 import { Button, Card, Kicker } from "@/components/app/ui";
 import { cx } from "@/components/case/cx";
 import { highlight } from "@/components/case/evidence";
 import { canAct } from "@/components/case/roles";
+import { AddFiles } from "@/components/upload/add-files";
 import { docRows, itemsOf, segmentsOf, usedFor, type DocRow, type Item } from "@/components/documents/documents";
 import { outcomeText, type EvidenceType } from "@/components/inputs/evidence-input";
 import { isUploaderOnly } from "@/components/shell/person";
 
 export type DocFocus = { docId: string; quote?: string };
-
-const TAG: Record<SourceDoc["type"], string> = {
-  quote: "QT", email: "EM", chat: "CH", proforma: "PF", freight_invoice: "INV", reply: "ANS", other: "NT",
-};
 
 const KINDS: { type: EvidenceType; label: string }[] = [
   { type: "email", label: "Email" }, { type: "chat", label: "Chat" }, { type: "other", label: "Note" },
@@ -28,21 +27,41 @@ const KINDS: { type: EvidenceType; label: string }[] = [
 /** Invoice, quote and proforma text reads as printed; emails, chats and answers as messages. */
 const isPrinted = (d: SourceDoc) => d.type === "freight_invoice" || d.type === "quote" || d.type === "proforma";
 
-type ReadState = { label: string; failed: boolean; error?: string };
+type ReadState = { label: string; failed: boolean; error?: string; state: "read" | "failed" | "reading" | "waiting" };
 
 /** The read status shown in the list, with the stored readStatus/readError winning when present. */
 function readState(r: DocRow): ReadState {
-  if (r.doc.readStatus === "not_read") return { label: "Couldn't read", failed: true, error: r.doc.readError };
-  if (r.doc.readStatus === "reading" && r.status.state === "waiting") return { label: "Reading…", failed: false };
+  if (r.doc.readStatus === "not_read") return { label: "Couldn't read", failed: true, error: r.doc.readError, state: "failed" };
+  if (r.doc.readStatus === "reading" && r.status.state === "waiting") return { label: "Reading…", failed: false, state: "reading" };
   const failed = r.status.state === "failed" || r.status.state === "partial";
-  return { label: r.status.label, failed, error: failed ? r.doc.readError : undefined };
+  return {
+    label: r.status.label, failed, error: failed ? r.doc.readError : undefined,
+    state: failed ? "failed" : r.status.state === "waiting" ? "waiting" : "read",
+  };
+}
+
+const STATUS_ICON: Record<ReadState["state"], LucideIcon> = { read: CircleCheck, failed: CircleAlert, reading: LoaderCircle, waiting: Clock };
+
+/** The read status as words with an icon beside them (the words carry the meaning). */
+function ReadStatus({ st, className }: { st: ReadState; className?: string }) {
+  const Icon = STATUS_ICON[st.state];
+  return (
+    <span className={cx("inline-flex items-center gap-1.5 text-meta", st.failed ? "font-semibold text-hold" : "text-ink-2", className)}>
+      <Icon aria-hidden="true" strokeWidth={2.2}
+        className={cx("size-3.5 flex-none", st.state === "read" && "text-pay", st.state === "reading" && "animate-spin motion-reduce:animate-none")} />
+      <span>{st.label}</span>
+    </span>
+  );
 }
 
 const FOCUS_ID = "focus";
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+/** Below lg the list and the document stack; picking a document scrolls to it. */
+const stacked = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(max-width: 1023.98px)").matches;
 
-export function DocumentsTab({ bill, focus }: { bill: Bill; focus?: DocFocus }) {
+export function DocumentsTab({ bill, focus, onLine }: { bill: Bill; focus?: DocFocus; onLine?: (lineNo: number) => void }) {
   const { person } = useBills();
+  const reduced = useReducedMotion();
   const rows = docRows(bill.x);
   const [selectedId, setSelectedId] = useState(focus?.docId ?? rows[0]?.doc._id);
   // A new focus (from a line's "See where") selects its document.
@@ -53,49 +72,91 @@ export function DocumentsTab({ bill, focus }: { bill: Bill; focus?: DocFocus }) 
   }
   const selected = rows.find((r) => r.doc._id === selectedId) ?? rows[0];
   const facts = !isUploaderOnly(person);
+  const list = useRef<HTMLUListElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
+  const behavior: ScrollBehavior = reduced ? "auto" : "smooth";
+
+  const pick = (id: string) => {
+    setSelectedId(id);
+    if (stacked()) requestAnimationFrame(() => pane.current?.scrollIntoView?.({ block: "start", behavior }));
+  };
+  const backToList = () => {
+    list.current?.scrollIntoView?.({ block: "start", behavior });
+    list.current?.querySelector<HTMLButtonElement>("button[aria-current]")?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col gap-4">
-        <Card className="p-1.5">
-          <ul aria-label="Documents" className="flex flex-col">
-            {rows.map((r) => {
-              const st = readState(r);
-              const on = r === selected;
-              return (
-                <li key={r.doc._id}>
-                  <button type="button" onClick={() => setSelectedId(r.doc._id)} aria-current={on || undefined}
-                    className={cx("grid w-full grid-cols-[38px_minmax(0,1fr)] gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left",
-                      on ? "bg-sunken" : "hover:bg-sunken")}>
-                    <span aria-hidden="true" className="mt-0.5 grid h-7 place-items-center rounded-[8px] border border-line-strong bg-surface font-mono text-[10.5px] font-bold text-ink-2">
-                      {TAG[r.doc.type]}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13.5px] font-semibold leading-[19px]" title={r.doc.title}>{r.doc.title}</span>
-                      <span className="block truncate text-meta text-ink-3">{[r.kind, r.date].filter(Boolean).join(" · ")}</span>
-                      <span className={cx("block text-meta", st.failed ? "font-semibold text-hold" : "text-ink-2")}>{st.label}</span>
-                      {st.error && <span className="block text-meta text-ink-3">{st.error}</span>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {!rows.length && <p className="px-3 py-4 text-why text-ink-2">No documents on this bill yet.</p>}
+      {/* Below lg the three parts stack as list, document, add evidence; at lg the left column holds list and add. */}
+      <div className="contents lg:col-start-1 lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+        <Card className="order-1 min-w-0 scroll-mt-4 p-1.5">
+          {rows.length ? (
+            <ul ref={list} aria-label="Documents" className="flex flex-col gap-0.5">
+              {rows.map((r) => <DocButton key={r.doc._id} row={r} on={r === selected} onPick={() => pick(r.doc._id)} />)}
+            </ul>
+          ) : (
+            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+              <span aria-hidden="true" className="inline-flex size-11 items-center justify-center rounded-full bg-sunken text-ink-3">
+                <Inbox strokeWidth={1.8} className="size-5" />
+              </span>
+              <p className="font-semibold text-ink">No documents on this bill yet.</p>
+              <p className="text-why text-ink-3">Add the quote, emails or chats where a price was agreed.</p>
+            </div>
+          )}
         </Card>
-        <AddEvidence bill={bill} />
+        <div className="order-3 min-w-0"><AddEvidence bill={bill} /></div>
       </div>
       {selected && (
-        <DocumentPane key={selected.doc._id} bill={bill} row={selected} facts={facts}
-          focusQuote={focus && focus.docId === selected.doc._id ? focus.quote : undefined} />
+        <div ref={pane} className="order-2 min-w-0 scroll-mt-4 lg:col-start-2 lg:row-start-1">
+          <DocumentPane onLine={onLine} key={selected.doc._id} bill={bill} row={selected} facts={facts} onBack={backToList}
+            focus={focus && focus.docId === selected.doc._id ? focus : undefined} />
+        </div>
       )}
     </div>
   );
 }
 
+function DocButton({ row: r, on, onPick }: { row: DocRow; on: boolean; onPick: () => void }) {
+  const st = readState(r);
+  return (
+    <li>
+      <button type="button" onClick={onPick} aria-current={on || undefined}
+        className={cx("relative grid w-full grid-cols-[34px_minmax(0,1fr)] gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left transition-colors duration-200",
+          on ? "bg-sunken" : "hover:bg-sunken")}>
+        <span aria-hidden="true" className={cx("absolute inset-y-3 left-0 w-[3px] rounded-full bg-brand transition-opacity duration-200", on ? "opacity-100" : "opacity-0")} />
+        <span aria-hidden="true" className={cx("mt-0.5 inline-flex size-[34px] items-center justify-center rounded-[10px] border transition-colors duration-200",
+          on ? "border-transparent bg-[var(--lime-ink)] text-lime dark:bg-lime dark:text-lime-ink" : "border-line bg-surface text-ink-2")}>
+          <DocIcon type={r.doc.type} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[13.5px] font-semibold leading-[19px]" title={r.doc.title}>{r.doc.title}</span>
+          <span className="block truncate text-meta text-ink-3">{[r.kind, r.date].filter(Boolean).join(" · ")}</span>
+          <ReadStatus st={st} className="mt-0.5" />
+          {st.error && <span className="block text-meta text-ink-3">{st.error}</span>}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** Flashes the focused quote once when it arrives (not under reduced motion), and scrolls it into view. */
+function useFocusFlash(box: RefObject<HTMLDivElement | null>, focusId: string | undefined, token: unknown) {
+  const reduced = useReducedMotion();
+  // The focus whose flash has finished; while the current focus isn't it, the quote flashes.
+  const [done, setDone] = useState<unknown>(undefined);
+  useEffect(() => {
+    if (!focusId) return;
+    box.current?.querySelector(`[data-quote="${focusId}"]`)?.scrollIntoView?.({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    const t = setTimeout(() => setDone(token), 1600);
+    return () => clearTimeout(t);
+  }, [box, focusId, token, reduced]);
+  return !reduced && !!focusId && token !== undefined && done !== token;
+}
+
 /** The selected document in full, every quote CargoOS used marked, the focused one scrolled into view. */
-function DocumentPane({ bill, row, facts, focusQuote }: { bill: Bill; row: DocRow; facts: boolean; focusQuote?: string }) {
+function DocumentPane({ bill, row, facts, focus, onBack, onLine }: { bill: Bill; row: DocRow; facts: boolean; focus?: DocFocus; onBack: () => void; onLine?: (lineNo: number) => void }) {
   const st = readState(row);
+  const focusQuote = focus?.quote;
   const read = row.status.state === "read" || row.status.state === "partial";
   const items: Item[] = read && facts ? itemsOf(bill.x, row.doc) : [];
   // The focused quote is the item whose quote it is, or marked on its own when no item covers it.
@@ -113,43 +174,74 @@ function DocumentPane({ bill, row, facts, focusQuote }: { bill: Bill; row: DocRo
     const line = lineOf.get(id);
     return usedFor(it.lines) ?? (line !== undefined ? `Invoice line ${line}` : undefined);
   };
+  /** The invoice line a highlight is about, for the chip that jumps back to it. */
+  const lineFor = (id: string) => byId.get(id)?.lines?.[0] ?? lineOf.get(id);
 
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!focusId) return;
-    box.current?.querySelector(`[data-quote="${focusId}"]`)?.scrollIntoView?.({ block: "center" });
-  }, [focusId]);
+  const flashing = useFocusFlash(box, focusId, focus);
+  const printed = isPrinted(row.doc);
+  const empty = !row.doc.text.trim();
+
+  const text = (
+    <p data-testid="document-text"
+      className={cx(printed
+        // Phones wrap so every amount stays in view; wider screens keep the printed columns.
+        ? "font-mono text-[12px] leading-[21px] whitespace-break-spaces [overflow-wrap:anywhere] sm:whitespace-pre sm:text-[13px] sm:leading-[22px] sm:[overflow-wrap:normal]"
+        : "font-sans text-[14.5px] leading-[23px] whitespace-pre-wrap [overflow-wrap:anywhere]")}>
+      {segments.map((s, i) => {
+        if (!s.id) return <Fragment key={i}>{s.text}</Fragment>;
+        const note = noteOf(s.id);
+        const line = lineFor(s.id);
+        const focused = s.id === focusId;
+        return (
+          <Fragment key={i}>
+            <mark data-quote={s.id} data-focused={focused || undefined} data-flash={(focused && flashing) || undefined}
+              className={cx(focused && "transition-[outline-color,outline-offset] duration-700 ease-move motion-reduce:transition-none",
+                focused && (flashing ? "outline-4 outline-offset-2 outline-ask-fill" : "outline-2 outline-offset-1 outline-ink"))}>{s.text}</mark>
+            {note && (onLine && line !== undefined
+              ? <button type="button" onClick={() => onLine(line)} title={`Show line ${line} on the bill`}
+                  className="ml-1 whitespace-nowrap rounded-[5px] bg-raised px-1.5 py-px align-[1px] font-sans text-[11px] font-semibold text-ink-2 hover:bg-brand hover:text-brand-ink">{note} ↗</button>
+              : <span className="ml-1 whitespace-nowrap rounded-[5px] bg-raised px-1.5 py-px align-[1px] font-sans text-[11px] font-semibold text-ink-2">{note}</span>)}
+          </Fragment>
+        );
+      })}
+    </p>
+  );
 
   return (
-    <Card aria-label={row.doc.title} className="min-w-0 overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 border-b border-line px-5 pb-3 pt-4">
-        <div className="min-w-0">
-          <Kicker>{[row.kind, row.sender, row.date].filter(Boolean).join(" · ")}</Kicker>
-          <h2 className="mt-0.5 break-words text-panel font-bold">{row.doc.title}</h2>
+    <Card aria-label={row.doc.title} className="min-w-0 overflow-hidden animate-in fade-in duration-300 motion-reduce:animate-none">
+      <div className="border-b border-line px-5 pb-3 pt-4">
+        <button type="button" onClick={onBack}
+          className="-ml-1 mb-2 inline-flex h-8 items-center gap-1.5 rounded-[9px] px-1 text-[13px] font-semibold text-link hover:underline lg:hidden">
+          <ArrowLeft aria-hidden="true" strokeWidth={2} className="size-4" />All documents
+        </button>
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="mt-0.5 hidden size-10 flex-none items-center justify-center rounded-[11px] bg-sunken text-ink-2 sm:inline-flex">
+            <DocIcon type={row.doc.type} className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <Kicker>{[row.kind, row.sender, row.date].filter(Boolean).join(" · ")}</Kicker>
+            <h2 className="mt-0.5 break-words text-panel font-bold">{row.doc.title}</h2>
+          </div>
+          <ReadStatus st={st} className="pt-1 text-right" />
         </div>
-        <span className={cx("pt-1 text-meta", st.failed ? "font-semibold text-hold" : "text-ink-2")}>{st.label}</span>
       </div>
       {st.failed && (
-        <div role="status" className="mx-5 mt-4 rounded-[12px] bg-hold-tint px-3 py-2 text-meta text-hold">
-          {st.error ?? "Couldn't read part of this document; affected lines are waiting on answers."}
+        <div role="status" className="mx-5 mt-4 flex items-start gap-2 rounded-[12px] bg-hold-tint px-3 py-2 text-meta text-hold">
+          <CircleAlert aria-hidden="true" strokeWidth={2.2} className="mt-px size-4 flex-none" />
+          <span>{st.error ?? "Couldn't read part of this document; affected lines are waiting on answers."}</span>
         </div>
       )}
-      <div ref={box} data-testid="document-scroll" className="max-h-[70vh] overflow-auto px-5 py-4">
-        <p data-testid="document-text"
-          className={cx("whitespace-pre-wrap [overflow-wrap:anywhere]", isPrinted(row.doc) ? "font-mono text-[13px] leading-[22px]" : "font-sans text-[14.5px] leading-[23px]")}>
-          {segments.map((s, i) => {
-            if (!s.id) return <Fragment key={i}>{s.text}</Fragment>;
-            const note = noteOf(s.id);
-            return (
-              <Fragment key={i}>
-                <mark data-quote={s.id} data-focused={s.id === focusId || undefined}
-                  className={cx(s.id === focusId && "outline-2 outline-offset-1 outline-ink")}>{s.text}</mark>
-                {note && <span className="ml-1 whitespace-nowrap rounded-[5px] bg-raised px-1.5 py-px align-[1px] font-sans text-[11px] font-semibold text-ink-2">{note}</span>}
-              </Fragment>
-            );
-          })}
-        </p>
-        {!row.doc.text.trim() && <p className="text-why text-ink-3">No text in this document.</p>}
+      <div ref={box} data-testid="document-scroll"
+        className={cx("max-h-[70vh] overflow-auto", printed && !empty ? "bg-sunken p-2.5 sm:p-5" : "px-5 py-4")}>
+        {printed && !empty
+          ? <div className="min-w-full rounded-[6px] border border-line bg-surface px-3.5 py-4 shadow-card sm:w-max sm:px-7 sm:py-6">{text}</div>
+          : text}
+        {empty && (
+          <p className="flex items-center gap-2 text-why text-ink-3">
+            <FileX aria-hidden="true" strokeWidth={1.8} className="size-4 flex-none" />No text in this document.
+          </p>
+        )}
       </div>
     </Card>
   );
@@ -161,7 +253,8 @@ function AddEvidence({ bill }: { bill: Bill }) {
   const [type, setType] = useState<EvidenceType>("email");
   const [text, setText] = useState("");
   const phone = <Link href={`/upload/${bill.x.case._id}`} className="text-[13.5px] font-semibold text-link underline underline-offset-4">Add from a phone</Link>;
-  if (!canAct(person.roles, "addEvidence")) return <div className="px-1">{phone}</div>;
+  const files = person.roles.includes("uploader") ? <AddFiles bill={bill} /> : null;
+  if (!canAct(person.roles, "addEvidence")) return <div className="flex flex-col gap-3">{files}<div className="px-1">{phone}</div></div>;
 
   const add = () => {
     const t = text.trim();
@@ -171,8 +264,10 @@ function AddEvidence({ bill }: { bill: Bill }) {
   };
 
   return (
+    <div className="flex flex-col gap-3">
+    {files}
     <Card className="flex flex-col gap-3 p-4">
-      <h3 className="font-bold">Add evidence</h3>
+      <h3 className="font-bold">Paste evidence</h3>
       <label className="flex flex-col gap-1 text-meta font-semibold text-ink-2">
         Kind
         <select value={type} onChange={(e) => setType(e.target.value as EvidenceType)}
@@ -190,5 +285,6 @@ function AddEvidence({ bill }: { bill: Bill }) {
       <Button onClick={add} disabled={!text.trim()}>Add and recheck</Button>
       {phone}
     </Card>
+    </div>
   );
 }

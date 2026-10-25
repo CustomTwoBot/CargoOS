@@ -155,7 +155,9 @@ function BillRow({ bill, status, split, uploader, writeHref, replayTag, primary 
   const ref = [bill.invoiceRef ?? bill.x.case.title, invoice?.sentAt ? pacificDate(invoice.sentAt) : undefined].filter(Boolean).join(" · ");
   const href = writeHref ? `/bills/${bill.id}/message` : `/bills/${bill.id}`;
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 px-5 py-4 md:grid-cols-[minmax(200px,1.3fr)_minmax(160px,1fr)_minmax(200px,1.4fr)_100px_120px]">
+    // Columns shrink instead of overflowing the card (it clips), and Leo's rows drop the money columns he never sees.
+    <li className={cx("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 px-5 py-4",
+      uploader ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto]" : "md:grid-cols-[minmax(0,1.3fr)_minmax(120px,1fr)_minmax(0,1.4fr)_auto_auto]")}>
       <Link href={href} className="flex min-w-0 items-center gap-3 rounded-[10px] outline-offset-4">
         <span aria-hidden="true" className="inline-flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sunken text-[12px] font-bold text-ink-2">{initials(bill.forwarder)}</span>
         <span className="flex min-w-0 flex-col">
@@ -167,14 +169,14 @@ function BillRow({ bill, status, split, uploader, writeHref, replayTag, primary 
         <div className="order-3 col-span-2 flex flex-col gap-1.5 md:order-none md:col-span-1">
           <SplitBar pay={split.pay} hold={split.hold} ask={split.ask} height={8}
             label={`Pay ${money(split.pay)}, hold ${money(split.hold)}, ask ${money(split.ask)}`} />
-          <span className="text-[12.5px] tabular-nums text-ink-3">{money(split.pay)} · {money(split.hold)} · {money(split.ask)}</span>
+          <span className="truncate text-[12.5px] tabular-nums text-ink-3">{money(split.pay)} · {money(split.hold)} · {money(split.ask)}</span>
         </div>
-      ) : <span className="hidden md:block" />}
+      ) : null}
       <div className="order-4 col-span-2 flex min-w-0 flex-col md:order-none md:col-span-1">
         <span className={cx("font-semibold", TONE[status.tone])}>{status.label}</span>
         <span className="truncate text-[12.5px] text-ink-3">{status.sub}</span>
       </div>
-      <span className="hidden text-right font-semibold tabular-nums md:block">{uploader ? "" : money(split.billed)}</span>
+      {!uploader && <span className="hidden min-w-[72px] text-right font-semibold tabular-nums md:block">{money(split.billed)}</span>}
       <div className="flex justify-end">
         <Link href={href} className={primary ? PRIMARY_SMALL : BUTTON.small}>
           {status.action}

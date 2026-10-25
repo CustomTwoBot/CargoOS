@@ -86,6 +86,31 @@ describe("HistoryTab", () => {
     expect(rows()).toHaveLength(total);
   });
 
+  it("when nothing matches, says so and Clear search brings every step back", () => {
+    story();
+    const total = rows().length;
+    search("zzz-not-there");
+    expect(screen.getByText("No step matches “zzz-not-there”.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByLabelText("Search history")).toHaveValue("");
+    expect(screen.getByLabelText("Search history")).toHaveFocus();
+    expect(rows()).toHaveLength(total);
+    expect(screen.queryByText(/No step matches/)).not.toBeInTheDocument();
+  });
+
+  it("groups steps under their day and puts an icon beside each sentence, never instead of it", () => {
+    story();
+    const first = rows()[0];
+    expect(first).toHaveTextContent(/^Oct \d{1,2}/);
+    // Only the first step of a day carries the day.
+    expect(rows().filter((li) => /^[A-Z][a-z]{2} \d{1,2}/.test(li.textContent ?? ""))).toHaveLength(new Set(rows().map((li) => li.querySelector("time")!.title.split(",")[0])).size);
+    for (const li of rows()) {
+      const icon = li.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+      expect(icon?.nextElementSibling?.textContent?.length).toBeGreaterThan(0);
+    }
+  });
+
   it("an uploader sees only document steps, with no quotes", () => {
     story();
     act(() => setDevicePerson("leo"));

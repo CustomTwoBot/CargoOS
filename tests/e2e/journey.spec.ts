@@ -35,7 +35,7 @@ test("the whole bill journey on the redesigned screens", async ({ page }) => {
   await expect(page.getByText("Agreed $200")).toBeVisible();
   await page.getByRole("button", { name: "Yes, recheck the bill" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("You can safely pay $6,800 of $7,500.", { timeout: 10_000 });
-  await expect(page.getByText("Moved")).toBeVisible();
+  await expect(page.getByText("Moved").first()).toBeVisible();
 
   // Maya asks for approval.
   await asPerson(page, /Maya/);

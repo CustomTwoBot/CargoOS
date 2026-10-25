@@ -82,6 +82,32 @@ describe("LetterPage", () => {
     expect(await screen.findByText("Copied. Paste it into your email to Derek.")).toBeInTheDocument();
   });
 
+  it("after copying, the button says Copied for two seconds, then Copy text again", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
+    mount();
+    accept();
+    vi.useFakeTimers();
+    try {
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Copy text" })); });
+      expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(2100); });
+      expect(screen.getByRole("button", { name: "Copy text" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an edit shows Saving… and then Saved", async () => {
+    mount();
+    accept();
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    const el = message();
+    el.querySelector<HTMLElement>("span:not([data-chip])")!.textContent = "Hello Derek,\n\n";
+    fireEvent.input(el);
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
   it("a clipboard failure is said plainly, never thrown", async () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) }, configurable: true });
     mount();

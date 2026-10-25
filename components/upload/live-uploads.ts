@@ -46,6 +46,8 @@ export function useLocalUploads() {
     items,
     add: (rows: LocalUpload[]) => setItems((all) => [...all, ...rows]),
     patch: (key: string, p: Partial<LocalUpload>) => setItems((all) => all.map((i) => (i.key === key ? { ...i, ...p } : i))),
+    /** Drops an upload that never reached the server (a failed upload), so it leaves the list. */
+    remove: (key: string) => setItems((all) => all.filter((i) => i.key !== key)),
     clear: () => setItems([]),
   };
 }

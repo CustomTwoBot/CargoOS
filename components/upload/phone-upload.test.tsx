@@ -75,7 +75,7 @@ describe("Phone page: replay", () => {
     render(<PhoneUploadPage caseId="demo" />);
     await pick("WhatsApp chat export", new File(["10/12/26, 09:14 - Derek PCL: hi"], "WhatsApp Chat with Derek PCL.txt", { type: "text/plain" }));
     await pick("Photo of a paper", new File(["jpg"], "IMG_2041.jpg", { type: "image/jpeg" }));
-    expect(added().map((r) => r.firstChild?.firstChild?.textContent)).toEqual(["WhatsApp chat", "Photo of a paper"]);
+    expect(added().map((r) => r.querySelector("[data-kind]")?.textContent)).toEqual(["WhatsApp chat", "Photo of a paper"]);
   });
 });
 

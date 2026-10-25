@@ -16,7 +16,7 @@ export function Busy({ label, className }: { label: string; className?: string }
 /** Bottom-right stack for toasts (QuietToast). */
 export function ToastRegion({ children }: { children: ReactNode }) {
   return (
-    <div aria-live="polite" aria-label="Notifications" role="region" className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+    <div aria-live="polite" aria-label="Notifications" role="region" className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-center gap-2 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:items-end">
       {children}
     </div>
   );
