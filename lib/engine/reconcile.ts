@@ -1,6 +1,7 @@
 // reconcile(): facts + charges -> one findings revision (SPEC.md §5.3, §6, §9 W1 step 3).
 // Pure: same input, same output; no network, no database, no clock.
-import type { Case, Charge, Fact, Finding } from "../types";
+import type { Case, Charge, Fact, Finding, SourceDoc } from "../types";
+import { explain } from "./explain";
 import { evaluateCharge, type RuleContext, type RuleResult } from "./rules";
 
 // SPEC.md §6 "User verdicts across recomputes".
@@ -11,6 +12,8 @@ export interface ReconcileInput {
   facts: Fact[];
   charges: Charge[];
   prior?: Finding[];  // the previous revision, for carrying user verdicts
+  // Optional beyond SPEC §5.3: lets why-lines name the source type ("email, Sep 5"). Without it they read "(Sep 5)".
+  documents?: SourceDoc[];
 }
 
 const sameIds = (a: string[], b: string[]) =>
@@ -22,7 +25,7 @@ function unchanged(prev: Finding, next: RuleResult): boolean {
 }
 
 export function reconcile(input: ReconcileInput): Finding[] {
-  const { case: c, facts, charges, prior = [] } = input;
+  const { case: c, facts, charges, prior = [], documents } = input;
   const revision = c.revision + 1;
   // TODO(Dev): reconcile's §5.3 input has no documents, so the invoice date (valid-until fallback
   // when there is no booking date) is not available here. Raise with the team if a scenario needs it.
@@ -46,7 +49,6 @@ export function reconcile(input: ReconcileInput): Finding[] {
         ...r.factIds.flatMap((id) => { const span = factById.get(id)?.span; return span ? [span] : []; }),
         ...(r.evidence ?? []),
       ],
-      // TODO(Dev): W1 step 4 fills this from the explain.ts templates.
       explanation: "",
     };
     // Optional fields are left off rather than set to undefined.
@@ -54,6 +56,7 @@ export function reconcile(input: ReconcileInput): Finding[] {
     if (r.deltaCents !== undefined) finding.deltaCents = r.deltaCents;
     if (r.missing) finding.missing = r.missing;
     if (r.routeTo) finding.routeTo = r.routeTo;
+    finding.explanation = explain(finding, facts, { documents, charge });
 
     const prev = priorByKey.get(charge._id);
     if (prev?.userVerdict) {
@@ -61,7 +64,7 @@ export function reconcile(input: ReconcileInput): Finding[] {
         finding.userVerdict = prev.userVerdict;
         if (prev.userVerdictBy) finding.userVerdictBy = prev.userVerdictBy;
       } else {
-        finding.explanation = VERDICT_CLEARED_NOTE;
+        finding.explanation = `${finding.explanation} ${VERDICT_CLEARED_NOTE}`;
       }
     }
     return finding;
