@@ -10,7 +10,7 @@ import { cx } from "@/components/case/cx";
 import { money } from "@/components/case/format";
 import { historyEntries } from "@/components/history/history";
 import { isRechecking } from "@/components/case/view-model";
-import { useBills, type Bill } from "@/components/app/bills-provider";
+import { BAYLINE_OCT, useBills, type Bill } from "@/components/app/bills-provider";
 import { looksLikeConvexId } from "@/components/app/convex-id";
 import { nextStep } from "@/components/app/next-step";
 import { LinkButton } from "@/components/app/ui";
@@ -33,6 +33,15 @@ export function BillPage({ id }: { id: string }) {
   // A live bill made on another screen (its link, or the phone's QR code): remember it here so it loads.
   const unknownLive = !b && mode === "live" && looksLikeConvexId(id);
   useEffect(() => { if (unknownLive) rememberBill(id); }, [unknownLive, id, rememberBill]);
+  // The October bill is live only, with no recorded copy to show while the server connects.
+  if (!b && mode === "live" && id === BAYLINE_OCT.id) {
+    return (
+      <div className="mx-auto flex max-w-[920px] flex-col items-start gap-3 px-4 pt-10 sm:px-6">
+        <h1 className="text-[24px] font-bold">Loading this bill…</h1>
+        <p className="text-ink-3">It comes live from the server. If it doesn’t appear, press Reset demo in Settings.</p>
+      </div>
+    );
+  }
   if (!b) {
     return (
       <div className="mx-auto flex max-w-[920px] flex-col items-start gap-3 px-4 pt-10 sm:px-6">

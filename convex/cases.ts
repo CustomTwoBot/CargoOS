@@ -7,14 +7,14 @@ import { query } from "./_generated/server";
 import schema, { findingState } from "./schema";
 import { SCENARIO_A_REF } from "./seed";
 
-// The seeded Scenario A case, so the UI can find it again after resetDemo. Cases has no shipmentRef index,
-// so this scans until the first match; the table holds a handful of demo cases.
+// A seeded demo case (Scenario A unless `shipmentRef` names another), so the UI can find it again after a
+// reset. Cases has no shipmentRef index, so this scans until the first match; the table holds a handful of demo cases.
 export const getDemoCase = query({
-  args: {},
+  args: { shipmentRef: v.optional(v.string()) },
   returns: v.union(v.null(), v.id("cases")),
-  handler: async (ctx) => {
+  handler: async (ctx, { shipmentRef = SCENARIO_A_REF }) => {
     for await (const c of ctx.db.query("cases")) {
-      if (c.shipmentRef === SCENARIO_A_REF) return c._id;
+      if (c.shipmentRef === shipmentRef) return c._id;
     }
     return null;
   },

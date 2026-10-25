@@ -3,7 +3,7 @@
 // in full on the right with every quote CargoOS used marked and the line it was used for. A person
 // holding clerk adds evidence here (and rechecks); anyone can add from a phone via /upload/[caseId].
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import type { SourceDoc } from "@/lib/types";
 import type { Bill } from "@/components/app/bills-provider";
 import { useBills } from "@/components/app/bills-provider";
@@ -14,6 +14,7 @@ import { cx } from "@/components/case/cx";
 import { highlight } from "@/components/case/evidence";
 import { canAct } from "@/components/case/roles";
 import { AddFiles } from "@/components/upload/add-files";
+import { PhoneCard } from "@/components/upload/phone-card";
 import { docRows, itemsOf, segmentsOf, usedFor, type DocRow, type Item } from "@/components/documents/documents";
 import { outcomeText, type EvidenceType } from "@/components/inputs/evidence-input";
 import { isUploaderOnly } from "@/components/shell/person";
@@ -247,14 +248,20 @@ function DocumentPane({ bill, row, facts, focus, onBack, onLine }: { bill: Bill;
   );
 }
 
+/** The page's origin, read on the client only (the server renders no QR code). */
+const useOrigin = () => useSyncExternalStore(() => () => {}, () => window.location.origin, () => "");
+
 /** Paste an email, chat or note; it is saved to the bill and the lines are rechecked. Clerk only. */
 function AddEvidence({ bill }: { bill: Bill }) {
   const { person, toast } = useBills();
   const [type, setType] = useState<EvidenceType>("email");
   const [text, setText] = useState("");
-  const phone = <Link href={`/upload/${bill.x.case._id}`} className="text-[13.5px] font-semibold text-link underline underline-offset-4">Add from a phone</Link>;
+  const origin = useOrigin();
+  const link = <Link href={`/upload/${bill.x.case._id}`} className="text-[13.5px] font-semibold text-link underline underline-offset-4">Add from a phone</Link>;
+  // Live, a phone scans this bill's QR code and sends the WhatsApp export straight into it.
+  const phoneCard = bill.live && origin ? <PhoneCard url={`${origin}/upload/${bill.x.case._id}`} /> : null;
   const files = person.roles.includes("uploader") ? <AddFiles bill={bill} /> : null;
-  if (!canAct(person.roles, "addEvidence")) return <div className="flex flex-col gap-3">{files}<div className="px-1">{phone}</div></div>;
+  if (!canAct(person.roles, "addEvidence")) return <div className="flex flex-col gap-3">{files}<div className="px-1">{link}</div></div>;
 
   const add = () => {
     const t = text.trim();
@@ -283,8 +290,9 @@ function AddEvidence({ bill }: { bill: Bill }) {
       </label>
       <p className="text-meta text-ink-3">Quotes are kept word for word.</p>
       <Button onClick={add} disabled={!text.trim()}>Add and recheck</Button>
-      {phone}
+      {!phoneCard && link}
     </Card>
+    {phoneCard}
     </div>
   );
 }

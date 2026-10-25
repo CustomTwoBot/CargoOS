@@ -3,7 +3,7 @@
 import type { Draft, Question } from "@/lib/types";
 import { delta, inCurrency, money } from "./format";
 import { groupTotals } from "./totals";
-import { currencyOf, groupsOf, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
+import { currencyOf, groupsOf, isWaitingQuestion, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
 
 export type Issue =
   | { id: string; kind: "line"; row: Row; title: string; amount: string; isNew: boolean }
@@ -12,7 +12,7 @@ export type Issue =
 
 /** Open questions, oldest first. */
 export const openQuestions = (x: CaseInput): Question[] =>
-  x.questions.filter((q) => q.status === "open").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  x.questions.filter((q) => isWaitingQuestion(x, q)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
 /** "Your answer" when the case only ever had one question; else "Question 2", "Follow-up". Stable as questions get answered. */
 export function questionTitle(x: CaseInput, q: Question): string {

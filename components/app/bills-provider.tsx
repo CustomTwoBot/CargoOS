@@ -1,8 +1,9 @@
 "use client";
 // Every bill the app knows, in one shape, for every page under the app frame (docs/design.md §0.5).
 // Replay bills are recorded DemoCases acted on through case-store; live bills come from Convex
-// (live-store): the seeded Scenario A case stands in for its replay once it loads, and cases created
-// on this device (/bills/new) are remembered in localStorage and read by id. Live values flow down
+// (live-store): the seeded Scenario A case stands in for its replay once it loads, Bayline's October bill
+// is live only (it is listed first; its WhatsApp chat comes from the phone), and cases created on this
+// device (/bills/new) are remembered in localStorage and read by id. Live values flow down
 // through nested sources, so no hook runs outside a Convex provider and nothing is copied into state.
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useMutation, useQuery } from "convex/react";
@@ -21,6 +22,7 @@ import type { CaseInput } from "@/components/case/view-model";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
 import { useDevicePerson } from "@/components/shell/person";
+import octKey from "@/fixtures/baylineOct/scenario.json";
 
 export type Bill = {
   /** The id in the URL: a replay case's id, Scenario A's id for its live stand-in, or a Convex case id. */
@@ -62,6 +64,9 @@ export function useBills(): BillsValue {
 /** Forwarder names for the recorded cases; live cases carry their own `Case.forwarder`. */
 const FORWARDER: Record<string, string> = { [SCENARIO_A.id]: "Pacific Crest Logistics", [SCENARIO_B.id]: "Kestrel Bay Logistics" };
 const DEMO_CASES: DemoCase[] = [SCENARIO_A, SCENARIO_B];
+
+/** Bayline's October bill (fixtures/baylineOct/): seeded live by resetLiveDemo, with no recorded replay. */
+export const BAYLINE_OCT = { id: "bayline-oct", shipmentRef: octKey.case.shipmentRef } as const;
 
 export const invoiceRefOf = (x: CaseInput): string | undefined =>
   x.documents.find((d) => d.type === "freight_invoice")?.title.replace(/^Invoice\s+/i, "").replace(/\.(pdf|png|jpe?g|txt|eml)$/i, "");
@@ -135,17 +140,21 @@ function useToasts() {
 
 // ---- live sources --------------------------------------------------------
 
-type Lives = { demo?: LiveCase; created: LiveCase[] };
+type Lives = { demo?: LiveCase; oct?: LiveCase; created: LiveCase[] };
 type DemoSetup = { missing: boolean; setup?: () => void };
 
-function LiveDemo({ person, toast, render }: { person: Person; toast: Toast; render: (l: LiveCase | undefined, d: DemoSetup) => ReactNode }) {
+function LiveDemo({ person, toast, render }: {
+  person: Person; toast: Toast; render: (l: LiveCase | undefined, oct: LiveCase | undefined, d: DemoSetup) => ReactNode;
+}) {
   // getDemoCase is null (not undefined, which is loading) when the backend was never seeded.
-  const caseId = useQuery(api.cases.getDemoCase);
+  const caseId = useQuery(api.cases.getDemoCase, {});
   const reset = useMutation(api.seed.resetLiveDemo);
   const setup = useCallback(() => {
-    reset({ personId: person.id }).then(() => toast("Demo set up. The Pacific Crest bill is live."), (e: unknown) => toast(errorText(e)));
+    Promise.all([reset({ personId: person.id }), reset({ personId: person.id, shipmentRef: BAYLINE_OCT.shipmentRef })])
+      .then(() => toast("Demo set up. The Pacific Crest bills are live."), (e: unknown) => toast(errorText(e)));
   }, [reset, person.id, toast]);
-  return render(useLiveCase(person, toast), { missing: caseId === null, setup });
+  const oct = useLiveCase(person, toast, BAYLINE_OCT.shipmentRef);
+  return render(useLiveCase(person, toast), oct, { missing: caseId === null, setup });
 }
 
 /** A remembered id the backend rejects (a link to something that isn't a case) is skipped, not fatal. */
@@ -182,8 +191,8 @@ export function BillsProvider({ children, cases }: { children: ReactNode; cases?
     setReported((m) => (m[id] === l ? m : { ...m, [id]: l })), []);
   const created = live ? ids.flatMap((id) => reported[id] ?? []) : [];
 
-  const body = (demo?: LiveCase, setup: DemoSetup = { missing: false }) => (
-    <Bills person={person} toast={toast} lives={{ demo, created }} live={live} given={cases ?? DEMO_CASES} demoSetup={setup}>
+  const body = (demo?: LiveCase, oct?: LiveCase, setup: DemoSetup = { missing: false }) => (
+    <Bills person={person} toast={toast} lives={{ demo, oct, created }} live={live} given={cases ?? DEMO_CASES} demoSetup={setup}>
       {children}
     </Bills>
   );
@@ -215,6 +224,11 @@ function Bills({ person, toast, lives, live, given, demoSetup, children }: {
   const store = useCaseStore(replayCases, toast, person);
 
   const bills: Bill[] = [];
+  const oct = lives.oct;
+  if (oct) {
+    bills.push({ id: BAYLINE_OCT.id, demo: oct.demo, x: oct.x, local: oct.local, actions: oct.actions,
+      forwarder: oct.x.case.forwarder ?? billForwarder(oct.x), invoiceRef: invoiceRefOf(oct.x), live: true });
+  }
   for (const demo of given) {
     if (demo.id === SCENARIO_A.id && liveDemo) {
       bills.push({ id: demo.id, demo: liveDemo.demo, x: liveDemo.x, local: liveDemo.local, actions: liveDemo.actions,

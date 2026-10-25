@@ -1,0 +1,151 @@
+{
+  "scenarioId": "bayline-oct",
+  "description": "Bayline's October container from Pacific Crest. The quote and invoice are in; the WhatsApp group with Derek is on Leo's phone. Before the chat: drayage +$100 to dispute, congestion $250 and chassis $300 waiting. Leo uploads the chat: Sam approved $250 congestion (cleared), chassis was agreed at $150 (+$150 to dispute). At stake $100 -> $250.",
+  "case": {
+    "title": "Bayline 40HC Ningbo-LB (Oct)",
+    "shipmentRef": "PCL-INV-1103",
+    "forwarder": "Pacific Crest Logistics",
+    "incoterm": "FOB Ningbo",
+    "baseCurrency": "USD"
+  },
+  "documents": [
+    {
+      "id": "doc_quote",
+      "type": "quote",
+      "title": "Quote Q-PCL-1001",
+      "sender": "forwarder",
+      "sentAt": "2026-10-01T09:30:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - QUOTATION Q-PCL-1001\nDate: 2026-10-01   To: Bayline Home Goods   Valid until: 2026-10-31\n1x40HC FOB Ningbo -> Ontario, CA warehouse\nOcean freight 40HC Ningbo-Long Beach (all-in)      USD 4,500.00\nDestination THC                                    USD   650.00\nCustoms entry                                      USD   125.00\nDrayage Long Beach -> Ontario CA                   USD   850.00\nDocumentation fee                                  USD    75.00\nTOTAL                                              USD 6,200.00\nTerms: PSS/GRI as filed by carrier at time of shipment apply."
+    },
+    {
+      "id": "doc_invoice",
+      "type": "freight_invoice",
+      "title": "Invoice PCL-INV-1103",
+      "sender": "forwarder",
+      "sentAt": "2026-10-23T09:00:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - INVOICE PCL-INV-1103   Date: 2026-10-23   Ref: Q-PCL-1001\n1  Ocean freight 40HC Ningbo-Long Beach     4,500.00\n2  PSS peak season surcharge                  400.00\n3  Destination THC                            650.00\n4  Port congestion fee                        250.00\n5  Chassis usage                              300.00\n6  Drayage Long Beach -> Ontario CA           950.00\n7  Customs entry                              125.00\n8  Documentation fee                           75.00\n   TOTAL DUE USD                            7,250.00"
+    }
+  ],
+  "expected": {
+    "charges": [
+      {
+        "lineNo": 1,
+        "chargeType": "ocean_freight",
+        "amountCents": 450000
+      },
+      {
+        "lineNo": 2,
+        "chargeType": "pss",
+        "amountCents": 40000
+      },
+      {
+        "lineNo": 3,
+        "chargeType": "destination_thc",
+        "amountCents": 65000
+      },
+      {
+        "lineNo": 4,
+        "chargeType": "congestion",
+        "amountCents": 25000
+      },
+      {
+        "lineNo": 5,
+        "chargeType": "chassis",
+        "amountCents": 30000
+      },
+      {
+        "lineNo": 6,
+        "chargeType": "drayage",
+        "amountCents": 95000
+      },
+      {
+        "lineNo": 7,
+        "chargeType": "customs_entry",
+        "amountCents": 12500
+      },
+      {
+        "lineNo": 8,
+        "chargeType": "doc_fee",
+        "amountCents": 7500
+      }
+    ],
+    "findings": [
+      {
+        "lineNo": 1,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 450000,
+        "expectedCents": 450000
+      },
+      {
+        "lineNo": 2,
+        "status": "supported",
+        "ruleId": "R4_PERMITTED_SURCHARGE",
+        "billedCents": 40000
+      },
+      {
+        "lineNo": 3,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 65000,
+        "expectedCents": 65000
+      },
+      {
+        "lineNo": 4,
+        "status": "needs_review",
+        "ruleId": "R6_NO_EVIDENCE",
+        "billedCents": 25000
+      },
+      {
+        "lineNo": 5,
+        "status": "needs_review",
+        "ruleId": "R6_NO_EVIDENCE",
+        "billedCents": 30000
+      },
+      {
+        "lineNo": 6,
+        "status": "potential_discrepancy",
+        "ruleId": "R2_RATE_MISMATCH",
+        "billedCents": 95000,
+        "expectedCents": 85000,
+        "deltaCents": 10000
+      },
+      {
+        "lineNo": 7,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 12500,
+        "expectedCents": 12500
+      },
+      {
+        "lineNo": 8,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 7500,
+        "expectedCents": 7500
+      }
+    ],
+    "question": {
+      "shouldAsk": true,
+      "to": "ops_lead",
+      "coversLines": [
+        4,
+        5
+      ]
+    },
+    "replies": [],
+    "draft": {
+      "to": "forwarder",
+      "coversLines": [
+        6
+      ],
+      "totalDisputedCents": 10000
+    },
+    "totals": {
+      "billedCents": 725000,
+      "agreedBeforeCents": 660000,
+      "atStakeBeforeCents": 10000,
+      "waitingBeforeCents": 55000
+    }
+  }
+}

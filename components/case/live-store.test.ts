@@ -127,7 +127,7 @@ describe("useLiveCase", () => {
         role: "clerk", personId: "sam", caseId, chargeId: finding.chargeId, amountCents: 450000, description: "Ocean freight",
       } },
       { name: "uploads:addPastedText", args: { caseId, personId: "sam", text: "ok approved", docType: "chat", title: "Chat you added" } },
-      { name: "seed:resetLiveDemo", args: { personId: "sam" } },
+      { name: "seed:resetLiveDemo", args: { personId: "sam", shipmentRef: "PCL-INV-1012" } },
     ]);
   });
 
