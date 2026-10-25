@@ -1,8 +1,8 @@
 "use client";
-// The app at 1280 (docs/design.md §0.1): a sidebar with every case and the cross-case inboxes, and
-// for the open case the At stake card pinned above an Overview tab plus one tab per thing to
-// decide; Documents and History from the sidebar. Replay mode only for now: every case is a
-// DemoCase (recorded snapshots) and `useCaseStore` applies what the operator does on top.
+// The app (docs/design.md §0.1, §0.2): a sidebar with the places shared by every case (the
+// cross-case inboxes, the cases, New case) and the open case, whose own tabs, Documents and History
+// live inside it. The shell fits the window from 768px up. Replay mode only for now: every case is
+// a DemoCase (recorded snapshots) and `useCaseStore` applies what the operator does on top.
 // Live Convex data replaces this in SPEC W3 step 8.
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useRef, useState, useSyncExternalStore } from "react";
@@ -16,13 +16,15 @@ import { CasesEmpty } from "@/components/new-case/cases-empty";
 import { NewCaseFlow } from "@/components/new-case/new-case-flow";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
+import { AppShell } from "@/components/shell/app-shell";
+import { caseStatus } from "@/components/shell/case-status";
 import { useCaseStore } from "./case-store";
 import { CasesList, type CaseSummary } from "./cases-list";
 import type { DemoCase } from "./demo-case";
 import { SCENARIO_A } from "./fixture";
 import { issuesOf, openQuestions } from "./issues";
 import { ALL_ROLES } from "./roles";
-import { Sidebar, type View } from "./sidebar";
+import { Sidebar, type Place, type View } from "./sidebar";
 import { CaseWorkspace } from "./workspace";
 import { casePill, totalsOf, type CaseInput } from "./view-model";
 
@@ -64,49 +66,47 @@ export function CaseScreen({ cases = DEMO_CASES, roles = ALL_ROLES }: Props) {
   const counts = inboxCounts(inboxCases);
   const summaries: Record<string, CaseSummary> = Object.fromEntries(cases.map((c) => [c.id, summaryOf(store.inputs[c.id])]));
   const actions = (id: string) => store.actionsFor(cases.find((c) => c.id === id)!);
+  const sidebarCases = cases.map((c) => ({ id: c.id, title: c.title, atStakeCents: summaries[c.id].atStakeCents, status: summaries[c.id].status }));
+  const title = view === "questions" ? "Questions" : view === "approvals" ? "Approvals" : view === "new" ? "New case"
+    : view === "cases" || !demo ? "Cases" : demo.title;
 
   return (
     <Tooltip.Provider delay={150}>
-      <div className="flex h-dvh min-w-[1280px] overflow-hidden bg-bg text-ink">
-        <Sidebar view={view} onView={setView} activeId={activeId}
-          cases={cases.map((c) => ({ id: c.id, title: c.title, atStakeCents: summaries[c.id].atStakeCents, openQuestions: summaries[c.id].openQuestions }))}
-          onOpenCase={(id) => open(id, tabOf(id))}
-          counts={{ questions: summaries[activeId]?.openQuestions ?? 0, documents: summaries[activeId]?.documents ?? 0, events: summaries[activeId]?.events ?? 0 }}
-          inbox={{ questions: counts.questions, approvals: counts.approvals }}
-          onQuestion={() => demo && open(demo.id, openQuestions(store.inputs[demo.id])[0]?._id ?? "overview")}
-          onNewCase={() => setView("new")} />
-        <main className="flex min-w-0 flex-1 flex-col">
-          {view === "cases" && (cases.length ? (
-            <CasesList cases={cases} summaries={summaries} onOpen={(id) => open(id, tabOf(id))} />
-          ) : (
-            <div className="pt-6"><CasesEmpty onNew={() => setView("new")} onLoadExample={() => undefined} examples={[]} /></div>
-          ))}
-          {view === "new" && (
-            <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
-              <NewCaseFlow onCancel={() => setView(cases.length ? "case" : "cases")}
-                onLoadExample={(id) => (cases.some((c) => c.id === id) ? open(id) : undefined)}
-                onCreate={() => { toast("In this replay, new cases aren't read. Open a recorded case to try the checks."); setView("cases"); }} />
-            </div>
-          )}
-          {view === "questions" && (
-            <QuestionsInbox items={questionItems(inboxCases)} viewer={OPERATOR}
-              onOpen={(caseId, qid) => open(caseId, qid)}
-              onReply={(caseId, qid) => { actions(caseId).reply(qid); open(caseId); }} />
-          )}
-          {view === "approvals" && (
-            <ApprovalsInbox items={approvalItems(inboxCases)} viewer={OPERATOR}
-              onOpen={(caseId) => open(caseId, "dispute")}
-              onAccept={(caseId, draftId) => actions(caseId).accept(draftId)}
-              onReject={(caseId, draftId, reason) => actions(caseId).reject(draftId, reason)}
-              onMessageChange={(caseId, draftId, t) => actions(caseId).editMessage(draftId, t)} />
-          )}
-          {demo && (view === "case" || view === "documents" || view === "history") && (
-            <CaseWorkspace key={demo.id} demo={demo} x={store.inputs[demo.id]} local={store.state[demo.id]}
-              actions={actions(demo.id)} roles={roles} view={view} now={clock}
-              tab={tabOf(demo.id)} onTab={(t) => setTab(demo.id, t)}
-              inbox={{ demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] }} />
-          )}
-        </main>
+      <AppShell title={title} waiting={counts.questions + counts.approvals > 0}
+        sidebar={(mode, close) => (
+          <Sidebar mode={mode} view={view} activeId={activeId} cases={sidebarCases} inbox={{ questions: counts.questions, approvals: counts.approvals }}
+            onView={(p: Place) => { setView(p); close?.(); }} onOpenCase={(id) => { open(id, tabOf(id)); close?.(); }} onClose={close} />
+        )}>
+        {view === "cases" && (cases.length ? (
+          <CasesList cases={cases} summaries={summaries} onOpen={(id) => open(id, tabOf(id))} />
+        ) : (
+          <div className="pt-6"><CasesEmpty onNew={() => setView("new")} onLoadExample={() => undefined} examples={[]} /></div>
+        ))}
+        {view === "new" && (
+          <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
+            <NewCaseFlow onCancel={() => setView(cases.length ? "case" : "cases")}
+              onLoadExample={(id) => (cases.some((c) => c.id === id) ? open(id) : undefined)}
+              onCreate={() => { toast("In this replay, new cases aren't read. Open a recorded case to try the checks."); setView("cases"); }} />
+          </div>
+        )}
+        {view === "questions" && (
+          <QuestionsInbox items={questionItems(inboxCases)} viewer={OPERATOR}
+            onOpen={(caseId, qid) => open(caseId, qid)}
+            onReply={(caseId, qid) => { actions(caseId).reply(qid); open(caseId); }} />
+        )}
+        {view === "approvals" && (
+          <ApprovalsInbox items={approvalItems(inboxCases)} viewer={OPERATOR}
+            onOpen={(caseId) => open(caseId, "dispute")}
+            onAccept={(caseId, draftId) => actions(caseId).accept(draftId)}
+            onReject={(caseId, draftId, reason) => actions(caseId).reject(draftId, reason)}
+            onMessageChange={(caseId, draftId, t) => actions(caseId).editMessage(draftId, t)} />
+        )}
+        {demo && (view === "case" || view === "documents" || view === "history") && (
+          <CaseWorkspace key={demo.id} demo={demo} x={store.inputs[demo.id]} local={store.state[demo.id]}
+            actions={actions(demo.id)} roles={roles} view={view} now={clock}
+            tab={tabOf(demo.id)} onTab={(t) => setTab(demo.id, t)} onView={setView}
+            inbox={{ demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] }} />
+        )}
         <ToastRegion>
           {toasts.map((t) => (
             <QuietToast key={t.id} text={t.text}
@@ -114,7 +114,7 @@ export function CaseScreen({ cases = DEMO_CASES, roles = ALL_ROLES }: Props) {
               onClose={() => setToasts((all) => all.filter((v) => v.id !== t.id))} />
           ))}
         </ToastRegion>
-      </div>
+      </AppShell>
     </Tooltip.Provider>
   );
 }
@@ -122,8 +122,7 @@ export function CaseScreen({ cases = DEMO_CASES, roles = ALL_ROLES }: Props) {
 function summaryOf(x: CaseInput): CaseSummary {
   const t = totalsOf(x), issues = issuesOf(x);
   return {
-    atStakeCents: t.atStakeCents, billedCents: t.billedCents, pill: casePill(x).label,
+    atStakeCents: t.atStakeCents, billedCents: t.billedCents, pill: casePill(x).label, status: caseStatus(x),
     openQuestions: openQuestions(x).length, toDecide: issues.filter((i) => i.kind !== "dispute").length,
-    documents: x.documents.length, events: x.events.length,
   };
 }

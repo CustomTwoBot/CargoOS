@@ -77,21 +77,9 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     expect(screen.getByText("“They did expedite it. Pay it this time.”")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Draft dispute" })).not.toHaveAttribute("aria-disabled");
-    fireEvent.click(screen.getByRole("button", { name: /^History/ }));
-    expect(screen.getAllByText("draft_rejected").length).toBeGreaterThan(0);
-    expect(screen.getByText("Rejected the dispute. Nothing went to the seller.")).toBeInTheDocument();
   });
-
-  it("the rail switches to Documents and History without losing the case state", () => {
-    render(<CaseScreen cases={[SCENARIO_A]} />);
-    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    fireEvent.click(screen.getByRole("button", { name: /^History/ }));
-    expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
-    expect(screen.getAllByText("draft_created").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: /^Documents/ }));
-    expect(within(screen.getByRole("list", { name: "Documents" })).getByText("Invoice PCL-INV-1012")).toBeInTheDocument();
-  });
+  // Documents and History moved from the sidebar into the case's own tab strip (docs/design.md §0.2);
+  // their tests live with the case (workspace / case tabs).
 
   it("a screen holding only ops lead can answer but sees no dispute, verdict, evidence or approve controls", () => {
     render(<CaseScreen cases={[SCENARIO_A]} roles={["ops_lead"]} />);
@@ -113,7 +101,7 @@ describe("sidebar", () => {
     const nav = screen.getByRole("navigation", { name: "Sections" });
     expect(within(nav).getAllByText("Bayline 40HC Ningbo-LB").length).toBeGreaterThan(0);
     expect(within(nav).getByText("$300")).toBeInTheDocument();
-    expect(within(nav).getByText("1 waiting on you")).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Bayline 40HC Ningbo-LB, $300 at stake, Waiting on you" })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "Collapse sidebar" }));
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
     expect(localStorage.getItem("cargoos.sidebar")).toBe("collapsed");
