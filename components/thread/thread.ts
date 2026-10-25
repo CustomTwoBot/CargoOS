@@ -9,6 +9,7 @@ import { questionTitle } from "@/components/case/issues";
 import { canAct } from "@/components/case/roles";
 import { resultWord, type Tone } from "@/components/case/words";
 import { instant, isRechecking, toRows, totalsOf, type CaseInput, type Row } from "@/components/case/view-model";
+import { docRows } from "@/components/documents/documents";
 import { linesPhrase } from "@/components/history/history";
 import { ASKED, DECIDER, firstName, personOf, reasonFor } from "@/components/inboxes/people";
 import type { CaseEvent, Draft, Person, Question, SourceDoc } from "@/lib/types";
@@ -35,11 +36,28 @@ export type ThreadItem =
       earlier?: { whose: string; text: string } }
   /** A person's answer: a bubble on the right. */
   | { kind: "reply"; id: string; at: string; who: string; text: string }
-  /** A person's decision on the dispute: requested, accepted, rejected (with the reason). */
-  | { kind: "decision"; id: string; at: string; text: string; reason?: string };
+  /** A person's step on the dispute, said like a system line: "Maya" + " asked you to approve…". */
+  | { kind: "decision"; id: string; at: string; who: string; text: string; reason?: string };
 
 const text = (s: string): Seg => ({ t: "text", text: s });
 const lineLink = (r: Pick<Row, "key" | "lineNo">): Seg => ({ t: "line", key: r.key, text: `Line ${r.lineNo}` });
+
+// TODO(merge): use chargeName from components/canvas/model.ts once the canvas branch lands, so both panes print a charge alike.
+/** A charge as the invoice means it: "Drayage Oakland → Reno NV 3×40HC" (typed "->" and "3x40HC"). */
+const chargeName = (d: string) => d.replace(/\s->\s/g, " → ").replace(/(\d)( ?)x( ?)(\d)/g, "$1$2×$3$4");
+
+/**
+ * The engine's why-line without the numbers the canvas already shows next to the line: "Billed $4,800."
+ * in front and "Over by $300." at the end. "Billed in CNY." stays: it is the reason.
+ */
+export const whyShort = (why: string) =>
+  why.replace(/^Billed \$[\d,]+(?:\.\d{2})?\.\s*/, "").replace(/\s*Over by \$[\d,]+(?:\.\d{2})?\.$/, "").trim();
+
+/** "Line 1, Ocean freight …: $300 over. Agreed $4,500 (email, Sep 5, …)." */
+const lineSentence = (r: Row, viewer: Person): Para => {
+  const why = whyShort(r.why);
+  return [lineLink(r), text(`, ${chargeName(r.description)}: `), ...resultSegs(r, viewer), text(why ? `. ${why}` : ".")];
+};
 
 /** Who did it, from this screen: "you" for the viewer, the first name otherwise. */
 export const nameFor = (person: Person | undefined, viewer: Person) =>
@@ -94,6 +112,19 @@ function resultSegs(r: Row, viewer: Person): Seg[] {
 /** The plain reason, from this screen: "Approved by you" on Sam's, "Approved by Sam" on Maya's. */
 const reasonFrom = (r: Row, viewer: Person) => reasonFor(r.reason.plain, viewer);
 
+/**
+ * An uploader's thread: one line per document and what was read from it, in the words and counts the
+ * canvas's document list uses ("Read, 7 facts"). No amounts or findings.
+ */
+function documentLines(x: CaseInput): ThreadItem[] {
+  const when = (docId: string, fallback?: string) =>
+    x.events.find((e) => (e.type === "doc_added" || e.type === "reply_received") && e.payload.docId === docId)?.at ?? fallback ?? "";
+  return docRows(x)
+    .map((r): ThreadItem => ({ kind: "system", id: `doc_${r.doc._id}`, at: when(r.doc._id, r.doc.sentAt),
+      text: r.status.state === "read" ? `Read ${r.doc.title} · ${r.status.read}` : `${r.doc.title} · ${r.status.label}` }))
+    .sort((a, b) => instant(a.at) - instant(b.at));
+}
+
 /** The first check: what CargoOS read, how many charges match, and each line it can't accept as billed. */
 function checkSummary(x: CaseInput, revision: number, viewer: Person, at: string): ThreadItem[] {
   const rows = rowsAt(x, revision);
@@ -105,8 +136,7 @@ function checkSummary(x: CaseInput, revision: number, viewer: Person, at: string
   const asked = new Set(x.questions.flatMap((q) => q.findingKeys));
   const unasked = rows.filter((r) => r.group === "waiting" && !asked.has(r.key));
   const paras: Para[] = [[text(`${cleared.length} ${cleared.length === 1 ? "charge matches" : "charges match"} what was agreed.`)]];
-  for (const r of disputed) paras.push([lineLink(r), text(`, ${r.description}: `), ...resultSegs(r, viewer), text(`. ${r.why}`)]);
-  for (const r of unasked) paras.push([lineLink(r), text(`, ${r.description}: `), ...resultSegs(r, viewer), text(`. ${r.why}`)]);
+  for (const r of [...disputed, ...unasked]) paras.push(lineSentence(r, viewer));
   return [
     { kind: "agent", id: `check_${revision}_read`, at, paras: [[text(`I read ${listOf(docs)}, and checked all ${charges(rows.length)}.`)]] },
     { kind: "agent", id: `check_${revision}_result`, at, paras },
@@ -124,7 +154,7 @@ function changeSummary(x: CaseInput, e: CaseEvent, revision: number, viewer: Per
   if (!moved.length) return undefined;
   const paras: Para[] = [[text(`${cap(cause)} changed ${charges(moved.length)}:`)]];
   for (const r of moved) {
-    paras.push([text("· "), lineLink(r), text(`, ${r.description} ${inCurrency(r.billedCents, r.currency)} → `), ...resultSegs(r, viewer), text(`. ${reasonFrom(r, viewer)}.`)]);
+    paras.push([text("· "), lineLink(r), text(`, ${chargeName(r.description)} ${inCurrency(r.billedCents, r.currency)} → `), ...resultSegs(r, viewer), text(`. ${reasonFrom(r, viewer)}.`)]);
   }
   const t = totalsAt(x, revision);
   paras.push([text("At stake is now "), { t: "word", text: money(t.atStakeCents), tone: t.atStakeCents ? "dispute" : "cleared" }, text(".")]);
@@ -179,15 +209,14 @@ function draftItems(x: CaseInput, viewer: Person, forwarder: string): ThreadItem
     if (e.type === "approval_requested") {
       const by = actor(e, d.requestedBy);
       const decider = nameFor(DECIDER, viewer);
-      out.push(d.requestedBy
-        ? { kind: "decision", id: e._id, at: e.at, text: `${cap(nameFor(by, viewer))} asked ${decider} to approve a dispute: ${what}.` }
-        : { kind: "decision", id: e._id, at: e.at, text: `${cap(nameFor(by, viewer))} drafted a dispute: ${what}.` });
+      out.push({ kind: "decision", id: e._id, at: e.at, who: cap(nameFor(by, viewer)),
+        text: d.requestedBy ? ` asked ${decider} to approve a dispute: ${what}.` : ` drafted a dispute: ${what}.` });
     } else if (e.type === "approved") {
-      out.push({ kind: "decision", id: e._id, at: e.at, text: `${cap(nameFor(actor(e, d.approvedBy), viewer))} accepted the dispute.` });
+      out.push({ kind: "decision", id: e._id, at: e.at, who: cap(nameFor(actor(e, d.approvedBy), viewer)), text: " accepted the dispute." });
       out.push({ kind: "agent", id: `${e._id}_message`, at: e.at,
         paras: [[text(`I drafted the message to ${forwarder} with the numbers from the check. Nothing is sent: you send it yourself.`)]] });
     } else if (e.type === "draft_rejected") {
-      out.push({ kind: "decision", id: e._id, at: e.at, text: `${cap(nameFor(actor(e, d.rejectedBy), viewer))} rejected the dispute.`,
+      out.push({ kind: "decision", id: e._id, at: e.at, who: cap(nameFor(actor(e, d.rejectedBy), viewer)), text: " rejected the dispute.",
         reason: (e.payload.reason as string | undefined) ?? d.rejectionReason });
     }
   }
@@ -228,7 +257,7 @@ export function threadOf(x: CaseInput, viewer: Person, now: Date | null, forward
     }
     i = j;
   }
-  if (!seesFindings(viewer)) return items;
+  if (!seesFindings(viewer)) return documentLines(x);
 
   const asked = askedName(viewer);
   for (const e of events) {
@@ -269,7 +298,7 @@ export function threadOf(x: CaseInput, viewer: Person, now: Date | null, forward
 
 /** This person's next step, shown at the bottom of the thread. */
 export type Dock =
-  | { kind: "answer"; questionId: string; label?: string; replay?: string }
+  | { kind: "answer"; questionId: string; label?: string }
   | { kind: "blocked"; text: string }
   | { kind: "rechecking"; text: string }
   | { kind: "request"; text: string; button: string }
@@ -324,8 +353,11 @@ export function dockOf(demo: DemoCase, x: CaseInput, local: Pick<CaseLocal, "rep
     }
     if (draft.status === "approved") return { kind: "message", draftId: draft._id, text: `The message to ${forwarder} is ready.` };
     if (draft.status === "rejected") {
-      const by = nameFor(personOf(draft.rejectedBy), viewer);
-      return { kind: "quiet", text: `${cap(by)} rejected the dispute${draft.rejectionReason ? `: “${draft.rejectionReason}”` : "."}` };
+      // The reason is the thread's last line; the dock says what to do about it.
+      const by = cap(nameFor(personOf(draft.rejectedBy), viewer));
+      if (!canAct(viewer.roles, "draftDispute")) return { kind: "quiet", text: `${by} rejected the dispute.` };
+      return { kind: "request", text: `${by} rejected it. Fix the lines, then ask again.`,
+        button: canAct(viewer.roles, "approve") ? "Draft again" : `Ask ${asked} again` };
     }
   }
 
@@ -338,7 +370,6 @@ export function dockOf(demo: DemoCase, x: CaseInput, local: Pick<CaseLocal, "rep
     return {
       kind: "answer", questionId: q._id,
       label: openQs(x).length > 1 || q.followupOf ? `Answering ${n === "Follow-up" ? "the follow-up" : n}` : undefined,
-      replay: demo.answers[q._id] ? "In this replay CargoOS reads the recorded answer." : undefined,
     };
   }
 
@@ -362,7 +393,7 @@ export function itemText(it: ThreadItem): string {
     case "agent": return it.paras.map(paraText).join("\n");
     case "question": return [it.title, it.earlier && `${it.earlier.whose} earlier answer: “${it.earlier.text}”`, it.text, ...it.cites.map((c) => `${c.source}: ${c.quote}`), it.foot].filter(Boolean).join("\n");
     case "reply": return `${it.text} — ${it.who}`;
-    case "decision": return it.reason ? `${it.text} “${it.reason}”` : it.text;
+    case "decision": return `${it.who}${it.text}${it.reason ? `\n“${it.reason}”` : ""}`;
     default: return it.text;
   }
 }
