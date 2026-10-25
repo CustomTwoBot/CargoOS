@@ -24,7 +24,7 @@
 |------|-----------|------|
 | Dev Patel | Backend / full stack (strong) | **W1 Case engine**: rules, reconcile, findings revisions, diff, totals, explanations, pipeline |
 | Arpan Savani | Backend / full stack (strong), TypeScript | **W2 Extraction + agent**: Claude extraction, quote validation, ops-lead question/answer loop, dispute drafts |
-| Dzhamal Chapanov | Backend / full stack | **W3 Frontend**: case overview bar, three status groups, source panel, timeline, what-changed panel, ops-lead inbox, role switcher, draft/approval, paste box, line editor |
+| Dzhamal Chapanov | Backend / full stack | **W3 Frontend**: case overview bar, three status groups, source panel, timeline, what-changed panel, question card with reply box, roles per screen (no switcher), draft/approval, paste box, line editor |
 | Pranav Krishna | CI/CD, DevOps, DS | **W4 Infra + proof**: deploy, CI, CLAUDE.md, shared types, seed, fixtures + variations, eval harness, e2e test, fallback replay, real-user outreach, submission. Plays the **ops lead** live |
 
 Sleep: someone always awake and testing overnight. Presenters sleep in shifts Sun 01:00-05:00.
@@ -41,9 +41,9 @@ Sleep: someone always awake and testing overnight. Presenters sleep in shifts Su
 ## MVP: the one journey
 1. AP clerk opens the seeded Scenario A case (quote PDF, email amendment, WhatsApp export, forwarder invoice). CargoOS shows the case overview bar (Billed · Agreed · At stake · Waiting), the agreement timeline, and invoice lines grouped into **To dispute / Waiting on answers / Cleared**, each with a "why" line showing the numbers. Every line opens its source text.
 2. Line 1 (ocean freight, +$300 over the amended rate) is To dispute; line 2 (PSS, allowed by a quote clause) is Cleared; lines 4 and 6 are Waiting. At stake $300.
-3. CargoOS decides the two waiting lines need the ops lead, writes one specific question citing invoice lines 4 and 6, and posts it to the ops-lead inbox.
+3. CargoOS decides the two waiting lines need the ops lead, writes one specific question citing invoice lines 4 and 6, and shows it on the case as an open question.
 4. Ops lead (Pranav, live) replies: "approved the $200 congestion fee on WhatsApp, nobody agreed to $400 rush handling." Findings recompute: line 4 moves to Cleared, line 6 to To dispute, At stake goes $300 → $700, and the what-changed panel cites the reply for each change.
-5. Clerk drafts the dispute, is blocked from approving it ("Requires controller"), switches to the controller, who approves. Draft only. Nothing is sent.
+5. The operator (one person holding clerk, controller and ops lead) drafts the dispute and approves it in the controller role; the server accepts approval only from that role. Draft only. Nothing is sent.
 
 Also in MVP: **Agree / Not an issue** buttons on each line (saved as events); paste box and editable invoice lines for judges' own scenarios.
 
@@ -66,7 +66,7 @@ Done means: the demo shows step 3 through 5 live and deployed, with a typed repl
 |---|---|---|
 | W1 Case engine | Dev | Scenario A facts → expected findings exactly (SPEC.md §7.2); adding the reply facts → line 4 `supported`, line 6 `potential_discrepancy`, revision 2 stored, diff lists both changes with fact IDs; totals $300 → $700 at stake; PSS never flagged |
 | W2 Extraction + agent | Arpan | Scenario A docs → schema-valid facts and 8 charges with exact-substring quotes; agent asks on A, stays silent on A-clean; yes / partial / no / ambiguous replies handled; Claude/API failure → `needs_review`, no crash |
-| W3 Frontend | Dzhamal | Overview bar, three groups, click-to-source, timeline, what-changed panel, ops-lead inbox, Agree / Not an issue, clerk cannot approve, controller can. Works on the fixture before the backend is ready |
+| W3 Frontend | Dzhamal | Overview bar, three groups, click-to-source, timeline, what-changed panel, question card with reply box, Agree / Not an issue, approval in the controller role (server-checked). Works on the fixture before the backend is ready |
 | W4 Infra + proof | Pranav | Deployed URL with CI; Scenario A + 10 variations with answer keys (incl. ops lead says no); eval prints per-metric results with denominators; Playwright e2e on deploy; recorded fallback replay; one real quote collected |
 
 ## Integration checkpoints (rebased Sat 09:00)
@@ -74,7 +74,7 @@ Done means: the demo shows step 3 through 5 live and deployed, with a typed repl
 |---|---|
 | Sat 11:00 | Contracts + fixture + CLAUDE.md on main; scaffold deployed (Next.js + Convex); team sync |
 | **Sat 15:00** | **Go/no-go:** deployed slice, seeded case → findings → typed reply → changed findings visible. If not, cut to Scenario A only and drop everything else |
-| Sat 17:00 | Live agent Q&A on the deployed app; role gate works. Show it at the Hyphenate booth for feedback |
+| Sat 17:00 | Live agent Q&A on the deployed app; server approval gate works. Show it at the Hyphenate booth for feedback |
 | Sat 19:00-23:00 | Paste box + line editor, eval run with real numbers, polish |
 | **Sat 23:00** | **Feature freeze.** Bug fixes and demo polish only after this |
 | Sun 01:00 | Hardened: happy path never breaks, judge-paste path tested, fallback replay recorded |
@@ -84,7 +84,7 @@ Done means: the demo shows step 3 through 5 live and deployed, with a typed repl
 ## Cut list
 - D&D / 46 CFR checklist: stretch #2 only if the core is stable at freeze (stretch #1 is the "Ask why" box).
 - Incoterms rule logic: stored as case metadata only.
-- Login, signup, OAuth: three seeded users and a role switcher.
+- Login, signup, OAuth: one operator holding all three roles, no role switcher.
 - Sending email: drafts only. This is also the safety story.
 - Arbitrary file upload: seeded packet plus a paste box covers the demo and judge inputs.
 - Multiple shipments / forwarder history across cases.

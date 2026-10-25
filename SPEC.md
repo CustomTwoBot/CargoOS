@@ -35,7 +35,7 @@ We enter four judged tracks plus three free opt-ins. The only sponsor technology
 
 | Track | Prize | What judges want | What we use from the sponsor |
 | --- | --- | --- | --- |
-| Hyphenate: Autonomous Systems for Finance (primary) | $8,000 / $5,000 / $3,000, interviews for top 5 | Real enough (messy data, proof it works); would you hire it (seat, limited access, clean record, knows when to ask); something new; the moment (catches what others missed, recovers, defends a decision). Submit a video that opens on the moment, a live demo that runs for real (judges may bring a scenario), a seats line, real vs simulated, code | Nothing technical. Shown through: role gate, append-only history, question/answer loop incl. refusal, paste box for judge scenarios |
+| Hyphenate: Autonomous Systems for Finance (primary) | $8,000 / $5,000 / $3,000, interviews for top 5 | Real enough (messy data, proof it works); would you hire it (seat, limited access, clean record, knows when to ask); something new; the moment (catches what others missed, recovers, defends a decision). Submit a video that opens on the moment, a live demo that runs for real (judges may bring a scenario), a seats line, real vs simulated, code | Nothing technical. Shown through: server-side approval gate (controller role only, logged), append-only history, question/answer loop incl. refusal, paste box for judge scenarios |
 | Anthropic | TBD | Named community; a real problem you lived or heard firsthand; works and is usable Monday; thoughtful use of Claude, and you know where it can go wrong | Claude API: extraction with source quotes, deciding whether and whom to ask, reading replies, drafting disputes, "Ask why" (stretch) |
 | Microsoft: Built for the Real World | Surface laptop each, FDE tech talk, mentorship | Production-minded AI agent in finance. Customer understanding, measurable usefulness, path from prototype to production, responsible design, end-to-end function | Nothing required. Azure hosting is optional; skip unless trivial |
 | Convex | $5,000 cash (confirm at booth; an older list said hardware) | Meaningful use of Convex as the backend | Convex database, file storage, queries (reactive UI), mutations, actions (call Claude) |
@@ -63,9 +63,9 @@ One shipment case, one journey, working live on the deployed app. Everything els
 
 1. The clerk opens the seeded Scenario A case (quote PDF, email amendment, WhatsApp export, forwarder invoice). CargoOS shows the case overview bar, the agreement timeline, and the three status groups. Every line opens its source text.
 2. Lines show: line 1 in **To dispute** (ocean freight over the amended rate, +$300), line 2 in **Cleared** (peak season surcharge allowed by a quote clause), lines 4 and 6 in **Waiting on answers**, the rest Cleared.
-3. CargoOS decides that one question to the ops lead can resolve lines 4 and 6, writes it citing both lines, and posts it to the ops-lead inbox.
+3. CargoOS decides that one question to the ops lead can resolve lines 4 and 6, writes it citing both lines, and shows it on the case as an open question for the ops lead.
 4. The ops lead types a reply. All lines recompute: line 4 moves to Cleared, line 6 to To dispute (+$400). At stake goes from $300 to $700. A "what changed" panel cites the reply for each change.
-5. The clerk creates a dispute draft (to the forwarder, $700, with citations) and is blocked from approving it: "Requires controller." Switch role to controller, who approves. Nothing is sent.
+5. The operator creates a dispute draft (to the forwarder, $700, with citations) and approves it in the controller role. The server accepts approval only from the controller role. Nothing is sent.
 
 **Agent behavior (what makes it real, not hardcoded):**
 
@@ -81,7 +81,7 @@ One shipment case, one journey, working live on the deployed app. Everything els
 - Extraction from PDF text and chat/email text, with exact source quotes.
 - Rules R0 to R9 (section 6), full recompute on every change, stored findings revisions, before/after diff.
 - Ops-lead question/answer loop incl. refusal and one follow-up.
-- Three seeded users and a role switcher: clerk, controller, ops lead. No login.
+- One operator who holds all three roles (clerk, controller, ops lead) by default. No role switcher, no login. A screen can be set per device to hold fewer roles (e.g. a demo laptop with only ops lead).
 - Case overview bar, three status groups, "why" line with numbers, click to source.
 - **Agree** / **Not an issue** buttons per line, saved as events.
 - Dispute draft with citations; controller-only approval.
@@ -118,7 +118,7 @@ One TypeScript app: Next.js for the screens, Convex for data and backend logic, 
 **Repo layout:**
 
 ```
-/app                 Next.js pages (case view, inbox, history)
+/app                 Next.js pages (case view, history)
 /components          UI components
 /convex              schema.ts, queries, mutations, actions, seed.ts
 /lib/types.ts        shared types (section 5) - the contract
@@ -297,16 +297,16 @@ export interface CaseEvent {
 | `drafts` | Draft | `by_case [caseId]` |
 | `events` | CaseEvent | `by_case_at [caseId, at]` |
 
-The current role is kept in the browser (role switcher) and passed as an argument to every mutation. Mutations that approve check `role === "controller"` on the server, not just in the UI.
+The screen holds a set of roles (all three by default; set per device, never by a UI control). Each action passes its own role to its mutation: `clerk` for verdicts, line edits, evidence, drafts and approval requests; `ops_lead` for replies; `controller` for approval. Mutations that approve check `role === "controller"` on the server, not just in the UI.
 
 ### 5.3 Function contracts
 
 | Function | Where | Owner | Signature |
 | --- | --- | --- | --- |
 | `extractDocument` | `lib/ai/extract.ts`, called from a Convex action | Arpan | `(doc: SourceDoc) => Promise<{ facts: NewFact[]; charges: NewCharge[] }>` |
-| `reconcile` | `lib/engine/reconcile.ts`, pure | Dev | `(input: { case: Case; facts: Fact[]; charges: Charge[]; prior?: Finding[] }) => Finding[]` |
+| `reconcile` | `lib/engine/reconcile.ts`, pure | Dev | `(input: { case: Case; facts: Fact[]; charges: Charge[]; prior?: Finding[]; documents?: SourceDoc[] }) => Finding[]` (`documents` optional: lets why lines name the source type; the pipeline should pass the case's documents) |
 | `diffFindings` | `lib/engine/diff.ts`, pure | Dev | `(prev: Finding[], next: Finding[], eventId: string) => FindingChange[]` |
-| `explain` | `lib/engine/explain.ts`, pure | Dev | `(f: Finding, facts: Fact[]) => string` |
+| `explain` | `lib/engine/explain.ts`, pure | Dev | `(f: Finding, facts: Fact[], context?: { documents?: SourceDoc[]; charge?: Charge }) => string` (`reconcile` calls it; other code reads `Finding.explanation`) |
 | `planQuestion` | `lib/ai/planQuestion.ts` | Arpan | `(state: CaseState, open: Finding[]) => Promise<NewQuestion \| null>` |
 | `interpretReply` | `lib/ai/interpretReply.ts` | Arpan | `(q: Question, replyDoc: SourceDoc, state: CaseState) => Promise<{ interpretation; facts: NewFact[] }>` |
 | `draftDispute` | `lib/ai/draftDispute.ts` | Arpan | `(findings: Finding[], state: CaseState) => Promise<{ subject; body }>` (code adds totals) |
@@ -362,7 +362,7 @@ The current role is kept in the browser (role switcher) and passed as an argumen
 
 **Step order for each charge `c`:**
 
-1. **Currency (R3).** If `c.currency` is not the case currency: use the latest `fx_rate` fact to convert. No `fx_rate` fact → `needs_review`, R3, missing `["exchange rate for <currency>"]`.
+1. **Currency (R3).** The base currency is **USD** (team decision). If `c.currency` is not USD → `needs_review`, R3, routeTo `ops_lead`, missing `["exchange rate for <currency>"]`. Conversion with an `fx_rate` fact is **not implemented** because the spec never defined how a rate is stored (`amountCents` can't hold 7.1 CNY/USD); a non-USD line with an `fx_rate` fact still waits, with missing `["agreed conversion for <currency> (fx_rate format not defined yet)"]`.
 2. **Duplicate (R1).** If an earlier line on the same invoice has the same `chargeType` and the same `amountCents` → this line is `potential_discrepancy`, R1, expected 0, delta = billed.
 3. **Decisive facts.** Collect facts for `c.chargeType` of kind `agreed_rate` (only if applicable, see below), `approval`, or `rejection`. Take the one with the **latest `effectiveAt`**.
    - Two decisive facts at the same `effectiveAt` that disagree (different amounts, or approval vs rejection) → `needs_review`, **R7**, missing `["sources disagree"]`, routeTo `ops_lead`.
@@ -410,7 +410,54 @@ The current role is kept in the browser (role switcher) and passed as an argumen
 | R8 | Billed {billed}. Approved by the {role} on {date}: "{quote}". |
 | R9 | Billed {billed}. The {role} said this was not agreed on {date}: "{quote}". Over by {delta}. |
 
-Money renders as `$4,800`; dates as `Sep 5`. `{conditionText}` = ", if booked by Sep 10; booked Sep 8" when a condition applied.
+Money renders as `$4,800`; dates as `Sep 5`. `{conditionText}` = ", if booked by Sep 10; booked Sep 8" when a condition applied. `{docTitle}` renders as the document **type** (`quote`, `email`, `chat`, `invoice`, `reply`, `proforma`, `document`), not its title: "(email, Sep 5)". `{role}` renders `ops_lead` as "ops lead". The exact text for every Scenario A line is in `fixtures/scenarioA.ui.json`, and the engine matches it word for word.
+
+**Engine decisions (gaps the engine filled; implemented and tested in `lib/engine/`, Oct 24):**
+
+These settle details the rules above left open. Agents building against the engine should treat them as part of the spec.
+
+*Money and dates (`money.ts`)*
+- `formatUSD` shows cents only when non-zero (`$4,800`, `$300.50`, `$0`) and puts the minus first (`-$300`). It throws on non-integer cents.
+- `parseMoneyToCents` accepts an optional leading `-`, an optional `$`, correctly grouped commas and any number of decimals. More than two decimals round half away from zero (`"1.005"` → 101). Anything else (e.g. `"USD 650.00"`, `"4,80,0"`, `""`) returns `null`; it never guesses.
+- A date is read from the ISO string **as written**, never through the machine's time zone: `2026-09-05T23:30:00-07:00` is `Sep 5` everywhere.
+- Booked-by and valid-until checks compare **calendar dates**, inclusive (booked Sep 10 with "if booked by Sep 10" applies).
+- "Latest" and "same `effectiveAt`" compare **instants**, so `14:21-07:00` and `21:21Z` are the same moment. A datetime without an offset is rejected; a date-only string counts as midnight UTC.
+
+*Rules (`rules.ts`)*
+- **Booking date** = the calendar date of the latest `booking_date` fact's `effectiveAt` (`Fact` has no separate date field).
+- An `agreed_rate` with no `amountCents` is ignored.
+- **R1** needs the same invoice (`docId`), an earlier `lineNo`, the same `chargeType` and the same `amountCents`. routeTo the biller.
+- **R7** (same latest instant): a rejection alongside a rate or approval, or two different amounts. The same amount from two sources is **not** a conflict. If a rate and an approval tie and agree, the rate decides (R0/R2).
+- When an R0/R2 rate had a `bookedBy` condition, the booking fact is added to `factIds`, so the why line and source panel can show "booked Sep 8".
+- `expectedCents` / `deltaCents` per rule:
+
+| Rule | `expectedCents` | `deltaCents` |
+| --- | --- | --- |
+| R0 | agreed rate (also when billed is under it) | none (never negative) |
+| R1, R9 | 0 | billed |
+| R2 | agreed rate | billed − agreed |
+| R3, R6, R7 | none | none |
+| R4 | the clause's cap if it has one, else none | billed − cap, only when over |
+| R5 | billed (excluded but billable at cost; `A-excl` answer key) | none |
+| R8 | approved amount, or billed if the approval has no amount | billed − approved, only when over |
+
+*Findings (`reconcile.ts`)*
+- New findings get `revision = case.revision + 1` (the seeded case starts at 0, so the first revision is 1). `key = chargeId`. Lines come back in `lineNo` order.
+- `billedCents` = the charge's `amountCents` as billed, even when it is not USD (`A-cny` line 3 is 461500).
+- `evidence` = the cited facts' spans in `factIds` order, plus for R1 the earlier duplicate line's span. It never contains text the engine wrote, so every evidence quote is a document substring.
+- Optional fields (`expectedCents`, `deltaCents`, `missing`, `routeTo`, `userVerdict`, `userVerdictBy`) are **left off**, never set to `undefined` (Convex rejects `undefined` values).
+- "Unchanged `factIds`" for carrying a user verdict compares them as a **set** (order doesn't matter).
+- Known gap: the valid-until fallback to the invoice `sentAt` (when there is no booking fact) is not wired yet. `reconcile` could read it from `documents`, but doesn't. No current fixture needs it.
+
+*Why lines (`explain.ts`)*
+- The verdict-cleared sentence is appended **after** the rule's template.
+- Additions where a template would mislead or hide the numbers:
+  - R0 with billed under the rate: "Billed $800. Under the agreed rate of $850 (quote, Sep 2)."
+  - R4 or R8 when disputed: the template plus " Over by {delta}."
+  - R7: each source is written as amount (or "approved" / "not agreed") plus `(type, date)`: "Sources disagree: $4,500 (email, Sep 5) vs $4,400 (chat, Sep 5)."
+  - R3 with an unusable `fx_rate` fact: "Billed in CNY. An exchange rate was mentioned, but converting it is not supported yet, so it cannot be checked yet."
+- A quote that already ends in `.`, `!` or `?` gets no second full stop after the closing quotation mark.
+- Without `documents`, sources read "(Sep 2)" instead of "(quote, Sep 2)". `explain` never throws: if a cited fact is missing, it falls back to the numbers it has ("Billed $4,800. Over by $300.").
 
 ## 7. Scenario A, variations and eval
 
@@ -543,11 +590,11 @@ Save the full-mode output to `eval-results.md` with the date and model used. Onl
 
 ## 8. UI spec
 
-One case page, an ops-lead inbox, and a role switcher. Colors are not final; pick them later, but keep the three groups visually distinct.
+One case page, run by one operator who holds all three roles. No role switcher (a possible later feature); role-specific interfaces and separate ops-lead / controller apps come later. Visual design and copy: `docs/design.md` (§0 covers the one-operator rules).
 
-**Global header:** app name, case title, **role switcher** (Clerk / Controller / Ops lead, stored in localStorage with a safe fallback to Clerk), and a small trust line: "Synthetic data. Nothing is sent or paid automatically."
+**Global header:** app name, case title, and a small trust line: "Synthetic data. Nothing is sent or paid automatically."
 
-**Case page (clerk and controller):**
+**Case page:**
 
 1. **Case overview bar** at the top: Billed · Agreed · At stake · Waiting on answers (section 6 formulas), plus a count line: "1 to dispute · 2 waiting on answers · 5 cleared." Tagline under it: "Checked before you pay."
 2. **Three status groups**, in this order: **To dispute**, **Waiting on answers**, **Cleared** (collapsed by default, shows count). Each line row shows: line number, description, billed amount, rule badge, the "why" line, and delta when present.
@@ -555,13 +602,13 @@ One case page, an ops-lead inbox, and a role switcher. Colors are not final; pic
 4. **Agree / Not an issue** buttons on each To dispute and Waiting line. Agree sets `confirmed`; Not an issue sets `false_positive` (line moves to Cleared, marked "Dismissed by clerk"). Both write events.
 5. **Agreement timeline** (left or top): the documents and facts in date order (quote Sep 2 → email Sep 5 → booking Sep 8 → chat Sep 28 → invoice Oct 12 → reply), each fact clickable to its source. Superseded facts are struck through with "replaced by …".
 6. **What changed panel**: after each recompute, a list like "Line 4: Waiting → Cleared, because the ops lead approved it (reply, Oct 24): 'approved the $200 congestion fee on WhatsApp'." Newest revision on top; older revisions collapsible.
-7. **Open question card**: shows the question CargoOS asked, to whom, and its status.
+7. **Open question card**: shows the question CargoOS asked, to whom, and its status, with a reply box; submitting saves a `reply` document and triggers the pipeline.
 8. **Add evidence** box: paste text, choose type (email / chat / other), add. Triggers the pipeline.
 9. **Line editor**: edit amount or description of an invoice line inline (writes `charge_edited`). This is how judges try their own scenario.
-10. **Dispute draft**: button "Draft dispute" (enabled when At stake > 0). Shows to, subject, body, total, findings covered. Buttons: "Request approval" (clerk) and "Approve" (controller only). As clerk, Approve shows a disabled state with "Requires controller" and writes `approval_blocked`.
+10. **Dispute draft**: button "Draft dispute" (enabled when At stake > 0). Shows to, subject, body, total, findings covered. Buttons: "Request approval" (clerk role) and "Approve" (controller role). The operator holds both, so Approve is enabled after drafting. The server still rejects approval from any other role and writes `approval_blocked`.
 11. **Case history panel**: the event log, newest first, with actor and time.
 
-**Ops-lead inbox (ops lead role):** list of open questions with citations; a reply box; submitting saves a `reply` document and triggers the pipeline. The ops lead sees no approve buttons.
+**Roles per screen:** by default the screen holds clerk, controller and ops lead and shows every control. A screen set to fewer roles shows only those roles' controls: with only ops lead it shows the case and the question card with its reply box, and no Agree / Not an issue, line editor, Draft dispute or Approve.
 
 **States to handle:** loading (skeleton rows), recomputing (subtle spinner on the overview bar), extraction failed (yellow banner: "Couldn't read part of this document; affected lines are waiting on answers"), empty case.
 
@@ -612,7 +659,7 @@ Goal: the screens in section 8, working on the fixture first, then on live Conve
 3. **Source panel** with highlighted quote. Test: clicking line 1 shows the email quote highlighted.
 4. **Agree / Not an issue** buttons. Test: Not an issue moves the line to Cleared with "Dismissed by clerk" and lowers At stake.
 5. **Agreement timeline, What changed panel, open question card, case history panel.** Test: revision 2 renders exactly two changes, citing the reply quote.
-6. **Role switcher, ops-lead inbox, dispute draft panel with approval gate.** Test: as clerk, Approve is disabled and shows "Requires controller"; as controller it is enabled; the ops lead sees the inbox and no approve buttons.
+6. **Roles per screen, reply box in the question card, dispute draft panel with approval.** Test: with all roles, Approve is enabled and calls the approve mutation with role `controller`; a screen with only ops lead shows the reply box and no approve, dispute or verdict controls; no role switcher is rendered.
 7. **Add evidence box and line editor.** Test: submitting calls the right Convex mutation with the right arguments (mocked).
 8. **Switch from fixture to Convex queries** (`useQuery`), keep the fixture mode behind a flag for demo fallback.
 9. **Polish:** loading, recomputing and error states; the move animation; readable on a laptop at 1280 px.
@@ -628,7 +675,7 @@ Goal: everyone can build from minute one, the demo never breaks, and we can prov
 3. **Variations.** Write the 10 variation fixtures from section 7.4, each with documents, `facts.json` and expected results. Reuse the earlier generator script if useful for PDFs. Test: every fixture validates against the Zod answer-key schema.
 4. **Eval script** per section 7.5, both modes. Engine-only mode runs in CI and must pass. Full mode run manually Saturday evening; save `eval-results.md`.
 5. **Pipeline wiring** with Dev (section 4 flow) and the reset button.
-6. **End-to-end smoke test** (Playwright) on the deployed URL: open case → see $300 at stake → type the canonical reply as ops lead → see $700 → clerk blocked → controller approves. Runs in CI after deploy.
+6. **End-to-end smoke test** (Playwright) on the deployed URL: open case → see $300 at stake → type the canonical reply → see $700 → draft dispute → approve → approved, nothing sent. Runs in CI after deploy.
 7. **Fallback replay.** A saved, pre-processed copy of Scenario A (findings, question, reply results) the UI can load with a "Replay" label if Claude is slow or down. Test: replay mode renders without network calls to Claude.
 8. **Real people (start 11:00, finish by 17:00).** Ask at sponsor booths and mentors, post in the hackathon Discord, text family and friends, message 5 to 10 bookkeepers, customs brokers or fractional CFOs. Three questions: last time a freight bill didn't match what was agreed; how they check bills today and how long it takes; would they trust a tool that flags and drafts if they approve first. Get permission to quote. Never present simulated personas as interviews.
 9. **Submission assets (from 05:00 Sunday):** demo video that opens on the reply moment, README (setup, what Claude does, AI tools used, real vs simulated, limits), Devpost text, domain name, all four members added, all tracks opted in.
@@ -664,9 +711,9 @@ Everything built must be tested. A task is not done until its tests are written,
 | Agent | Asks on A, not on A-clean; groups lines 4 and 6; handles yes / partial / no; one follow-up on ambiguous, then closed\_unresolved |
 | Failure | Claude error or invalid JSON twice → `extraction_failed` event, lines stay needs\_review, UI banner, no crash |
 | Draft | All numbers in the body come from code and match findings |
-| Permissions | Clerk cannot approve (UI and server); controller can; ops lead sees no approve control |
+| Permissions | Server rejects approve with role `clerk` or `ops_lead` and writes `approval_blocked`; UI sends role `controller` for Approve; a screen without the controller role shows no approve control; no role switcher |
 | UI | Counts and At stake correct for both revisions; lines move groups on recompute; source panel highlights the quote |
-| E2E | Deployed journey: $300 → reply → $700 → clerk blocked → controller approves |
+| E2E | Deployed journey: $300 → reply → $700 → draft → approved, nothing sent |
 | Seed | Reset restores the starting state; seeding twice is idempotent |
 
 **Commands (set up by Pranav):** `npm run test` (unit + component), `npm run test:e2e` (Playwright), `npm run eval` (engine-only), `npm run eval:full` (real Claude, manual), `npm run typecheck`, `npm run lint`.
@@ -691,7 +738,7 @@ Everything before 3 PM serves the go/no-go slice; everything after 11 PM is hard
 | 1:00 | Open question card | "Lines 4 and 6 have no agreement anywhere. CargoOS decided one question to the ops lead can settle both, and asked." |
 | 1:20 | Pranav types the reply live as ops lead | (silence while it recomputes) |
 | 1:35 | Lines move: 4 → Cleared, 6 → To dispute; $300 → $700; What changed panel | "New evidence, new verdict, and it shows exactly why." |
-| 2:00 | Draft dispute; clerk clicks Approve → blocked; switch to controller → approves | "It drafts, it never sends. Only the controller can approve." |
+| 2:00 | Draft dispute → Approve; History shows the approval in the controller role | "It drafts, it never sends. Approval is a controller action, checked on the server and logged." |
 | 2:30 | Eval table | "On our synthetic test set: \[numbers from eval-results.md only\]. All data is synthetic." |
 | 2:45 | Seats line + real quote | "It fills the freight-invoice audit seat in AP." + the real person's quote |
 
