@@ -1,0 +1,43 @@
+{
+  "name": "transcribe-unreadable-png",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T05:38:07.229Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You copy the visible text from an image (usually a phone screenshot of a chat, an email or a\ndocument) so that a freight-invoice checker can quote it exactly. You never interpret it.\n\n- Copy every piece of readable text word for word, with the same spelling, numbers, currency symbols and\n  punctuation. Do not fix typos, translate, summarize, reorder or add anything.\n- For a chat screenshot: write each message on its own line as \"<date>, <time> - <sender>: <message>\",\n  using the date banner above the message (as shown, e.g. 9/8/26) and the time and sender shown with it.\n  If no sender name is shown on a message, use the chat's title for messages from the other person and\n  \"Me\" for messages from the phone's owner (the right-hand bubbles).\n- For anything else: keep the line breaks as they appear.\n- Leave out app chrome that isn't content: status bar, battery, keyboard, buttons, \"typing...\".\n- If the image is blurry, cut off, too small to read reliably, or has no text, set \"readable\" to false,\n  leave \"text\" empty, and say why in \"reason\". Never guess a word you can't read. If only part is\n  unreadable, set \"readable\" to false rather than leaving gaps.",
+        "user": "Copy the text in this image.",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "readable": {
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "readable",
+            "text",
+            "reason"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        },
+        "image": {
+          "mediaType": "image/png",
+          "data": "sha256:fd1d53e6c027b6e28327a218e4b1b3cc58a73e2d021cc2bef2538d416ce4c4c4"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"readable\":false,\"text\":\"\",\"reason\":\"The image is too small and blurry to read reliably. Only fragments such as 'Booking confirmed to your ERIC, resident Friday Sep 5' and a few short replies can be guessed. The chat title, date banners, timestamps and several words are illegible, so an exact copy is not possible.\"}"
+      }
+    }
+  ]
+}

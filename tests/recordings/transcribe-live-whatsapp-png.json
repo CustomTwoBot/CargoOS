@@ -1,0 +1,207 @@
+{
+  "name": "transcribe-live-whatsapp-png",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T05:38:04.468Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You copy the visible text from an image (usually a phone screenshot of a chat, an email or a\ndocument) so that a freight-invoice checker can quote it exactly. You never interpret it.\n\n- Copy every piece of readable text word for word, with the same spelling, numbers, currency symbols and\n  punctuation. Do not fix typos, translate, summarize, reorder or add anything.\n- For a chat screenshot: write each message on its own line as \"<date>, <time> - <sender>: <message>\",\n  using the date banner above the message (as shown, e.g. 9/8/26) and the time and sender shown with it.\n  If no sender name is shown on a message, use the chat's title for messages from the other person and\n  \"Me\" for messages from the phone's owner (the right-hand bubbles).\n- For anything else: keep the line breaks as they appear.\n- Leave out app chrome that isn't content: status bar, battery, keyboard, buttons, \"typing...\".\n- If the image is blurry, cut off, too small to read reliably, or has no text, set \"readable\" to false,\n  leave \"text\" empty, and say why in \"reason\". Never guess a word you can't read. If only part is\n  unreadable, set \"readable\" to false rather than leaving gaps.",
+        "user": "Copy the text in this image.",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "readable": {
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "readable",
+            "text",
+            "reason"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        },
+        "image": {
+          "mediaType": "image/png",
+          "data": "sha256:054738615f7d146e6907b814b93bf55e2f950b54131e4255b5ab0d80e2eb2094"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"readable\":true,\"text\":\"9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\\n9/8/26, 9:15 AM - Me: great thanks\\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\\n9/28/26, 10:30 AM - Me: ok keep me posted\",\"reason\":\"The screenshot is clear and all text is fully legible.\"}"
+      }
+    },
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You extract facts and invoice lines from one freight document for an invoice checker. Code checks\nevery quote against the document and decides everything else; you only copy what the document says.\n\nFact kinds (use exactly these):\n- agreed_rate: a price agreed for a charge. Needs chargeType and amountCents. Set bookedBy only if the\n  price depends on booking by a date (as YYYY-MM-DD), and validUntil if the document says how long it is valid.\n- permitted_surcharge: a clause that allows a charge on top of the price (e.g. \"PSS/GRI as filed ... apply\").\n  Needs chargeType; amountCents only if the clause states one.\n- exclusion: a charge the document says is not included but will be billed (e.g. duties billed at cost).\n- approval / rejection: a buyer-side person clearly agreeing to / refusing a specific charge.\n- fx_rate: an agreed exchange rate. Quote it; leave amountCents null.\n- validity: a validity period not tied to one price (rare; prefer validUntil on rates).\n- booking_date: the shipment was booked. effectiveAt is when it was booked. No chargeType.\n- incoterm: the incoterm (e.g. \"FOB Ningbo\"). No chargeType.\n\nCharge types (use exactly these): ocean_freight (main sea freight), air_freight, trucking, origin_thc,\ndestination_thc (terminal handling at destination), pss (peak season surcharge), fuel_surcharge,\ncongestion (port congestion fee), handling (handling / rush handling), doc_fee (documentation fee),\ncustoms_entry, drayage (port-to-warehouse trucking), chassis, demurrage, detention, other.\nDuties and taxes are \"other\".\n\nRules:\n- quote: the exact words from the document, character for character, never paraphrased. Use the shortest\n  passage that states the fact; for a priced line, the whole line including its amount.\n- amountCents: the amount written inside the quote, in cents (USD 4,800.00 -> 480000; $4,500 -> 450000).\n  Never add, subtract, convert or total anything. null if the quote has no amount.\n- currency: as written (\"USD\", \"CNY\"); \"USD\" when a \"$\" amount has no other currency. null with no amount.\n- Hedged statements (\"possible\", \"may be extra\", \"we'll see\") are not agreements: never record them.\n- Don't judge whether a charge is right; don't compute totals; skip TOTAL and subtotal lines.\n- effectiveAt: when the fact was stated, from the document or message date and time as written, as\n  YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS (no time zone).\n- statedBy: who stated it: \"supplier\", \"forwarder\", \"carrier\" or \"buyer\".\n- locator: where it is, e.g. \"page 1\", \"line 4\", \"email body\", \"msg 2026-09-08 09:12\".\n- confidence: 0 to 1, how sure you are the fact is stated as you recorded it.\n- Unused optional fields are null. Return empty lists if there is nothing to extract.\n\nThis document is a chat export, one message per line, e.g. WhatsApp \"Export chat\":\n\"9/8/26, 9:12 AM - Derek PCL: message\" (Android) or \"[9/8/26, 9:12:00 AM] Derek PCL: message\" (iPhone).\nDates are month/day/year. For each fact, effectiveAt = that message's date and time, and locator =\n\"msg YYYY-MM-DD HH:MM\" (24-hour). A confirmed booking is booking_date. A price agreed in the chat is\nagreed_rate; a buyer clearly approving or refusing a charge is approval / rejection. Tell the sides apart by\nthe sender names. A chat has no invoice charges: return none.",
+        "user": "{\n  \"docId\": \"doc_chat_png\",\n  \"type\": \"chat\",\n  \"title\": \"whatsapp.png\",\n  \"text\": \"9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\\n9/8/26, 9:15 AM - Me: great thanks\\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\\n9/28/26, 10:30 AM - Me: ok keep me posted\"\n}",
+        "jsonSchema": {
+          "$defs": {
+            "__schema0": {
+              "type": "string",
+              "description": "{enum: [\"ocean_freight\",\"air_freight\",\"trucking\",\"origin_thc\",\"destination_thc\",\"pss\",\"fuel_surcharge\",\"congestion\",\"handling\",\"doc_fee\",\"customs_entry\",\"drayage\",\"chassis\",\"demurrage\",\"detention\",\"other\"]}"
+            },
+            "__schema1": {
+              "type": "string",
+              "description": "{enum: [\"supplier\",\"forwarder\",\"carrier\",\"buyer\"]}"
+            }
+          },
+          "type": "object",
+          "properties": {
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "{enum: [\"agreed_rate\",\"permitted_surcharge\",\"exclusion\",\"approval\",\"rejection\",\"fx_rate\",\"validity\",\"booking_date\",\"incoterm\"]}"
+                  },
+                  "chargeType": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amountCents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedBy": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "validUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "effectiveAt": {
+                    "type": "string"
+                  },
+                  "statedBy": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "locator": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "chargeType",
+                  "amountCents",
+                  "currency",
+                  "bookedBy",
+                  "validUntil",
+                  "effectiveAt",
+                  "statedBy",
+                  "quote",
+                  "locator",
+                  "confidence"
+                ]
+              }
+            },
+            "charges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "lineNo": {
+                    "type": "integer",
+                    "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                  },
+                  "billedBy": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "chargeType": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "locator": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "lineNo",
+                  "billedBy",
+                  "chargeType",
+                  "description",
+                  "amountCents",
+                  "currency",
+                  "quote",
+                  "locator",
+                  "confidence"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "facts",
+            "charges"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"facts\":[{\"kind\":\"booking_date\",\"chargeType\":null,\"amountCents\":null,\"currency\":null,\"bookedBy\":null,\"validUntil\":null,\"effectiveAt\":\"2026-09-08T09:12:00\",\"statedBy\":\"forwarder\",\"quote\":\"Booking confirmed for your 40HC, booked today Sep 8\",\"locator\":\"msg 2026-09-08 09:12\",\"confidence\":0.9}],\"charges\":[]}"
+      }
+    }
+  ]
+}

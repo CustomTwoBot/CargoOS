@@ -43,7 +43,8 @@ async function insertScenarioA(ctx: MutationCtx): Promise<Id<"cases">> {
   const docIds = new Map<string, Id<"documents">>();
   for (const raw of answerKey.documents) {
     const { id, ...doc } = FixtureDocSchema.parse(raw);
-    const docId = await ctx.db.insert("documents", { ...doc, caseId });
+    // Seeded documents come pre-extracted, so they count as read (extraction never runs on them).
+    const docId = await ctx.db.insert("documents", { ...doc, caseId, readStatus: "read" });
     docIds.set(id, docId);
     // Deterministic timestamp so a reset always yields the same state.
     await ctx.db.insert("events", {

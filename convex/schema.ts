@@ -67,6 +67,9 @@ export default defineSchema({
     sentAt: v.optional(v.string()),
     text: v.string(),
     fileId: v.optional(v.id("_storage")),
+    textFrom: v.optional(v.union(v.literal("pdf"), v.literal("eml"), v.literal("txt"), v.literal("image"), v.literal("paste"))),
+    readStatus: v.optional(v.union(v.literal("reading"), v.literal("read"), v.literal("not_read"))),
+    readError: v.optional(v.string()),
   }).index("by_case", ["caseId"]),
 
   facts: defineTable({
@@ -86,6 +89,7 @@ export default defineSchema({
     supersedes: v.optional(v.array(v.id("facts"))),
     origin: v.union(v.literal("extraction"), v.literal("reply"), v.literal("manual")),
     confidence: v.optional(v.number()),
+    fromImage: v.optional(v.boolean()),
   }).index("by_case", ["caseId"]),
 
   charges: defineTable({
@@ -100,6 +104,7 @@ export default defineSchema({
     span: sourceSpan,
     editedBy: v.optional(role),
     confidence: v.optional(v.number()),
+    fromImage: v.optional(v.boolean()),
   }).index("by_case", ["caseId"]),
 
   // One row per key per revision.

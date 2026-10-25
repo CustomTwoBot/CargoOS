@@ -49,6 +49,9 @@ export const SourceDocSchema = z.object({
   sentAt: isoDate.optional(),
   text: z.string(),
   fileId: z.string().optional(),
+  textFrom: z.enum(["pdf", "eml", "txt", "image", "paste"]).optional(),
+  readStatus: z.enum(["reading", "read", "not_read"]).optional(),
+  readError: z.string().optional(),
 });
 
 export const SourceSpanSchema = z.object({
@@ -77,6 +80,7 @@ export const FactSchema = z.object({
   supersedes: z.array(z.string()).optional(),
   origin: z.enum(["extraction", "reply", "manual"]),
   confidence: confidence.optional(),
+  fromImage: z.boolean().optional(),
 });
 
 export const ChargeSchema = z.object({
@@ -92,6 +96,7 @@ export const ChargeSchema = z.object({
   span: SourceSpanSchema,
   editedBy: RoleSchema.optional(),
   confidence: confidence.optional(),
+  fromImage: z.boolean().optional(),
 });
 
 export const FindingSchema = z.object({

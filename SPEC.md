@@ -185,7 +185,7 @@ HACK.md              this plan
 **Pipeline (runs on every change: new or uploaded document, reply, edited invoice line, learned rule saved or undone):**
 
 1. Write a `CaseEvent` (`doc_added`, `document_uploaded`, `reply_received`, `charge_edited`, `rule_learned` or `rule_undone`).
-2. If it is a new document or reply: get its text first. PDF: read server-side with the PDF text library. `.eml`: read as plain text (headers and body). WhatsApp `.txt` or pasted text: as-is. Photo: Claude transcribes it. The text is stored in `SourceDoc.text`. Then a Convex action calls `extractDocument` on that text (or `interpretReply`), validates with Zod, checks every quote is a substring, saves facts and charges. Documents uploaded together are extracted in parallel (one action each).
+2. If it is a new document or reply: get its text first. PDF: read server-side with the PDF text library. `.eml`: read as plain text (headers and body). WhatsApp `.txt` or pasted text: as-is. Photo or screenshot (PNG, JPEG, WebP; HEIC is "not readable" with a message): resized server-side so the longest side is about 1500 px, then `transcribeImage` (Claude vision, `lib/ai/transcribe.ts`) copies the visible text word for word, keeping chat senders and timestamps, and returns "unreadable" with a reason instead of guessing. The text is stored in `SourceDoc.text` (`textFrom: "image"`, original file kept in storage), once: recomputes never transcribe again. An unreadable image writes `extraction_failed` and stays in Documents as "Not read"; nothing else changes. Facts and charges from it carry `fromImage`. Then a Convex action calls `extractDocument` on that text (or `interpretReply`), validates with Zod, checks every quote is a substring, saves facts and charges. Documents uploaded together are extracted in parallel (one action each).
 3. Mutation loads all facts and charges for the case plus the learned rules for its forwarder, and calls `reconcile()` (pure). Saves the result as findings revision N+1, keeping user verdicts (section 6).
 4. Calls `diffFindings(revN, revN+1)` and saves the changes inside the `recomputed` event.
 5. If any finding is `needs_review`, no open question covers it, and no document in the case is still being read: action calls `planQuestion` (waiting for every document stops a premature question, e.g. when the invoice is read before the quote). If it returns a question, save it and set case status `awaiting_answer`.
@@ -196,12 +196,14 @@ HACK.md              this plan
 
 ## 5. Shared data types and JSON formats
 
-These types are the contract between the team. They are in `lib/types.ts`, mirrored in `lib/schemas.ts` (Zod) and `convex/schema.ts`. Do not change them without telling the team. The changes the Oct 24 evening decisions need are listed in §5.5 and land in one code PR after the team OKs them; until then, code uses the types below.
+These types are the contract between the team. They are in `lib/types.ts`, mirrored in `lib/schemas.ts` (Zod) and `convex/schema.ts`. Do not change them without telling the team. The changes for the Oct 24 evening decisions are listed in §5.5 and are applied (all new fields optional).
 
 ### 5.1 `lib/types.ts`
 
+The block below is the current `lib/types.ts` (includes the §5.5 changes, applied Oct 24 evening, and the extraction fields: `SourceDoc.textFrom` / `readStatus` / `readError`, `Fact.fromImage`, `Charge.fromImage`).
+
 ```ts
-export type Role = "clerk" | "controller" | "ops_lead";
+export type Role = "clerk" | "controller" | "ops_lead" | "uploader";
 export type Party = "supplier" | "forwarder" | "carrier" | "buyer";
 export type DocType = "quote" | "email" | "chat" | "proforma" | "freight_invoice" | "reply" | "other";
 
@@ -218,7 +220,7 @@ export type Status =
 export type RuleId =
   | "R0_MATCH" | "R1_DUPLICATE" | "R2_RATE_MISMATCH" | "R3_MATH_CURRENCY"
   | "R4_PERMITTED_SURCHARGE" | "R5_EXCLUDED_SCOPE" | "R6_NO_EVIDENCE" | "R7_CONFLICT"
-  | "R8_APPROVED" | "R9_REJECTED";
+  | "R8_APPROVED" | "R9_REJECTED" | "R10_LEARNED";
 
 export interface Case {
   _id: string; title: string; shipmentRef: string;
@@ -226,13 +228,17 @@ export interface Case {
   baseCurrency: "USD";
   revision: number;               // latest findings revision
   status: "open" | "awaiting_answer" | "ready_for_approval" | "approved";
+  forwarder?: string;             // e.g. "Pacific Crest Logistics"; learned rules match on it
 }
 
 export interface SourceDoc {
   _id: string; caseId: string; type: DocType; title: string;
   sender?: string; sentAt?: string;   // ISO datetime
   text: string;                       // full text; every span quotes from this
-  fileId?: string;                    // Convex storage id for the original PDF
+  fileId?: string;                    // Convex storage id for the original file (PDF, .eml, .txt, image)
+  textFrom?: "pdf" | "eml" | "txt" | "image" | "paste"; // how `text` was obtained; "image" = transcribed by Claude
+  readStatus?: "reading" | "read" | "not_read";         // extraction progress; "not_read" = failed or unreadable
+  readError?: string;                                   // why it couldn't be read (shown in Documents)
 }
 
 export interface SourceSpan {
@@ -255,6 +261,7 @@ export interface Fact {
   supersedes?: string[];               // set by code, never by the LLM
   origin: "extraction" | "reply" | "manual";
   confidence?: number;                 // 0-1, extraction certainty only
+  fromImage?: boolean;                 // extracted from a transcribed screenshot / photo
 }
 
 export interface Charge {
@@ -265,6 +272,7 @@ export interface Charge {
   span: SourceSpan;
   editedBy?: Role;                     // set when changed in the line editor
   confidence?: number;
+  fromImage?: boolean;                 // extracted from a transcribed screenshot / photo
 }
 
 export interface Finding {
@@ -278,6 +286,7 @@ export interface Finding {
   explanation: string;                 // "why" line, code template
   userVerdict?: "confirmed" | "false_positive";
   userVerdictBy?: Role;
+  learnedRuleId?: string;              // R10 lines: the learned rule that cleared it
 }
 
 export interface FindingChange {
@@ -307,19 +316,39 @@ export interface Draft {
   subject: string; body: string;       // LLM wording; numbers inserted by code
   findingKeys: string[]; totalDisputedCents: number;
   status: "draft" | "pending_approval" | "approved" | "rejected";
-  createdBy: Role; approvedBy?: Role;  // approval allowed for controller only
+  createdBy: Role;
+  requestedBy?: string;                // person id who requested approval
+  approvedBy?: string;                 // person id; must hold controller and not be requestedBy
+  rejectedBy?: string;                 // person id
+  rejectionReason?: string;            // required when rejected
+  editedBody?: string;                 // owner's edited wording; numbers locked to findings
 }
 
 export type EventType =
   | "doc_added" | "charge_edited" | "facts_extracted" | "extraction_failed" | "recomputed"
   | "question_asked" | "reply_received" | "finding_confirmed" | "finding_dismissed"
-  | "draft_created" | "approval_requested" | "approval_blocked" | "approved";
+  | "draft_created" | "approval_requested" | "approval_blocked" | "approved"
+  | "draft_rejected" | "rule_learned" | "rule_undone" | "document_uploaded";
 
 export interface CaseEvent {
   _id: string; caseId: string; at: string;
   actor: Role | "system" | "agent";
   type: EventType;
   payload: Record<string, unknown>;    // e.g. { changes: FindingChange[] } on "recomputed"
+}
+
+// Seeded people (lib/people.ts); each screen is set to one of them. No login.
+export interface Person {
+  id: string; name: string; roles: Role[];
+}
+
+// "Not an issue" remembered per forwarder; reconcile receives these as input (R10).
+export interface LearnedRule {
+  _id: string; forwarder: string; chargeType: ChargeType;
+  maxAmountCents?: number;             // defaults to the dismissed line's billed amount; absent = any amount
+  createdBy: string;                   // person id
+  createdAt: string;                   // ISO
+  sourceCaseId: string; sourceChargeId: string;
 }
 ```
 
@@ -399,9 +428,9 @@ Each screen is set to one person from the fixed list in §5.5 (set per device, n
   ] }
 ```
 
-### 5.5 Pending type changes (apply in a code PR after team OK)
+### 5.5 Type changes for the Oct 24 evening decisions (applied)
 
-Not in `lib/types.ts` yet; do not code against them until the PR merges. They mirror into `lib/schemas.ts` and `convex/schema.ts` in the same PR.
+**Applied** in `types-people-rules` (merged Oct 24 evening): in `lib/types.ts`, mirrored in `lib/schemas.ts` and `convex/schema.ts`. Every new field is **optional** so existing code and data keep working; behavior (person checks, R10, reject) lands in follow-up PRs.
 
 - **People.** `Person { id, name, roles: Role[] }`, and `Role` adds `"uploader"`. Seeded as a fixed list in `lib/people.ts`, not a table:
 
@@ -417,11 +446,12 @@ Not in `lib/types.ts` yet; do not code against them until the PR merges. They mi
 - **Events.** `EventType` adds `"draft_rejected"`, `"rule_learned"`, `"rule_undone"`, `"document_uploaded"`.
 - **Convex.** New table `learnedRules` (LearnedRule) with index `by_forwarder_type [forwarder, chargeType]`. New mutations `rejectDraft` and `undoLearnedRule`.
 - **Also needed (added: the items above can't work without them):**
-  - `Case` adds `forwarder: string` (e.g. "Pacific Crest Logistics"), so learned rules can match by forwarder.
+  - `Case` adds `forwarder?: string` (optional; e.g. "Pacific Crest Logistics", set on Scenario A and every variation), so learned rules can match by forwarder.
   - `Finding` adds `learnedRuleId?` on R10 lines, so the UI can show which rule cleared the line and undo it.
-  - Every mutation takes the acting `personId` as well as `role`; the server checks `role` is in that person's roles.
+  - Every mutation takes the acting `personId` as well as `role`; the server checks `role` is in that person's roles. (Applied as an optional, not-yet-checked argument on `resetDemo`, `submitReply`, `createDraft`.)
   - The `reconcile` input adds `learnedRules?: LearnedRule[]` (§5.3).
-  - Fixtures: `facts.json` may carry `learnedRules`, and a scenario may carry `expectedWithLearned` (§7.6).
+  - Fixtures: `facts.json` may carry `learnedRules`, and a scenario may carry `expectedWithLearned` (§7.6). (Not yet: lands with B-repeat.)
+- **Extraction fields (added with `ai-extract`, all optional):** `SourceDoc.textFrom` (`pdf` / `eml` / `txt` / `image` / `paste`: how `text` was obtained), `SourceDoc.readStatus` (`reading` / `read` / `not_read`) and `readError`; `Fact.fromImage` and `Charge.fromImage` (the UI shows "from screenshot"). Seeded documents are `read`.
 
 ## 6. Rules engine and conflict logic
 
@@ -696,13 +726,15 @@ Real files we upload during the demo, generated once by a script from the 7.1 te
 
 | File | Content | Uploaded as |
 | --- | --- | --- |
-| `quote-Q-PCL-0902.pdf` | doc\_quote text, exactly | PDF, from the laptop |
-| `invoice-PCL-INV-1012.pdf` | doc\_invoice text, exactly | PDF, from the laptop |
-| `email-RE-Q-PCL-0902.eml` | doc\_email: subject and body exactly, plus From / To / Date headers (Sep 5 14:21) | `.eml`, or the body pasted as text |
-| `whatsapp-derek-pcl.txt` | doc\_chat text, exactly, in WhatsApp's "Export chat → Without media" format | `.txt`, from the phone uploader |
+| `quote.pdf` | doc\_quote text, exactly | PDF, from the laptop |
+| `invoice.pdf` | doc\_invoice text, exactly | PDF, from the laptop |
+| `email.eml` | doc\_email: subject and body exactly, plus From / To / Date headers (Sep 5 14:21 -0700) | `.eml`, or the body pasted as text |
+| `whatsapp.txt` | doc\_chat text, exactly, in WhatsApp's "Export chat → Without media" format | `.txt`, from the phone uploader |
+| `whatsapp.png` | the same chat as a WhatsApp-style screenshot (Sam's phone, chatting with Derek PCL) | image, from the phone uploader |
+| `unreadable.png` | a blurred copy, for the "Not read" path | image (tests only) |
 
-- The PDF text read back by the library must equal the 7.1 text after whitespace normalization (tested). If it doesn't, fix the generator, never the answer key.
-- Making the PDFs may need a PDF-writing dev dependency (e.g. `pdf-lib`), which needs Pranav's OK; printing the text to PDF from a browser is the fallback.
+- Generated by `npx tsx scripts/makeLiveFixtures.ts` (`pdf-lib` for the PDFs, Playwright for the screenshots) from the 7.1 text in `fixtures/scenarioA.json`.
+- The PDF text read back with `unpdf` must equal the 7.1 text after whitespace normalization (tested; `unpdf` collapses runs of spaces, which the whitespace-normalized quote check allows). If it doesn't, fix the generator, never the answer key.
 - `npm run eval:full` runs on these exact files before judging; its numbers go in `eval-results.md`.
 
 ## 8. UI spec
@@ -795,7 +827,7 @@ Goal: every Claude call returns schema-valid JSON with real source quotes, and t
 
 1. **Claude client.** One wrapper `callClaude({system, user, schema, pdf?})` that requests JSON, parses with Zod, retries once on invalid output, and throws a typed error otherwise. API key from Convex env (`ANTHROPIC_API_KEY`), never in the repo. Tests: mock client; invalid JSON then valid → succeeds on retry; invalid twice → typed error.
 2. **Quote validator.** `validateSpans(output, doc)`: drop any fact or charge whose `span.quote` is not an exact substring of `doc.text` (normalize whitespace only), and report what was dropped. Tests: exact match passes, paraphrase dropped, extra spaces tolerated.
-3. **extract.ts** (still to do, Pranav). Prompt per doc type (quote, email, chat, invoice). The prompt: lists the allowed `ChargeType` and `Fact.kind` values; says to copy quotes word for word; says amounts in cents; says to never compute totals or decide disputes; gives one short example. Duties and taxes are `chargeType` `"other"`. Extraction always runs on `SourceDoc.text`: for PDFs that text is read server-side with the PDF text library (not by sending the PDF to Claude), so quotes can be checked exactly. `.eml` is read as plain text. For photos, Claude first transcribes the image into `SourceDoc.text`; quotes are checked against that transcription. A WhatsApp `.txt` export is stored as-is. Tests: recorded responses for the four live files (7.7) → the Scenario A facts and 8 charges. Tests: recorded Claude responses (fixtures) for the four Scenario A docs → expected facts and 8 charges; one live smoke test run manually.
+3. **extract.ts** (still to do, Pranav). Prompt per doc type (quote, email, chat, invoice). The prompt: lists the allowed `ChargeType` and `Fact.kind` values; says to copy quotes word for word; says amounts in cents; says to never compute totals or decide disputes; gives one short example. Duties and taxes are `chargeType` `"other"`. Extraction always runs on `SourceDoc.text`: for PDFs that text is read server-side with the PDF text library (not by sending the PDF to Claude), so quotes can be checked exactly. `.eml` is read as plain text. For photos and screenshots, `transcribeImage` (Claude vision, after a server-side resize to ~1500 px with `jimp`) first copies the image's text into `SourceDoc.text`; quotes are checked against that transcription. A WhatsApp `.txt` export is stored as-is. Code also checks that every amount is written inside its own quote and attaches time zones to dates. Convex: `extractDocuments` (marks documents reading, extracts in parallel) and `extractAndStore` in `convex/ai.ts`; file reading runs in the Node action file `convex/files.ts`. Tests: recorded responses for the four live files (7.7) → the Scenario A facts and 8 charges, and through the engine → the answer key; `whatsapp.png` → transcription with the original messages and the booking_date fact; `unreadable.png` → unreadable. (Done Oct 24 evening, `ai-extract`.) Tests: recorded Claude responses (fixtures) for the four Scenario A docs → expected facts and 8 charges; one live smoke test run manually.
 4. **planQuestion.ts.** Input: case state and the `needs_review` findings. Claude returns the question-plan JSON (section 5.4) or `{"ask": false, "reason": "..."}`. Code rules around it: only R3 (missing rate), R6 and R7 lines can be asked about, never R1 or R2 lines, which code already decides; never more than one open question per finding; group all open findings into one question when they go to the same person. Tests: A → one question covering lines 4 and 6 to ops\_lead; A-clean → no question; A-nopss → one question covering 2, 4, 6.
 5. **interpretReply.ts.** Input: the question, the reply doc. Claude returns `interpretation` + facts (approval / rejection, with quotes from the reply). Code then: on `ambiguous` with no prior follow-up → create one follow-up question; on `ambiguous` with a prior follow-up → close as `closed_unresolved`. Tests (recorded responses): canonical reply → partial, one approval (congestion, 20000) and one rejection (handling); "no, nobody agreed to either" → two rejections; "yes we approved both" → two approvals; "I think we discussed something?" → ambiguous, follow-up created; second vague reply → closed.
 6. **draftDispute.ts.** Claude writes a short, polite subject and body to the forwarder citing each disputed line with its quote. Code inserts every number (line amounts, total) after generation, from findings, so the LLM never writes a number. Tests: body contains every disputed line number and the total from code; contains no dollar figure that differs from findings.

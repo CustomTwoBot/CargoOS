@@ -9,6 +9,8 @@
  */
 
 import type * as ai from "../ai.js";
+import type * as files from "../files.js";
+import type * as pipeline from "../pipeline.js";
 import type * as seed from "../seed.js";
 
 import type {
@@ -19,6 +21,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
+  files: typeof files;
+  pipeline: typeof pipeline;
   seed: typeof seed;
 }>;
 
