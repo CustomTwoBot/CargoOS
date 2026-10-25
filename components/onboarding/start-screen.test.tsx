@@ -35,6 +35,15 @@ describe("/start: set up this screen", () => {
     expect(push).toHaveBeenCalledWith("/bills");
   });
 
+  it("starts on the person the screen is already set to, so Continue keeps them", () => {
+    saveSetup("maya", "Harbor Goods");
+    render(<StartScreen />);
+    expect(screen.getByRole("radio", { name: "Maya · Bookkeeper" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Sam · Owner" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(localStorage.getItem("cargoos.person")).toBe("maya");
+  });
+
   it("says who the screen is already set to and offers to continue as them", () => {
     saveSetup("leo", "Harbor Goods");
     render(<StartScreen />);

@@ -4,19 +4,16 @@
 // shows the bill before the owner answers and, unless motion is reduced, replays the answer moment
 // (fixtures/scenarioA.ui.json: the congestion fee moves to Pay, rush handling to Hold) every few seconds.
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { Card, Kicker, Logo, PersonAvatar, SplitBar, Tag } from "@/components/app/ui";
-import { CountMoney, RISE, useReducedMotion } from "@/components/app/motion";
-import {
-  BadgeCheck, FileStack, FlaskConical, History, type LucideIcon, MessageCircleQuestion, Receipt, ScanSearch,
-  ShieldCheck, Smartphone, Stamp, UserRound,
-} from "@/components/app/icons";
+import type { ReactNode } from "react";
+import { Card, HOME_FOCUS, Kicker, Logo, PersonAvatar, SplitBar } from "@/components/app/ui";
 import { cx } from "@/components/case/cx";
 import { delta, money } from "@/components/case/format";
 import { PERSON_COPY, displayName } from "@/components/shell/person";
 import { personById } from "@/lib/people";
 import type { Person } from "@/lib/types";
 import { GetStarted } from "./get-started";
+import { HeroBackdrop } from "./hero-backdrop";
+import { ProcessFlow } from "./process-flow";
 
 const SHELL = "mx-auto w-full max-w-[1240px] px-4 sm:px-8";
 
@@ -41,9 +38,11 @@ const after = (ms: number): CSSProperties => ({ animationDelay: `${ms}ms`, anima
 
 export function Landing() {
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-ink">
+    // isolate: the fixed backdrop (-z-10) paints above this page's background but behind everything on it.
+    <div className="relative isolate flex min-h-screen flex-col bg-bg text-ink">
+      <HeroBackdrop />
       <header className={cx(SHELL, "flex h-16 items-center gap-3")}>
-        <Link href="/" aria-label="CargoOS home" className="mr-auto rounded-[10px]"><Logo /></Link>
+        <Link href="/" aria-label="CargoOS home" className={cx("mr-auto", HOME_FOCUS)}><Logo /></Link>
         <nav aria-label="Page" className="flex items-center gap-1 sm:gap-3">
           <a href="#how" className="inline-flex h-9 items-center rounded-full px-3 text-[13.5px] font-semibold text-ink-2 transition-colors hover:text-ink">How it works</a>
           <GetStarted variant={null} className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-[10px] bg-brand px-3.5 text-[13px] font-semibold text-brand-ink transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[.98] motion-reduce:transition-none motion-reduce:active:scale-100">Open the demo</GetStarted>
@@ -92,11 +91,13 @@ export function Landing() {
               Each line lands in <span className="font-semibold text-pay">Pay</span>, <span className="font-semibold text-hold">Hold</span> or{" "}
               <span className="font-semibold text-ask">Ask</span>, next to the words it was checked against.
             </Step>
-            <Step n={3} icon={BadgeCheck} title="The owner approves the dispute and sends the letter himself">
+            <Step n={3} title="The owner approves the dispute and sends the letter">
               CargoOS drafts the words and puts in the numbers. Nothing is sent or paid.
             </Step>
           </ol>
         </section>
+
+        <ProcessFlow className={cx(SHELL, "pb-16 lg:pb-24")} />
 
         <section aria-labelledby="who-title" className={cx(SHELL, "pb-16 lg:pb-24")}>
           <div className="mb-6 flex flex-col gap-1">
@@ -215,10 +216,9 @@ function Preview() {
   const armed = useArmed();
   const A = answered ? AFTER : BEFORE;
   return (
-    <figure className={cx(RISE, "flex min-w-0 flex-col gap-3")} style={after(120)}
-      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
-      <Card className="flex flex-col gap-5 p-5 shadow-float sm:p-7">
+    <figure className="flex min-w-0 flex-col gap-3">
+      {/* Hover lights the card in the same lime as the safe-to-pay amount. */}
+      <Card className="flex flex-col gap-5 p-5 transition-[box-shadow,border-color] duration-300 ease-out hover:border-lime hover:shadow-[0_0_0_1px_var(--lime),0_0_36px_-6px_var(--lime)] motion-reduce:transition-none sm:p-7">
         <div className="flex items-center gap-3">
           <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border border-line bg-sunken text-[13px] font-bold">PC</span>
           <div className="flex min-w-0 flex-col">

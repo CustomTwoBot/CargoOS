@@ -4,14 +4,15 @@
 // the same page so a quote opens its document without losing the place. Leo sees documents only.
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import type { Person, SourceSpan } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type { SourceSpan } from "@/lib/types";
 import { cx } from "@/components/case/cx";
 import { money } from "@/components/case/format";
 import { historyEntries } from "@/components/history/history";
 import { isRechecking } from "@/components/case/view-model";
 import { useBills, type Bill } from "@/components/app/bills-provider";
-import { nextStep, type Step } from "@/components/app/next-step";
+import { looksLikeConvexId } from "@/components/app/convex-id";
+import { nextStep } from "@/components/app/next-step";
 import { LinkButton } from "@/components/app/ui";
 import { ArrowDown, FileText, History, MoneyIcon, Receipt, type LucideIcon } from "@/components/app/icons";
 import { RISE } from "@/components/app/motion";
@@ -33,15 +34,9 @@ const TAB: Record<Tab, { name: string; icon: LucideIcon }> = {
 export function BillPage({ id }: { id: string }) {
   const { bill, person, now, mode, rememberBill } = useBills();
   const b = bill(id);
-  // A live bill opened by its link (from the other laptop, or the phone's QR) joins this screen's list.
-  const convexId = mode === "live" && /^[a-z0-9]{20,}$/.test(id);
-  useEffect(() => { if (!b && convexId) rememberBill(id); }, [b, convexId, id, rememberBill]);
-  const [waited, setWaited] = useState(false);
-  useEffect(() => {
-    if (b) return;
-    const t = setTimeout(() => setWaited(true), convexId ? 8000 : 1500);
-    return () => clearTimeout(t);
-  }, [b, convexId]);
+  // A live bill made on another screen (its link, or the phone's QR code): remember it here so it loads.
+  const unknownLive = !b && mode === "live" && looksLikeConvexId(id);
+  useEffect(() => { if (unknownLive) rememberBill(id); }, [unknownLive, id, rememberBill]);
   if (!b) {
     if (!waited) return <BillSkeleton />;
     return (

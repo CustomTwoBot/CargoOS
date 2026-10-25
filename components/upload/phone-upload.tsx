@@ -14,6 +14,9 @@ import { errorText } from "@/components/case/live-store";
 import { SCENARIO_A } from "@/components/case/fixture";
 import { cx } from "@/components/case/cx";
 import { useHasConvex } from "@/components/convex-provider";
+import type { Person } from "@/lib/types";
+import { personById } from "@/lib/people";
+import { useSetup } from "@/components/app/setup";
 import { WORKSPACE, useDevicePerson } from "@/components/shell/person";
 import { isBusy, stateOf, type UploadDocType, type UploadState } from "./kinds";
 import { uploadKey, useLiveUploads, useLocalUploads } from "./live-uploads";
@@ -85,8 +88,14 @@ function ReplayPhone() {
 
 // ---- live ----------------------------------------------------------------
 
+/**
+ * Who uploads from this phone: the person it was set up for on /start, or Leo (the uploader) when it never
+ * was, so a phone that only scanned the QR code doesn't add documents as the default person, Sam.
+ */
+export const phonePerson = (setUp: boolean, device: Person): Person => (setUp ? device : personById("leo") ?? device);
+
 function LivePhone({ caseId }: { caseId: Id<"cases"> }) {
-  const person = useDevicePerson();
+  const person = phonePerson(useSetup() !== null, useDevicePerson());
   const ctx = useQuery(api.uploads.getUploadContext, { caseId });
   const live = useLiveUploads(person);
   const local = useLocalUploads();

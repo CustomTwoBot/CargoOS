@@ -78,7 +78,7 @@ export function BillsPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-[28px] font-bold leading-[34px] tracking-[-0.03em] sm:text-[34px] sm:leading-10">
           {greeting(now)}, {firstName(person)}.{" "}
-          <span className="text-ink-4">{uploader ? "Add what was agreed." : needYou === 0 ? "Nothing needs you right now." : needYou === 1 ? "1 bill needs you." : `${needYou} bills need you.`}</span>
+          <span className="text-ink-4">{uploader ? "Add what was agreed." : needYou === 0 ? "You're all caught up." : needYou === 1 ? "1 bill needs you." : `${needYou} bills need you.`}</span>
         </h1>
         <p className="text-ink-3">{workspace} · checked against quotes, emails and chats{mode === "replay" ? " · replay of a recorded run" : ""}</p>
       </div>
@@ -137,12 +137,7 @@ export function BillsPage() {
           </>
         )}
       </Card>
-      {!uploader && (
-        <p className="flex items-center justify-center gap-1.5 text-center text-[13px] text-ink-3">
-          <Smartphone aria-hidden="true" strokeWidth={1.8} className="size-4 shrink-0" />
-          <span>Leo can add documents from his phone: open a bill and scan its QR code.</span>
-        </p>
-      )}
+      {!uploader && <p className="text-center text-[13px] text-ink-3">Leo can add documents from a phone: open a bill and scan its QR code.</p>}
     </div>
   );
 }

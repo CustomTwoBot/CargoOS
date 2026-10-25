@@ -44,19 +44,22 @@ describe("requests and decisions (CLAUDE.md rule 8, docs/design.md §0.3)", () =
     expect(toast).toHaveBeenLastCalledWith("Only Sam can accept or reject a dispute.");
   });
 
-  it("an owner drafting decides it too; rejecting records their id and the reason", () => {
-    const { act: a, x } = setup(SAM);
+  it("an owner who asks is the requester too, and can't decide it (as on the server)", () => {
+    const { toast, act: a, x } = setup(SAM);
     act(() => { a().draftDispute(); });
     const [d] = x().drafts;
-    expect(d.requestedBy).toBeUndefined();
+    expect(d).toMatchObject({ status: "pending_approval", requestedBy: "sam" });
     act(() => a().reject(d._id, "They did expedite it."));
-    expect(x().drafts[0]).toMatchObject({ status: "rejected", rejectedBy: "sam", rejectionReason: "They did expedite it." });
+    expect(x().drafts[0].status).toBe("pending_approval");
+    expect(x().events.filter((e) => e.type === "approval_blocked")).toHaveLength(1);
+    expect(toast).toHaveBeenLastCalledWith("You requested this dispute. Another owner decides.");
   });
 
   it("stamps what people do on the replay's clock, a minute after the recorded story, not the wall clock", () => {
-    const { act: a, x } = setup(SAM);
+    const { hook, act: a, x } = setup(MAYA);
     const recorded = Math.max(...SCENARIO_A.at(SCENARIO_A.end).events.map((e) => Date.parse(e.at)));
     act(() => { a().draftDispute(); });
+    hook.rerender({ viewer: SAM });
     const at = (type: string) => Date.parse(x().events.find((e) => e.type === type)!.at);
     expect(at("draft_created")).toBe(recorded + 60_000);
     expect(at("approval_requested")).toBe(recorded + 120_000);

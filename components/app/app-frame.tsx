@@ -9,22 +9,9 @@ import { cx } from "@/components/case/cx";
 import { displayName } from "@/components/shell/person";
 import { ChevronRight, ListChecks, Plus, Settings, ShieldCheck, type LucideIcon } from "./icons";
 import { useBills } from "./bills-provider";
-import { Logo, PersonAvatar } from "./ui";
+import { HOME_FOCUS, Logo, PersonAvatar } from "./ui";
 
-const NAV = "inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 text-[13.5px] font-semibold transition-[background-color,color,box-shadow] duration-200 ease-out motion-reduce:transition-none sm:px-3.5";
-
-/** True once the page has scrolled under the bar: the bar then gets a hairline and a soft shadow. */
-function useScrolled() {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 4);
-    on();
-    window.addEventListener("scroll", on, { passive: true });
-    return () => window.removeEventListener("scroll", on);
-  }, []);
-  return scrolled;
-}
-
+const NAV = "inline-flex h-9 items-center rounded-full px-3.5 text-[13.5px] font-semibold";
 export function AppFrame({ children }: { children: ReactNode }) {
   const { person, mode } = useBills();
   const path = usePathname() ?? "";
@@ -33,15 +20,14 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const inSettings = path === "/settings";
   return (
     <div className="flex min-h-screen flex-col bg-bg">
-      <header className={cx("sticky top-0 z-20 border-b bg-bg/85 backdrop-blur-md transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none",
-        scrolled ? "border-line shadow-card" : "border-line/60")}>
-        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center gap-2 px-4 sm:gap-3 sm:px-8">
-          <Link href="/bills" aria-label="CargoOS bills" className="mr-0.5 rounded-[10px] sm:mr-1">
-            <Logo labelClassName="hidden min-[420px]:inline" />
-          </Link>
-          <nav aria-label="Main" className="flex items-center gap-0.5 rounded-full bg-raised p-[3px] sm:gap-1">
-            <NavLink href="/bills" icon={ListChecks} on={inBills}>Bills</NavLink>
-            <NavLink href="/settings" icon={Settings} on={inSettings}>Settings</NavLink>
+      <header className="sticky top-0 z-20 border-b border-line/70 bg-bg/90 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center gap-3 px-4 sm:px-8">
+          <Link href="/" aria-label="CargoOS home" className={cx("mr-1", HOME_FOCUS)}><Logo /></Link>
+          <nav aria-label="Main" className="hidden items-center gap-1 rounded-full bg-raised p-[3px] sm:flex">
+            <Link href="/bills" aria-current={inBills ? "page" : undefined}
+              className={cx(NAV, inBills ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>Bills</Link>
+            <Link href="/settings" aria-current={path === "/settings" ? "page" : undefined}
+              className={cx(NAV, path === "/settings" ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink")}>Settings</Link>
           </nav>
           <div className="flex-1" />
           {mode === "replay" && (

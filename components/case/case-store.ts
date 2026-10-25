@@ -139,19 +139,19 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
           }));
       },
 
-      // An owner's draft goes straight up for their own decision (one person, as before). Anyone
-      // else's draft is a request: it carries their id, and an owner decides.
+      // Every draft is a request carrying the asker's id, as on the server (drafts.requestApproval): nobody,
+      // an owner included, decides a dispute they asked for (CLAUDE.md rule 8).
       draftDispute: () => {
         const d = demo.draft(inputs[id]);
         if (!d) return undefined;
         const decides = viewer.roles.includes("controller");
-        const draft: Draft = { ...d, status: "pending_approval", ...(!decides && { requestedBy: viewer.id }) };
+        const draft: Draft = { ...d, status: "pending_approval", requestedBy: viewer.id };
         patch(id, (l) => {
           const log1 = event(demo, l, caseId, "draftDispute", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents });
           const log2 = event(demo, { ...l, log: log1 }, caseId, "requestApproval", "approval_requested", { draftId: d._id, personId: viewer.id });
           return { ...l, drafts: [...l.drafts.filter((x) => x._id !== d._id), draft], log: log2 };
         });
-        toast(decides ? "Dispute drafted. Nothing was sent." : `Approval requested from ${firstName(OWNER)}. Nothing was sent.`);
+        toast(decides ? "Approval requested. You asked, so another owner decides. Nothing was sent." : `Approval requested from ${firstName(OWNER)}. Nothing was sent.`);
         return draft;
       },
 

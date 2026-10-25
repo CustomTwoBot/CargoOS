@@ -20,11 +20,16 @@ function mount(print = vi.fn(), cases?: DemoCase[]) {
   return print;
 }
 
-/** Scenario A after the answer, drafted and accepted by Sam through the replay actions. */
+/**
+ * Scenario A after the answer: Maya asks for approval and Sam accepts, through the replay actions. Whoever
+ * asks can't accept (CLAUDE.md rule 8, case-store draftDispute), so the request comes from Maya's screen.
+ */
 function accept() {
   act(() => bill().actions.reset("after"));
+  act(() => setDevicePerson("maya"));
   let id = "";
   act(() => { id = bill().actions.draftDispute()!._id; });
+  act(() => setDevicePerson("sam"));
   act(() => bill().actions.accept(id));
 }
 

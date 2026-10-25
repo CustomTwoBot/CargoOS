@@ -4,19 +4,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { BUTTON, Card, Logo } from "@/components/app/ui";
-import { RISE } from "@/components/app/motion";
-import { ArrowLeft, ArrowRight, Building2, ShieldCheck } from "@/components/app/icons";
-import { cx } from "@/components/case/cx";
+import { BUTTON, Card, HOME_FOCUS, Logo } from "@/components/app/ui";
 import { DEFAULT_WORKSPACE, saveSetup, useSetup } from "@/components/app/setup";
-import { DEFAULT_PERSON_ID, displayName, firstName, useDevicePerson } from "@/components/shell/person";
+import { displayName, firstName, useDevicePerson } from "@/components/shell/person";
 import { PersonPicker } from "./person-picker";
 
 export function StartScreen() {
   const router = useRouter();
   const setup = useSetup();
   const current = useDevicePerson();
-  const [personId, setPersonId] = useState(DEFAULT_PERSON_ID);
+  // Starts on whoever this screen is already set to (Sam when nothing is stored), so Continue on Maya's
+  // laptop keeps Maya. Read at render, not into state, so the server's Sam isn't frozen in after hydration.
+  const [picked, setPersonId] = useState<string>();
+  const personId = picked ?? current.id;
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
 
   const onContinue = (e: FormEvent) => {
@@ -28,11 +28,8 @@ export function StartScreen() {
   return (
     <div className="flex min-h-screen flex-col bg-bg text-ink">
       <header className="mx-auto flex h-16 w-full max-w-[1240px] items-center gap-3 px-4 sm:px-8">
-        <Link href="/" aria-label="CargoOS home" className="mr-auto"><Logo /></Link>
-        <Link href="/" className="group inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-semibold text-ink-2 transition-colors hover:bg-raised hover:text-ink">
-          <ArrowLeft aria-hidden="true" strokeWidth={2} className="size-4 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transition-none" />
-          Back
-        </Link>
+        <Link href="/" aria-label="CargoOS home" className={`mr-auto ${HOME_FOCUS}`}><Logo /></Link>
+        <Link href="/" className="text-[13.5px] font-semibold text-ink-2 underline-offset-4 hover:text-ink hover:underline">← Back</Link>
       </header>
 
       <main className="mx-auto w-full max-w-[920px] flex-1 px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
