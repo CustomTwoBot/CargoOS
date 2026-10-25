@@ -74,6 +74,30 @@ UI-тексты, имена токенов и код на английском, 
 
 **Кто что делает (файлы не пересекаются).** Оболочка: `components/case/case-screen.tsx`, `sidebar.tsx`, `cases-list.tsx`, `app/layout.tsx`. Кейс: `components/case/workspace.tsx`, `chrome.tsx`, `overview.tsx`, `overview-tab.tsx`, `case-tabs.tsx`, `issue-views.tsx`, `evidence-panel.tsx`. Инбоксы: `components/inboxes/*`. Общий контракт: `CaseWorkspace` получает `view` и `onView(view)` (`"case" | "documents" | "history"`).
 
+
+### 0.3 Люди на устройстве, Settings, виды кейса (решение Dzhamal, 25 октября; меняет §0 и §0.2 п.2)
+
+**Демо:** два ноутбука и телефон. Ноутбук 1: Maya, bookkeeper. Ноутбук 2: Sam, owner. Телефон: загрузка документов (iOS-приложение ведёт отдельная сессия, здесь его не трогаем). Люди и их роли — `lib/people.ts` (SPEC §5.5): Sam = clerk + ops_lead + controller + uploader, Maya = clerk + uploader, Leo = uploader.
+
+1. **Человек этого устройства выбирается в Settings**, не на главном экране (меняет §0 «никакого контрола» и SPEC §5.5 «never by a UI control»; спеку поправить после сообщения команде). По умолчанию Sam (все роли = прежний «один оператор»). Хранится в `localStorage` (`cargoos.person`), читается как тема: try/catch, сервер рендерит Sam.
+   - Названия в UI по спеке: **Owner** (Sam, решает и пишет продавцу), **Bookkeeper** (Maya, проверяет и просит одобрения), **Uploader** (Leo, только документы, без денег и находок).
+2. **Settings** — отдельное место, вход внизу сайдбара: блок «аватар · Sam · Owner · Bayline Trading», клик открывает Settings (и в свёрнутом виде — аватар). Страница с подменю слева:
+   - **This device** — кто работает на этом экране: три карточки-радио с тем, что человек может и не может («Accepts or rejects disputes», «Can't approve what they requested»…).
+   - **Workspace** — название, базовая валюта USD, участники (из `PEOPLE`, роли чипами), `Invite` неактивна с подсказкой «Demo workspace».
+   - **Appearance** — Light / Dark / System. Тема уходит из меню «⋯» кейса сюда.
+   - **Billing** — заглушка: план, «Invoices checked this month», карта не нужна, всё помечено `Demo`; кнопок оплаты нет.
+   - **Demo data** — Reset demo, Replay/Live, пометка «Synthetic data».
+3. **Как меняется интерфейс по человеку** (компоненты проверяют роли через `canAct`, человек — для правила «не одобряет своё»):
+   - **Owner:** всё как сейчас. Не может принять спор, который сам запросил: вместо Accept строка «You requested this. Another owner decides.» (сервер всё равно пишет `approval_blocked`).
+   - **Bookkeeper:** находки, Agree / Not an issue, правка строк, Add evidence, **Request approval** вместо Draft dispute → Accept. Вопросы видит без поля ответа («Waiting for Sam»). Approvals: свои запросы со статусом и причиной отказа, без Accept/Reject.
+   - **Uploader:** в сайдбаре только Cases (без сумм и точек статуса) и New case; кейс открывается сразу на Documents с загрузкой; ни At stake, ни находок, ни History с суммами.
+   - Внизу сайдбара всегда видно, кто это устройство, — чтобы на демо было понятно, какой ноутбук чей.
+4. **Виды кейса — уровень выше вкладок дел** (меняет §0.2 п.2: Documents и History в правом конце полосы вкладок незаметны). Под шапкой кейса подчёркнутые вкладки первого уровня: **Review** · **Documents 6** · **History 14** (иконка, имя, число). Полоса денег закреплена под ними для Review и Documents. Сегментная полоса Overview + дела показывается только в Review. На <1024 вкладки первого уровня остаются в одну строку.
+5. **Глифы.** Ни одного залитого круга с пиктограммой. Итог цепочки «How CargoOS checked line N» — тот же глиф статуса, что во вкладке и строке Overview (обводка, цвет статуса), размер как у остальных шагов.
+6. **Постоянная дизайн-проверка.** Отдельная сессия смотрит интегрированный интерфейс на 1440/1180/900/768 в обеих темах после каждого нового коммита, ведёт `docs/design-qa.md` и отправляет дефекты сессии-владельцу файлов.
+
+**Кто что делает.** Оболочка + люди + Settings: `case-screen.tsx`, `sidebar.tsx`, `cases-list.tsx`, `case-store.ts`, `roles.ts`, `components/shell/*`, `components/settings/*` (новая), `app/layout.tsx`. Кейс: файлы кейса из §0.2 + `case-menu.tsx`, `glyphs.tsx`, `components/documents/*`, `components/history/*`. Инбоксы: `components/inboxes/*` (включая `people.ts`: заменить временную модель на `lib/people.ts`). Контракт: `CaseWorkspace`, `QuestionsInbox`, `ApprovalsInbox` получают `viewer: Person` (из `lib/types`, по умолчанию Sam); `CaseActions` сами ставят `requestedBy` / `approvedBy` = `viewer.id` и не принимают спор от того, кто его запросил.
+
 ---
 
 ## 1. Решения
