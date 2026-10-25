@@ -31,7 +31,7 @@ export const PERSON_COPY: Record<string, { first: string; title: string; can: st
 /** The order people are shown in: owner, bookkeeper, uploader. */
 export const PEOPLE_IN_ORDER: readonly Person[] = ["sam", "maya", "leo"].map((id) => personById(id)).filter((p): p is Person => !!p);
 
-export const WORKSPACE = { name: "Bayline Trading", currency: "USD" } as const;
+export const WORKSPACE = { name: "Bayline Home Goods", currency: "USD" } as const;
 
 const copyOf = (p: Person) => PERSON_COPY[p.id] ?? { first: p.name, title: "", can: [], cant: [] };
 /** "Sam" */

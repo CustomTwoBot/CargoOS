@@ -1,5 +1,5 @@
-import { CaseScreen } from "@/components/case/case-screen";
+import { Landing } from "@/components/landing/landing";
 
 export default function Home() {
-  return <CaseScreen />;
+  return <Landing />;
 }
