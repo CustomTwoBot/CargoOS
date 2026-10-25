@@ -1,5 +1,6 @@
 // One tab per thing to decide (docs/design.md §0, layout A): a disputed line, the question to
-// answer (the dispute draft's tab is ApprovalDetail from the inboxes). Each tab tells one story: evidence on the left, the decision on the right.
+// answer (the dispute draft's tab is ApprovalDetail from the inboxes). Each tab tells one story: evidence on the left, the decision
+// on the right; below 1024px they stack, evidence first.
 import { useState } from "react";
 import type { Question, SourceSpan } from "@/lib/types";
 import { RowTagChip, StatusTag } from "./bits";
@@ -9,6 +10,8 @@ import { delta, inCurrency, whenAt } from "./format";
 import type { CaseInput, Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
+/** Two columns from 1024px; below that the story stacks: evidence or question first, then the rest (§0.2). */
+export const ISSUE_GRID = "grid min-h-0 flex-1 grid-cols-1 content-start items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]";
 const PRIMARY = "rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibold text-primary-ink";
 const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7px] text-[13.5px] font-semibold text-ink hover:bg-sunken";
 
@@ -16,7 +19,7 @@ const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7p
 function Evidence({ x, row }: { x: CaseInput; row: Row }) {
   const [open, setOpen] = useState<SourceSpan | null>(null);
   return (
-    <section aria-label="Evidence" className={cx(CARD, "min-h-0 overflow-auto px-6 py-5")}>
+    <section aria-label="Evidence" className={cx(CARD, "px-6 py-5")}>
       {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (
         <>
           <h3 className="mb-4 text-meta font-medium text-ink-3">How CargoOS checked line {row.lineNo}</h3>
@@ -32,9 +35,9 @@ type LineProps = { x: CaseInput; row: Row; canVerdict: boolean; onConfirm: (key:
 export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: LineProps) {
   const confirmed = row.finding.userVerdict === "confirmed";
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4">
+    <div data-testid="issue-grid" className={ISSUE_GRID}>
       <Evidence key={row.key} x={x} row={row} />
-      <aside aria-label="Decision" className={cx(CARD, "flex flex-col gap-3 self-start px-5 py-5")}>
+      <aside aria-label="Decision" className={cx(CARD, "flex flex-col gap-3 px-5 py-5 lg:sticky lg:top-0")}>
         <div className="flex items-center gap-2">
           <StatusTag group={row.group} />
           {row.tag && <RowTagChip>{row.tag}</RowTagChip>}
@@ -77,8 +80,8 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
   const earlier = q.followupOf ? x.replies.find((r) => r.questionId === q.followupOf) : undefined;
   const earlierText = earlier && x.documents.find((d) => d._id === earlier.docId)?.text;
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4">
-      <section aria-label="Question" className={cx(CARD, "self-start border-dashed border-waiting-line bg-waiting-row px-6 py-5")}>
+    <div data-testid="issue-grid" className={ISSUE_GRID}>
+      <section aria-label="Question" className={cx(CARD, "border-dashed border-waiting-line bg-waiting-row px-6 py-5")}>
         <div className="flex justify-between text-meta font-semibold text-waiting">
           <span>{q.followupOf ? "CargoOS asked a follow-up" : "CargoOS asked you"}</span><span>Waiting for your answer</span>
         </div>
@@ -103,7 +106,7 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
         )}
         <p className="mt-3 text-xs text-ink-3">Asked {whenAt(q.createdAt, now)}. {amount} is waiting on this answer.</p>
       </section>
-      <aside aria-label="What it's about" className={cx(CARD, "self-start px-5 py-5")}>
+      <aside aria-label="What it's about" className={cx(CARD, "px-5 py-5")}>
         {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (
           <>
             <h3 className="text-meta font-medium text-ink-3">{conflict ? "Charges where the sources disagree" : "Charges nobody agreed to yet"}</h3>

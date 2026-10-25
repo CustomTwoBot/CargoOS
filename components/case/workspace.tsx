@@ -1,35 +1,38 @@
-// One open case (docs/design.md §0.1, §0.2): its header, the money summary, the tab strip and the
-// open tab, plus Documents and History. Owns nothing: state comes from the case store.
+// One open case (docs/design.md §0.1, §0.2): its header, the money strip, the tab strip and the
+// open tab or view (Documents, History), all under the same header. Owns nothing: state comes from the case store.
+import { useState } from "react";
 import type { Role } from "@/lib/types";
 import { DocumentsView } from "@/components/documents/documents-view";
 import { HistoryView } from "@/components/history/history-view";
 import { ApprovalDetail } from "@/components/inboxes/approvals-inbox";
 import { approvalItems, type InboxCase } from "@/components/inboxes/items";
 import { OPERATOR } from "@/components/inboxes/people";
-import { EvidenceDrawer } from "@/components/inputs/evidence-drawer";
-import { CaseTabs } from "./case-tabs";
+import { CaseMenu } from "./case-menu";
+import { CaseTabs, type CaseView } from "./case-tabs";
 import type { CaseActions, CaseLocal } from "./case-store";
 import { CaseHeader, DraftButton } from "./chrome";
 import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
-import { changeNotes, clearedSummary, issuesOf, openQuestions, questionTitle, type Issue } from "./issues";
+import { changeNotes, issuesOf, openQuestions, questionTitle, type Issue } from "./issues";
 import { LineIssueView, QuestionView } from "./issue-views";
-import { AtStakeCard } from "./overview";
-import { AgreedCard, AllCharges, ChangedBanner, IssueList } from "./overview-tab";
+import { MoneyStrip } from "./overview";
+import { AllCharges, ChangedBanner, IssueList } from "./overview-tab";
 import { canAct } from "./roles";
 import {
-  casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestDraft, toRows, totalsOf, type CaseInput,
+  casePill, checkedAgainst, checkedLine, countLine, groupsOf, isRechecking, latestDraft, toRows, totalsOf, type CaseInput,
 } from "./view-model";
 
 export type WorkspaceProps = {
   demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions; roles: readonly Role[];
-  view: "case" | "documents" | "history"; now: Date | null; tab: string; onTab: (t: string) => void; inbox: InboxCase;
+  view: CaseView; now: Date | null; tab: string; onTab: (t: string) => void; inbox: InboxCase;
   /** Switches between the case's tabs and its Documents / History views (docs/design.md §0.2). */
-  onView?: (v: "case" | "documents" | "history") => void;
+  onView?: (v: CaseView) => void;
 };
 
-/** One case: header, pinned At stake card, tabs, and the open tab or view. */
-export function CaseWorkspace({ demo, x, local, actions, roles, view, now: clock, tab, onTab, inbox }: WorkspaceProps) {
+/** One case: header, pinned money strip, tabs, and the open tab or view. */
+export function CaseWorkspace({ demo, x, local, actions, roles, view: shown, onView, now: clock, tab, onTab, inbox }: WorkspaceProps) {
+  const [view, setView] = useOwnView(shown, onView);
+  const openTab = (t: string) => { setView("case"); onTab(t); };
   const now = clock ?? new Date(x.events.at(-1)?.at ?? x.questions[0]?.createdAt ?? 0);
   const rows = toRows(x);
   const totals = totalsOf(x);
@@ -47,57 +50,82 @@ export function CaseWorkspace({ demo, x, local, actions, roles, view, now: clock
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <CaseHeader title={x.case.title} checkedAgainst={checkedAgainst(x)} pill={casePill(x)} replay
+      <CaseHeader title={x.case.title} pill={casePill(x)} facts={headerFacts(x, inbox.forwarder)} replay
         actions={<>
-          {canAct(roles, "addEvidence") && <EvidenceDrawer onAdd={actions.addEvidence} />}
           {canAct(roles, "draftDispute") && (
-            <DraftButton disabledReason={draftDisabledReason} onDraft={() => { if (actions.draftDispute()) onTab("dispute"); }} />
+            <DraftButton disabledReason={draftDisabledReason} onDraft={() => { if (actions.draftDispute()) openTab("dispute"); }} />
           )}
+          <CaseMenu onAddEvidence={canAct(roles, "addEvidence") ? actions.addEvidence : undefined} />
         </>} />
 
+      <div className="px-6">
+        <MoneyStrip totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
+      </div>
+      <div className="mx-6 mt-2.5">
+        <CaseTabs issues={issues} tab={current ? tab : "overview"} onTab={openTab} view={view} onView={setView} />
+      </div>
+
       {view === "case" && (
-        <>
-          <div className="px-6">
-            <AtStakeCard totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
-          </div>
-          <div className="mx-6 mt-2.5"><CaseTabs issues={issues} tab={current ? tab : "overview"} onTab={onTab} /></div>
-          <div role="tabpanel" aria-labelledby={`tab-${current?.id ?? "overview"}`} className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-14 pt-3">
-            {!current ? (
-              <>
-                {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => onTab(issues.some((i) => i.id === k) ? k : "overview")} />}
-                <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_404px] gap-4">
-                  <IssueList issues={issues} cleared={clearedSummary(x)} onOpen={onTab}
-                    moveMs={local.replaying ? 560 : 280} movingKey={local.moving}
-                    allCharges={<AllCharges rows={rows}
-                      lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents, currency: c.currency }))}
-                      onSave={actions.saveLine} />} />
-                  <AgreedCard x={x} />
-                </div>
-              </>
-            ) : current.kind === "line" ? (
-              <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
-                onConfirm={(k) => actions.verdict(k, "confirmed")}
-                onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
-            ) : current.kind === "question" ? (
-              <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
-                canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)}
-                replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
-                onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
-            ) : approval ? (
+        <div role="tabpanel" aria-labelledby={`tab-${current?.id ?? "overview"}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-6 pb-14 pt-3">
+          {!current ? (
+            <>
+              {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => onTab(issues.some((i) => i.id === k) ? k : "overview")} />}
+              <IssueList issues={issues} groups={groupsOf(rows)} onOpen={onTab}
+                moveMs={local.replaying ? 560 : 280} movingKey={local.moving}
+                allCharges={<AllCharges rows={rows}
+                  lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents, currency: c.currency }))}
+                  onSave={actions.saveLine} />} />
+            </>
+          ) : current.kind === "line" ? (
+            <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
+              onConfirm={(k) => actions.verdict(k, "confirmed")}
+              onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
+          ) : current.kind === "question" ? (
+            <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
+              canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)}
+              replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
+              onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
+          ) : approval ? (
+            // ApprovalDetail (components/inboxes) has a fixed two-column grid; below 1024px this stacks the
+            // message above the decision. TODO(merge): drop once ApprovalDetail stacks on its own.
+            <div data-testid="dispute-stack" className="flex min-h-0 flex-1 flex-col max-lg:[&>div>.grid]:grid-cols-1 max-lg:[&>div>.grid]:content-start">
               <ApprovalDetail d={approval} now={clock} viewer={OPERATOR}
                 onAccept={() => actions.accept(approval.draftId)}
                 onReject={(reason) => actions.reject(approval.draftId, reason)}
                 onMessageChange={(t) => actions.editMessage(approval.draftId, t)} />
-            ) : null}
-          </div>
-        </>
+            </div>
+          ) : null}
+        </div>
       )}
-      {view === "documents" && <DocumentsView x={x} />}
-      {view === "history" && <div className="min-h-0 flex-1 overflow-auto px-6 pb-14 pt-1"><HistoryView x={x} /></div>}
+      {view === "documents" && (
+        <div role="tabpanel" aria-labelledby="tab-documents" className="flex min-h-0 flex-1 flex-col pt-3">
+          <p className="truncate px-6 pb-2.5 text-[13px] text-ink-2" title={checkedAgainst(x)}>{checkedAgainst(x)}</p>
+          <DocumentsView x={x} />
+        </div>
+      )}
+      {view === "history" && (
+        <div role="tabpanel" aria-labelledby="tab-history" className="min-h-0 flex-1 overflow-auto px-6 pb-14 pt-3"><HistoryView x={x} /></div>
+      )}
 
       <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
     </div>
   );
+}
+
+/**
+ * The view to show. The shell owns it once it passes `onView`; until then the workspace keeps its
+ * own choice, and a new `view` from the shell (its sidebar) wins.
+ */
+function useOwnView(shown: CaseView, onView?: (v: CaseView) => void): [CaseView, (v: CaseView) => void] {
+  const [own, setOwn] = useState<{ v: CaseView; from: CaseView } | null>(null);
+  if (onView) return [shown, onView];
+  return [own && own.from === shown ? own.v : shown, (v) => setOwn({ v, from: shown })];
+}
+
+/** "Invoice PCL-INV-1012", then the forwarder when known: the muted line under the case title. */
+function headerFacts(x: CaseInput, forwarder?: string): string[] {
+  const invoice = x.documents.find((d) => d.type === "freight_invoice")?.title;
+  return [invoice, forwarder].filter((f): f is string => !!f);
 }
 
 /**
