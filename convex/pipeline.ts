@@ -9,6 +9,7 @@ import type { Finding, Role, Status } from "../lib/types";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
+import { saveLearnedRule } from "./learnedRules";
 import { personId, role } from "./schema";
 
 const now = () => new Date().toISOString();
@@ -147,8 +148,16 @@ export const confirmFinding = mutation({
 export const dismissFinding = mutation({
   args: verdictArgs,
   returns: v.id("findings"),
-  // TODO(Pranav): call saveLearnedRule (convex/learnedRules.ts, SPEC §5.3) from here once it exists, then recompute.
-  handler: async (ctx, args) => await setVerdict(ctx, args, "false_positive"),
+  // Remembers "Not an issue" for the forwarder (SPEC §6 R10); saveLearnedRule schedules the recompute.
+  // A rule's createdBy is a person, so without a personId nothing is remembered.
+  handler: async (ctx, args) => {
+    const findingId = await setVerdict(ctx, args, "false_positive");
+    const finding = await ctx.db.get(findingId);
+    if (finding && args.personId !== undefined) {
+      await saveLearnedRule(ctx, { caseId: args.caseId, chargeId: finding.chargeId, personId: args.personId });
+    }
+    return findingId;
+  },
 });
 
 // ---- Line editor (SPEC §8 item 9) ----
