@@ -56,6 +56,8 @@ const caseLabel = (c: SidebarCase, plain = false) => (plain ? c.title : `${c.tit
 
 /** A 2px bar at the left edge marks where you are (docs/design.md §3.1, --primary). */
 const CURRENT = "bg-sunken text-ink before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary";
+/** Hover is a lighter tint than CURRENT, so the item under the pointer never reads as where you are. */
+const HOVER = "hover:bg-sunken/50";
 
 const IconButton = ({ name, onClick, children }: { name: string; onClick: () => void; children: ReactNode }) => (
   <button type="button" onClick={onClick} aria-label={name} title={name}
@@ -73,7 +75,7 @@ function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClos
   const place = (name: string, icon: ReactNode, on: boolean, onClick: () => void, n = 0) => (
     <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} aria-label={label(name, n)}
       className={cx("group relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium",
-        on ? CURRENT : "text-ink-2 hover:bg-sunken hover:text-ink")}>
+        on ? CURRENT : cx("text-ink-2 hover:text-ink", HOVER))}>
       <span className={on ? "text-ink" : "text-ink-3 group-hover:text-ink-2"}>{icon}</span>{name}<Count n={n} />
     </button>
   );
@@ -113,7 +115,7 @@ function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClos
                   <button type="button" onClick={() => onOpenCase(c.id)} aria-current={on ? "page" : undefined}
                     aria-label={caseLabel(c, plain)} title={plain ? c.title : `${c.title} · ${c.status.label}`}
                     className={cx("group relative grid h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left",
-                      plain ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[8px_minmax(0,1fr)_auto]", on ? CURRENT : "hover:bg-sunken")}>
+                      plain ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[8px_minmax(0,1fr)_auto]", on ? CURRENT : HOVER)}>
                     {!plain && <StatusDot tone={c.status.tone} />}
                     <span className={cx("truncate text-[13.5px]", on ? "font-semibold text-ink" : "font-medium text-ink-2 group-hover:text-ink")}>{c.title}</span>
                     {!plain && <span className={cx("text-[12.5px] font-semibold", c.atStakeCents ? "text-dispute" : "text-ink-3")}>{money(c.atStakeCents)}</span>}
@@ -129,7 +131,7 @@ function Full({ person, view, onView, cases, activeId, onOpenCase, inbox, onClos
       <div className="flex-none border-t border-line p-2">
         <p title={REPLAY} className="px-2.5 pb-1.5 pt-0.5 text-[11.5px] font-medium leading-4 text-ink-3">Replay</p>
         <button type="button" onClick={() => onView("settings")} aria-label={settingsLabel(person)} aria-current={view === "settings" ? "page" : undefined}
-          className={cx("group relative flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left", view === "settings" ? CURRENT : "hover:bg-sunken")}>
+          className={cx("group relative flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left", view === "settings" ? CURRENT : HOVER)}>
           <Avatar person={person} size={32} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-semibold text-ink">
@@ -150,7 +152,7 @@ function RailItem({ name, tip, on, onClick, children }: { name: string; tip?: Re
     <Tooltip.Root>
       <Tooltip.Trigger onClick={onClick} aria-label={name} aria-current={on ? "page" : undefined}
         className={cx("relative grid size-10 flex-none place-items-center rounded-[10px]",
-          on ? "bg-sunken text-ink" : "text-ink-3 hover:bg-sunken hover:text-ink")}>
+          on ? "bg-sunken text-ink ring-1 ring-inset ring-line-strong" : cx("text-ink-3 hover:text-ink", HOVER))}>
         {children}
       </Tooltip.Trigger>
       <Tooltip.Portal>
