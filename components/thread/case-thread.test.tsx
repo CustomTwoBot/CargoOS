@@ -35,7 +35,10 @@ describe("CaseThread", () => {
     expect(reply).not.toHaveBeenCalled();
     fireEvent.change(box, { target: { value: "approved congestion, not rush" } });
     fireEvent.keyDown(box, { key: "Enter" });
-    expect(reply).toHaveBeenCalledWith("q_1");
+    expect(reply).toHaveBeenCalledWith("q_1", "approved congestion, not rush");
+    // Until the answer comes back, the box closes and says CargoOS is rechecking.
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Rechecking with your answer…");
   });
 
   it("two open questions: the box says which one it answers", () => {

@@ -8,7 +8,7 @@ import { inCurrency, money, timeOf } from "@/components/case/format";
 import { questionTitle } from "@/components/case/issues";
 import { canAct } from "@/components/case/roles";
 import { resultWord, type Tone } from "@/components/case/words";
-import { instant, toRows, totalsOf, type CaseInput, type Row } from "@/components/case/view-model";
+import { instant, isRechecking, toRows, totalsOf, type CaseInput, type Row } from "@/components/case/view-model";
 import { linesPhrase } from "@/components/history/history";
 import { ASKED, DECIDER, firstName, personOf, reasonFor } from "@/components/inboxes/people";
 import type { CaseEvent, Draft, Person, Question, SourceDoc } from "@/lib/types";
@@ -300,10 +300,19 @@ function nextQuestion(demo: DemoCase, x: CaseInput): Question | undefined {
   return open.find((q) => q._id === recorded) ?? open[0];
 }
 
-export function dockOf(demo: DemoCase, x: CaseInput, local: Pick<CaseLocal, "replaying">, viewer: Person, forwarder = "the seller"): Dock {
+/**
+ * `sent` is the question this screen just answered: a live case sends the answer to the server, and
+ * the box stays closed until the answer and its recheck come back.
+ */
+export function dockOf(demo: DemoCase, x: CaseInput, local: Pick<CaseLocal, "replaying">, viewer: Person, forwarder = "the seller", sent?: string): Dock {
   if (!seesFindings(viewer)) return { kind: "none" };
   const asked = firstName(ASKED);
-  if (local.replaying) return { kind: "rechecking", text: `Rechecking with ${possessive(askedName(viewer))} answer…` };
+  const waitingOnServer = !!sent && openQs(x).some((q) => q._id === sent);
+  // A replay knows when it is playing an answer; a live case reads it off the events (a replay's own
+  // added evidence is never rechecked, so its events would read as rechecking forever).
+  if (local.replaying || (demo.live && isRechecking(x)) || waitingOnServer) {
+    return { kind: "rechecking", text: `Rechecking with ${possessive(askedName(viewer))} answer…` };
+  }
 
   const draft = x.drafts.at(-1);
   if (draft && draft.status !== "draft") {

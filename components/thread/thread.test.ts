@@ -124,6 +124,16 @@ describe("dockOf and pendingFor", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("answered"), { replaying: true }, SAM)).toEqual({ kind: "rechecking", text: "Rechecking with your answer…" });
   });
 
+  it("live case: no recorded order or replay note; rechecking from the answer until the server's recheck", () => {
+    const live = { ...SCENARIO_A, live: true, answers: {} };
+    expect(dockOf(live, SCENARIO_A.at("before"), idle, SAM)).toEqual({ kind: "answer", questionId: "q_1", label: undefined, replay: undefined });
+    expect(dockOf(live, SCENARIO_A.at("before"), idle, SAM, PC, "q_1")).toMatchObject({ kind: "rechecking" });
+    expect(dockOf(live, SCENARIO_A.at("answered"), idle, SAM)).toMatchObject({ kind: "rechecking" });
+    expect(dockOf(live, SCENARIO_A.at("after"), idle, SAM, PC, "q_1")).toMatchObject({ kind: "request" });
+    // A replay stays on its own clock: a question still open is answerable, whatever its events say.
+    expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, SAM)).toMatchObject({ kind: "answer" });
+  });
+
   it("someone else's question: a quiet line, nothing pending", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, MAYA)).toEqual({ kind: "quiet", text: "Waiting for Sam’s answer." });
     expect(pendingFor(SCENARIO_A.at("before"), MAYA)).toBe(0);

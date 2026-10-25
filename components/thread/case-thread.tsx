@@ -16,8 +16,11 @@ const WHO = "mb-[3px] text-xs font-semibold text-ink-3";
 const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, onFocus }: ThreadProps) {
+  // The question this screen just answered, until the answer and its recheck come back (live case).
+  const [sent, setSent] = useState<string>();
   const items = threadOf(x, viewer, now, forwarder);
-  const dock = dockOf(demo, x, local, viewer, forwarder);
+  const dock = dockOf(demo, x, local, viewer, forwarder, sent);
+  const reply = (questionId: string, text: string) => { setSent(questionId); actions.reply(questionId, text); };
   const list = useRef<HTMLOListElement>(null);
   const last = items.at(-1)?.id;
 
@@ -40,7 +43,7 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
         className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto px-[18px] py-4">
         {items.map((it) => <Item key={it.id} it={it} onFocus={onFocus} />)}
       </ol>
-      <DockView key={dockKey(dock)} dock={dock} actions={actions} onFocus={onFocus} />
+      <DockView key={dockKey(dock)} dock={dock} actions={actions} onReply={reply} onFocus={onFocus} />
     </aside>
   );
 }
@@ -115,14 +118,14 @@ function Item({ it, onFocus }: { it: ThreadItem; onFocus: OnFocus }) {
   }
 }
 
-type DockProps = { dock: Dock; actions: ThreadProps["actions"]; onFocus: OnFocus };
+type DockProps = { dock: Dock; actions: ThreadProps["actions"]; onReply: (questionId: string, text: string) => void; onFocus: OnFocus };
 
 /** This person's next step: the answer box, an action card, or one quiet line. */
-function DockView({ dock, actions, onFocus }: DockProps) {
+function DockView({ dock, actions, onReply, onFocus }: DockProps) {
   if (dock.kind === "none") return null;
   return (
     <div className="flex-none border-t border-line px-3.5 pb-3.5 pt-3">
-      {dock.kind === "answer" ? <Composer questionId={dock.questionId} label={dock.label} replay={dock.replay} onReply={actions.reply} />
+      {dock.kind === "answer" ? <Composer questionId={dock.questionId} label={dock.label} replay={dock.replay} onReply={onReply} />
         : dock.kind === "request" ? (
           <Card title="Next step" text={dock.text}>
             <button type="button" className={PRIMARY} onClick={() => actions.draftDispute()}>{dock.button}</button>
@@ -152,13 +155,13 @@ function Card({ title, text, children }: { title: string; text: string; children
   );
 }
 
-type ComposerProps = { questionId: string; label?: string; replay?: string; onReply: (questionId: string) => void };
+type ComposerProps = { questionId: string; label?: string; replay?: string; onReply: (questionId: string, text: string) => void };
 
 /** The answer box: only open when CargoOS waits on this person. Enter sends; Shift+Enter starts a new line. */
 function Composer({ questionId, label, replay, onReply }: ComposerProps) {
   const [text, setText] = useState("");
   const empty = !text.trim();
-  const send = () => { if (!empty) { onReply(questionId); setText(""); } };
+  const send = () => { if (!empty) { onReply(questionId, text.trim()); setText(""); } };
   return (
     <form onSubmit={(e) => { e.preventDefault(); send(); }}>
       {label && <p className="mb-1.5 px-1 text-xs font-semibold text-ink-3">{label}</p>}
