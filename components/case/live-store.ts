@@ -64,9 +64,9 @@ type Message = { subject: string; body: string };
 
 export type LiveCase = { demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions };
 
-/** The live Scenario A case, or undefined while loading and when the backend has none. */
-export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined {
-  const caseId = useQuery(api.cases.getDemoCase);
+/** A seeded demo case (Scenario A unless `shipmentRef` names another), or undefined while loading and when the backend has none. */
+export function useLiveCase(person: Person, toast: Toast, shipmentRef?: string): LiveCase | undefined {
+  const caseId = useQuery(api.cases.getDemoCase, shipmentRef ? { shipmentRef } : {});
   return useLiveCaseById(caseId ?? undefined, person, toast);
 }
 
@@ -119,7 +119,8 @@ export function useLiveCaseById(caseId: Id<"cases"> | undefined, person: Person,
       reset: () => {
         setWaiting(undefined);
         setMessages({});
-        run(() => resetLiveDemo({ personId }));
+        // Each demo bill resets only itself; any other case is refused by the server.
+        run(() => resetLiveDemo({ personId, shipmentRef: view.case.shipmentRef }));
       },
 
       reply: (questionId, text) => {

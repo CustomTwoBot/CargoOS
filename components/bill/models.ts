@@ -6,7 +6,7 @@ import { personById } from "@/lib/people";
 import { delta, money, timeOf } from "@/components/case/format";
 import { caseTotals } from "@/components/case/totals";
 import {
-  currencyOf, instant, isRechecking, latestChanges, latestDraft, latestQuestion, toRows, totalsOf, type CaseInput, type UiGroup,
+  currencyOf, instant, isRechecking, isWaitingQuestion, latestChanges, latestDraft, latestQuestion, toRows, totalsOf, type CaseInput, type UiGroup,
 } from "@/components/case/view-model";
 import { OWNER, firstName } from "@/components/shell/person";
 import { BOOKKEEPER, bookkeeperName, type Step } from "@/components/app/next-step";
@@ -149,10 +149,14 @@ export function trackOf(x: CaseInput, step: Step, forwarder: string): TrackStep[
     : { key: "checked", who: "C", title: "Reading documents", sub: "CargoOS", state: "now" });
 
   if (x.questions.length) {
-    const open = x.questions.some((q) => q.status === "open");
+    const open = x.questions.some((q) => isWaitingQuestion(x, q));
+    // Still open but nothing left to answer: a document settled its lines before anyone replied.
+    const settled = !open && !replied && x.questions.some((q) => q.status === "open");
     out.push(open
       ? { key: "answer", who: firstName(OWNER).charAt(0), whoId: OWNER.id, title: "Answer CargoOS", sub: `${firstName(OWNER)} · waiting`, state: "now" }
-      : { key: "answer", who: firstName(OWNER).charAt(0), whoId: OWNER.id, title: "Answered", sub: `${firstName(OWNER)}${replied ? ` · ${timeOf(replied.at)}` : ""}`, state: "done" });
+      : settled
+        ? { key: "answer", who: "C", title: "Settled by a document", sub: "CargoOS · no answer needed", state: "done" }
+        : { key: "answer", who: firstName(OWNER).charAt(0), whoId: OWNER.id, title: "Answered", sub: `${firstName(OWNER)}${replied ? ` · ${timeOf(replied.at)}` : ""}`, state: "done" });
   }
 
   const askedName = personName(asker, OWNER);

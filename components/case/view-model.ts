@@ -68,6 +68,13 @@ const changesOf = (e: CaseEvent): FindingChange[] => {
 export const currentFindings = (x: CaseInput) =>
   x.findings.filter((f) => f.revision === x.case.revision).sort((a, b) => a.lineNo - b.lineNo);
 
+/**
+ * An open question waits for an answer only while one of its lines still does. A document that settles
+ * every line it asked about (a WhatsApp chat sent from the phone) leaves nothing to answer.
+ */
+export const isWaitingQuestion = (x: CaseInput, q: Question) =>
+  q.status === "open" && currentFindings(x).some((f) => f.status === "needs_review" && q.findingKeys.includes(f.key));
+
 // Event times may carry different offsets, so compare instants, not strings.
 export const instant = (iso: string) => Date.parse(iso);
 
@@ -142,7 +149,7 @@ const answeredAt = (x: CaseInput) => latestEvent(x.events, ["reply_received"])?.
 export function casePill(x: CaseInput): { label: string; tone: "waiting" | "neutral" } {
   const d = latestDraft(x);
   if (isRechecking(x)) return { label: "Rechecking", tone: "neutral" };
-  if (x.questions.some((q) => q.status === "open")) return { label: "Waiting for your answer", tone: "waiting" };
+  if (x.questions.some((q) => isWaitingQuestion(x, q))) return { label: "Waiting for your answer", tone: "waiting" };
   if (d?.status === "approved") return { label: "Approved", tone: "neutral" };
   if (d && (d.status === "draft" || d.status === "pending_approval")) return { label: "Ready to approve", tone: "neutral" };
   const waiting = toRows(x).filter((r) => r.group === "waiting").length;

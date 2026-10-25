@@ -13,6 +13,7 @@ import { greeting, splitOf } from "@/components/bill/models";
 import { firstName, isUploaderOnly } from "@/components/shell/person";
 import { useWorkspaceName } from "@/components/app/setup";
 import { pacificDate } from "@/components/documents/documents";
+import { isWaitingQuestion } from "@/components/case/view-model";
 
 const TABS: { id: BillGroup; label: string }[] = [
   { id: "check", label: "To check" },
@@ -64,7 +65,7 @@ export function BillsPage() {
   const searching = query.trim() !== "";
   const needYou = rows.filter((r) => r.group === "check" && ["answer", "decide", "request", "rejected", "accepted"].includes(r.step.kind)).length;
   const sum = (k: "pay" | "hold" | "ask") => rows.filter((r) => r.step.kind !== "reading").reduce((n, r) => n + r.split[k], 0);
-  const askCount = rows.reduce((n, r) => n + r.b.x.questions.filter((q) => q.status === "open").length, 0);
+  const askCount = rows.reduce((n, r) => n + r.b.x.questions.filter((q) => isWaitingQuestion(r.b.x, q)).length, 0);
 
   return (
     <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 pt-6 sm:px-8">
