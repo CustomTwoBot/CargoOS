@@ -4,11 +4,12 @@ import ui from "@/fixtures/scenarioA.ui.json";
 import replyFixture from "@/fixtures/scenarioA.reply.facts.json";
 import {
   CaseEventSchema, CaseSchema, ChargeSchema, DraftSchema, ExtractionOutputSchema, FactSchema,
-  FindingChangeSchema, FindingSchema, QuestionPlanSchema, QuestionSchema, ReplyInterpretationSchema,
-  ReplySchema, SourceDocSchema, SourceSpanSchema,
+  FindingChangeSchema, FindingSchema, LearnedRuleSchema, PersonSchema, QuestionPlanSchema, QuestionSchema,
+  ReplyInterpretationSchema, ReplySchema, SourceDocSchema, SourceSpanSchema,
 } from "@/lib/schemas";
+import { holdsRole, PEOPLE, personById } from "@/lib/people";
 import type {
-  Case, CaseEvent, Charge, Draft, Fact, Finding, FindingChange, Question, Reply, SourceDoc, SourceSpan,
+  Case, CaseEvent, Charge, Draft, Fact, Finding, FindingChange, LearnedRule, Person, Question, Reply, SourceDoc, SourceSpan,
 } from "@/lib/types";
 
 // Mutual assignability: fails to compile if lib/schemas.ts drifts from lib/types.ts.
@@ -27,6 +28,8 @@ describe("schemas mirror lib/types.ts", () => {
     expectTypeOf<Same<z.infer<typeof ReplySchema>, Reply>>().toEqualTypeOf<true>();
     expectTypeOf<Same<z.infer<typeof DraftSchema>, Draft>>().toEqualTypeOf<true>();
     expectTypeOf<Same<z.infer<typeof CaseEventSchema>, CaseEvent>>().toEqualTypeOf<true>();
+    expectTypeOf<Same<z.infer<typeof PersonSchema>, Person>>().toEqualTypeOf<true>();
+    expectTypeOf<Same<z.infer<typeof LearnedRuleSchema>, LearnedRule>>().toEqualTypeOf<true>();
   });
 });
 
@@ -95,5 +98,69 @@ describe("schemas reject bad objects", () => {
 
   it("rejects non-ISO dates", () => {
     expect(FactSchema.safeParse({ ...fact, effectiveAt: "Sep 5" }).success).toBe(false);
+  });
+});
+
+// ---- SPEC.md 5.5 types (people, learned rules, drafts, events) ----
+
+describe("SPEC 5.5 types", () => {
+  const rule: LearnedRule = {
+    _id: "rule_1", forwarder: "Pacific Crest Logistics", chargeType: "handling", maxAmountCents: 40000,
+    createdBy: "maya", createdAt: "2026-10-24T14:20:00-07:00", sourceCaseId: "case_A", sourceChargeId: "chg_6",
+  };
+
+  it("accepts a learned rule, with or without a cap", () => {
+    expect(LearnedRuleSchema.parse(rule)).toEqual(rule);
+    expect(LearnedRuleSchema.safeParse({ ...rule, maxAmountCents: undefined }).success).toBe(true);
+  });
+
+  it("rejects a bad learned rule", () => {
+    expect(LearnedRuleSchema.safeParse({ ...rule, maxAmountCents: 400.5 }).success).toBe(false);
+    expect(LearnedRuleSchema.safeParse({ ...rule, chargeType: "rush" }).success).toBe(false);
+    expect(LearnedRuleSchema.safeParse({ ...rule, forwarder: "" }).success).toBe(false);
+    expect(LearnedRuleSchema.safeParse({ ...rule, createdAt: "Oct 24" }).success).toBe(false);
+  });
+
+  it("accepts the new roles, rule, events and optional fields", () => {
+    expect(PersonSchema.parse({ id: "leo", name: "Leo — uploader", roles: ["uploader"] }).roles).toEqual(["uploader"]);
+    expect(FindingSchema.safeParse({ ...ui.findings["2"][5], status: "supported", ruleId: "R10_LEARNED", learnedRuleId: "rule_1" }).success).toBe(true);
+    for (const type of ["draft_rejected", "rule_learned", "rule_undone", "document_uploaded"]) {
+      expect(CaseEventSchema.safeParse({ ...ui.events[0], type }).success).toBe(true);
+    }
+    expect(CaseSchema.parse(ui.case).forwarder).toBe("Pacific Crest Logistics");
+    expect(CaseSchema.safeParse({ ...ui.case, forwarder: undefined }).success).toBe(true);
+  });
+
+  it("drafts carry who requested, approved or rejected (person ids), the reason and the edited body", () => {
+    const rejected = { ...ui.draft, status: "rejected", requestedBy: "maya", rejectedBy: "sam", rejectionReason: "They did expedite it." };
+    expect(DraftSchema.parse(rejected)).toMatchObject({ requestedBy: "maya", rejectedBy: "sam" });
+    expect(DraftSchema.safeParse({ ...ui.draft, status: "approved", requestedBy: "maya", approvedBy: "sam", editedBody: "Hi Derek, ..." }).success).toBe(true);
+    expect(DraftSchema.safeParse({ ...rejected, rejectionReason: "" }).success).toBe(false);
+    // Existing drafts (no new fields) still validate.
+    expect(DraftSchema.safeParse(ui.draft).success).toBe(true);
+  });
+
+  it("rejects a person with no roles or an unknown role", () => {
+    expect(PersonSchema.safeParse({ id: "x", name: "X", roles: [] }).success).toBe(false);
+    expect(PersonSchema.safeParse({ id: "x", name: "X", roles: ["admin"] }).success).toBe(false);
+  });
+});
+
+describe("lib/people.ts", () => {
+  it("is the fixed list from SPEC 5.5, and every entry validates", () => {
+    expect(PEOPLE.map((p) => [p.id, p.name, p.roles])).toEqual([
+      ["maya", "Maya — bookkeeper", ["clerk", "uploader"]],
+      ["sam", "Sam — owner", ["clerk", "ops_lead", "controller", "uploader"]],
+      ["leo", "Leo — uploader", ["uploader"]],
+    ]);
+    PEOPLE.forEach((p) => PersonSchema.parse(p));
+  });
+
+  it("looks people up and checks their roles", () => {
+    expect(personById("sam")?.name).toBe("Sam — owner");
+    expect(personById("nobody")).toBeUndefined();
+    expect([holdsRole("sam", "controller"), holdsRole("maya", "controller"), holdsRole("leo", "clerk"), holdsRole("leo", "uploader")])
+      .toEqual([true, false, false, true]);
+    expect(holdsRole("nobody", "clerk")).toBe(false);
   });
 });

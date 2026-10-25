@@ -3,7 +3,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export const role = v.union(v.literal("clerk"), v.literal("controller"), v.literal("ops_lead"));
+export const role = v.union(v.literal("clerk"), v.literal("controller"), v.literal("ops_lead"), v.literal("uploader"));
+// Acting person (lib/people.ts). Optional on mutations until the person checks land (SPEC.md 5.5).
+export const personId = v.optional(v.string());
 export const party = v.union(v.literal("supplier"), v.literal("forwarder"), v.literal("carrier"), v.literal("buyer"));
 export const partyOrRole = v.union(party, role);
 
@@ -27,7 +29,7 @@ export const status = v.union(
 export const ruleId = v.union(
   v.literal("R0_MATCH"), v.literal("R1_DUPLICATE"), v.literal("R2_RATE_MISMATCH"), v.literal("R3_MATH_CURRENCY"),
   v.literal("R4_PERMITTED_SURCHARGE"), v.literal("R5_EXCLUDED_SCOPE"), v.literal("R6_NO_EVIDENCE"),
-  v.literal("R7_CONFLICT"), v.literal("R8_APPROVED"), v.literal("R9_REJECTED"),
+  v.literal("R7_CONFLICT"), v.literal("R8_APPROVED"), v.literal("R9_REJECTED"), v.literal("R10_LEARNED"),
 );
 
 export const eventType = v.union(
@@ -35,6 +37,7 @@ export const eventType = v.union(
   v.literal("recomputed"), v.literal("question_asked"), v.literal("reply_received"), v.literal("finding_confirmed"),
   v.literal("finding_dismissed"), v.literal("draft_created"), v.literal("approval_requested"),
   v.literal("approval_blocked"), v.literal("approved"),
+  v.literal("draft_rejected"), v.literal("rule_learned"), v.literal("rule_undone"), v.literal("document_uploaded"),
 );
 
 export const sourceSpan = v.object({
@@ -53,6 +56,7 @@ export default defineSchema({
     baseCurrency: v.literal("USD"),
     revision: v.number(),
     status: v.union(v.literal("open"), v.literal("awaiting_answer"), v.literal("ready_for_approval"), v.literal("approved")),
+    forwarder: v.optional(v.string()),
   }),
 
   documents: defineTable({
@@ -117,6 +121,7 @@ export default defineSchema({
     explanation: v.string(),
     userVerdict: v.optional(v.union(v.literal("confirmed"), v.literal("false_positive"))),
     userVerdictBy: v.optional(role),
+    learnedRuleId: v.optional(v.id("learnedRules")),
   }).index("by_case_rev", ["caseId", "revision"]),
 
   questions: defineTable({
@@ -148,8 +153,23 @@ export default defineSchema({
     totalDisputedCents: v.number(),
     status: v.union(v.literal("draft"), v.literal("pending_approval"), v.literal("approved"), v.literal("rejected")),
     createdBy: role,
-    approvedBy: v.optional(role),
+    requestedBy: v.optional(v.string()), // person ids (lib/people.ts)
+    approvedBy: v.optional(v.string()),
+    rejectedBy: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+    editedBody: v.optional(v.string()),
   }).index("by_case", ["caseId"]),
+
+  // "Not an issue" remembered per forwarder + charge type (R10, SPEC.md 6).
+  learnedRules: defineTable({
+    forwarder: v.string(),
+    chargeType,
+    maxAmountCents: v.optional(v.number()),
+    createdBy: v.string(), // person id
+    createdAt: v.string(),
+    sourceCaseId: v.id("cases"),
+    sourceChargeId: v.id("charges"),
+  }).index("by_forwarder_type", ["forwarder", "chargeType"]),
 
   // Append-only (CLAUDE.md rule 9).
   events: defineTable({
