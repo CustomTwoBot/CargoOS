@@ -77,11 +77,8 @@ export const instant = (iso: string) => Date.parse(iso);
 const latestEvent = (events: CaseEvent[], types: CaseEvent["type"][]) =>
   [...events].filter((e) => types.includes(e.type)).sort((a, b) => instant(a.at) - instant(b.at)).at(-1);
 
-/** Every change the latest recompute wrote (the server writes it too), group moves or not. */
-export function latestRecomputeChanges(x: CaseInput): FindingChange[] {
-  const last = latestEvent(x.events, ["recomputed"]);
-  return last ? changesOf(last) : [];
-}
+/** The changes one `recomputed` event carries (the server writes them too), group moves or not. */
+export const recomputeChanges = (e: CaseEvent): FindingChange[] => changesOf(e);
 
 /** Keys whose group changed in the latest recompute, with the group they came from. */
 export function movedFrom(x: CaseInput): Map<string, UiGroup> {

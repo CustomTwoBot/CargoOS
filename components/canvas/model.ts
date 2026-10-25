@@ -1,13 +1,14 @@
 // What the invoice canvas says (docs/design.md §0.4 п.3), derived from the case. Pure: amounts come
 // from the engine's totals and findings and are only formatted here; words follow the viewer.
 import { formatShortDate } from "@/lib/engine/money";
+import { pacificTime } from "@/components/documents/documents";
 import { PEOPLE } from "@/lib/people";
 import type { Person, SourceDoc } from "@/lib/types";
 import { inCurrency, money } from "@/components/case/format";
 import { caseTotals as engineTotals } from "@/lib/engine/totals";
 import type { CaseTotals } from "@/components/case/totals";
 import {
-  currencyOf, currentFindings, instant, latestChanges, latestRecomputeChanges, type CaseInput, type Row, type UiGroup,
+  currencyOf, currentFindings, instant, latestChanges, recomputeChanges, type CaseInput, type Row, type UiGroup,
 } from "@/components/case/view-model";
 import type { Tone } from "@/components/case/words";
 
@@ -79,18 +80,26 @@ export const countsOf = (rows: Row[]): Record<Filter, number> => ({
 });
 
 /**
- * At stake before the latest recheck, when the case has been checked more than once. Built from the
- * `recomputed` event alone (each change's previous status and delta), so a live case that only
- * carries its current findings works too; the engine's own `caseTotals` adds it up, never the UI.
+ * At stake after the first check, when the case has been rechecked since: what the reader saw at the
+ * start ("was $3,340"), not the step before. Built from the `recomputed` events alone (each change's
+ * previous status and delta, undone newest first), so a live case that only carries its current
+ * findings works too; the engine's own `caseTotals` adds it up, never the UI.
  */
-export function previousAtStake(x: CaseInput): number | undefined {
-  const changes = latestRecomputeChanges(x).filter((c) => c.from);
-  if (!changes.length) return undefined;
-  const before = new Map(changes.map((c) => [c.key, c.from!]));
+export function firstAtStake(x: CaseInput): number | undefined {
+  const rechecks = x.events.filter((e) => e.type === "recomputed").sort((a, b) => instant(b.at) - instant(a.at));
+  const state = new Map(currentFindings(x).map((f) => [f.key, f]));
+  let undone = false;
+  for (const e of rechecks) {
+    const changes = recomputeChanges(e).filter((c) => c.from);
+    for (const c of changes) {
+      const f = state.get(c.key);
+      if (f) state.set(c.key, { ...f, ...c.from! });
+    }
+    undone ||= changes.length > 0;
+  }
+  if (!undone) return undefined;
   const usd = currencyOf(x);
-  const previous = currentFindings(x).filter((f) => usd(f) === "USD")
-    .map((f) => (before.has(f.key) ? { ...f, ...before.get(f.key)! } : f));
-  return engineTotals(previous).atStake;
+  return engineTotals([...state.values()].filter((f) => usd(f) === "USD")).atStake;
 }
 
 /** Lines the latest recheck moved to another group: they get a "New" marker. */
@@ -115,8 +124,16 @@ function chatDays(x: CaseInput, doc: SourceDoc): string | undefined {
 /** "Email from Derek" when the email says who wrote it. */
 const emailFrom = (text: string) => /^From:\s*([A-Z][\p{L}'-]+)/mu.exec(text)?.[1];
 
-/** "Checked against": every source, oldest first, as a short chip label. */
+/** "Checked against": every source, oldest first, as a short chip label; same-day twins get their time ("Your answer · 2:05 PM"). */
 export function sourceChips(x: CaseInput, asked: string): SourceChip[] {
+  const chips = sourceLabels(x, asked);
+  return chips.map((c) => {
+    const twins = chips.filter((o) => o.label === c.label);
+    return twins.length > 1 && c.at ? { docId: c.docId, label: `${c.label.split(" · ")[0]} · ${pacificTime(c.at)}` } : { docId: c.docId, label: c.label };
+  });
+}
+
+function sourceLabels(x: CaseInput, asked: string): (SourceChip & { at?: string })[] {
   return [...x.documents]
     .sort((a, b) => instant(a.sentAt ?? "") - instant(b.sentAt ?? ""))
     .map((d) => {
@@ -125,6 +142,6 @@ export function sourceChips(x: CaseInput, asked: string): SourceChip[] {
         : d.type === "email" ? (emailFrom(d.text) ? `Email from ${emailFrom(d.text)}` : "Email")
         : d.type === "reply" ? (asked === "you" ? "Your answer" : `${asked}'s answer`) : "Note";
       const when = d.type === "chat" ? chatDays(x, d) : dateOf(d.sentAt);
-      return { docId: d._id, label: when ? `${name} · ${when}` : name };
+      return { docId: d._id, label: when ? `${name} · ${when}` : name, at: d.sentAt };
     });
 }
