@@ -26,6 +26,8 @@ describe("canvas model", () => {
   it("knows what the latest recheck changed and what was at stake before", () => {
     expect(previousAtStake(before)).toBeUndefined();
     expect(previousAtStake(after)).toBe(30000);
+    // A live case carries only its current findings; the recomputed event is enough.
+    expect(previousAtStake({ ...after, findings: after.findings.filter((f) => f.revision === after.case.revision) })).toBe(30000);
     expect(changedKeys(after).sort()).toEqual(["chg_4", "chg_6"]);
   });
 

@@ -4,8 +4,11 @@ import { formatShortDate } from "@/lib/engine/money";
 import { PEOPLE } from "@/lib/people";
 import type { Person, SourceDoc } from "@/lib/types";
 import { inCurrency, money } from "@/components/case/format";
-import { caseTotals, type CaseTotals } from "@/components/case/totals";
-import { currencyOf, instant, latestChanges, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
+import { caseTotals as engineTotals } from "@/lib/engine/totals";
+import type { CaseTotals } from "@/components/case/totals";
+import {
+  currencyOf, currentFindings, instant, latestChanges, latestRecomputeChanges, type CaseInput, type Row, type UiGroup,
+} from "@/components/case/view-model";
 import type { Tone } from "@/components/case/words";
 
 /** "Sam" from "Sam — owner". */
@@ -75,10 +78,19 @@ export const countsOf = (rows: Row[]): Record<Filter, number> => ({
   cleared: rows.filter((r) => r.group === "cleared").length,
 });
 
-/** At stake before the latest recheck, when the case has been checked more than once. */
+/**
+ * At stake before the latest recheck, when the case has been checked more than once. Built from the
+ * `recomputed` event alone (each change's previous status and delta), so a live case that only
+ * carries its current findings works too; the engine's own `caseTotals` adds it up, never the UI.
+ */
 export function previousAtStake(x: CaseInput): number | undefined {
-  const prev = x.findings.filter((f) => f.revision === x.case.revision - 1);
-  return prev.length ? caseTotals(prev, currencyOf(x)).atStakeCents : undefined;
+  const changes = latestRecomputeChanges(x).filter((c) => c.from);
+  if (!changes.length) return undefined;
+  const before = new Map(changes.map((c) => [c.key, c.from!]));
+  const usd = currencyOf(x);
+  const previous = currentFindings(x).filter((f) => usd(f) === "USD")
+    .map((f) => (before.has(f.key) ? { ...f, ...before.get(f.key)! } : f));
+  return engineTotals(previous).atStake;
 }
 
 /** Lines the latest recheck moved to another group: they get a "New" marker. */

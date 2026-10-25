@@ -44,7 +44,7 @@ export function CaseCanvas({ demo, x, actions, viewer, forwarder, focus, onFocus
         <InvoiceLines rows={rows} charges={x.charges} asked={asked} changed={changedKeys(x)}
           open={focus.kind === "line" ? focus.key : undefined} onFocus={onFocus}
           proofFor={(r) => (
-            <Proof x={x} row={r} charge={x.charges.find((c) => c._id === r.finding.chargeId)} asked={asked} canDecide={decides}
+            <Proof x={x} row={r} charge={x.charges.find((c) => c._id === r.finding.chargeId)} asked={asked} canDecide={decides} live={demo.live}
               onVerdict={actions.verdict} onSaveLine={actions.saveLine} onFocus={onFocus} />
           )} />
       </>

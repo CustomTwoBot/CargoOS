@@ -132,6 +132,19 @@ describe("Scenario A before the answer (Sam)", () => {
   });
 });
 
+describe("line edit", () => {
+  it("saves through saveLine and says whether CargoOS rechecks (live) or not (replay)", () => {
+    for (const demo of [SCENARIO_A, { ...SCENARIO_A, live: true }]) {
+      render(<Canvas demo={demo} viewer={SAM} start={{ kind: "line", key: "chg_1" }} />);
+      fireEvent.click(screen.getByRole("button", { name: "Edit line" }));
+      fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "4,500" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect(screen.getByText(/^Saved\./).closest("p")).toHaveTextContent(demo.live ? "CargoOS rechecks the line." : "In this replay the line isn't rechecked.");
+      cleanup();
+    }
+  });
+});
+
 describe("Scenario A after the answer (Maya)", () => {
   it("counts to $700, shows what it was, and names Sam's answer", () => {
     at(SCENARIO_A.end, MAYA);
