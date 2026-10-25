@@ -1,11 +1,11 @@
 // One tab per thing to decide (docs/design.md §0, layout A): a disputed line, the question to
-// answer, the dispute draft. Each tab tells one story: evidence on the left, the decision on the right.
+// answer (the dispute draft's tab is ApprovalDetail from the inboxes). Each tab tells one story: evidence on the left, the decision on the right.
 import { useState } from "react";
-import type { Draft, Question, SourceSpan } from "@/lib/types";
+import type { Question, SourceSpan } from "@/lib/types";
 import { RowTagChip, StatusTag } from "./bits";
 import { cx } from "./cx";
 import { Chain, DocumentView } from "./evidence-panel";
-import { inCurrency, capitalize, delta, money, whenAt } from "./format";
+import { delta, inCurrency, whenAt } from "./format";
 import type { CaseInput, Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
@@ -64,20 +64,32 @@ export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: Line
 type QuestionProps = {
   x: CaseInput; question: Question; rows: Row[]; amount: string; now: Date;
   canReply: boolean; replyNote?: string; onReply: (questionId: string, text: string) => void;
+  /** Why the answer box is closed in this replay (e.g. "Answer Question 1 first."); open when absent. */
+  blockedReason?: string;
 };
 
-export function QuestionView({ x, question: q, rows, amount, now, canReply, replyNote, onReply }: QuestionProps) {
+export function QuestionView({ x, question: q, rows, amount, now, canReply, replyNote, onReply, blockedReason }: QuestionProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState<SourceSpan | null>(null);
   const id = `answer-${q._id}`;
+  const conflict = rows.length > 0 && rows.every((r) => r.finding.ruleId === "R7_CONFLICT");
+  // A follow-up says why CargoOS asked again: the earlier answer, word for word.
+  const earlier = q.followupOf ? x.replies.find((r) => r.questionId === q.followupOf) : undefined;
+  const earlierText = earlier && x.documents.find((d) => d._id === earlier.docId)?.text;
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4">
       <section aria-label="Question" className={cx(CARD, "self-start border-dashed border-waiting-line bg-waiting-row px-6 py-5")}>
         <div className="flex justify-between text-meta font-semibold text-waiting">
-          <span>CargoOS asked you</span><span>Waiting for your answer</span>
+          <span>{q.followupOf ? "CargoOS asked a follow-up" : "CargoOS asked you"}</span><span>Waiting for your answer</span>
         </div>
+        {earlierText && (
+          <p className="mt-2 text-[13.5px] leading-5 text-ink-2">
+            Your earlier answer wasn&apos;t clear enough to settle it: <mark>“{earlierText}”</mark>
+          </p>
+        )}
         <p className="mt-2 text-[17px] leading-[27px]">{q.text}</p>
-        {canReply && (
+        {canReply && blockedReason && <p className="mt-4 text-[13.5px] font-semibold text-waiting">{blockedReason}</p>}
+        {canReply && !blockedReason && (
           <form className="mt-4" onSubmit={(e) => { e.preventDefault(); if (text.trim()) onReply(q._id, text.trim()); }}>
             <label htmlFor={id} className="mb-1.5 block text-meta font-semibold">Your answer</label>
             <textarea id={id} value={text} onChange={(e) => setText(e.target.value)} rows={3}
@@ -94,7 +106,7 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
       <aside aria-label="What it's about" className={cx(CARD, "self-start px-5 py-5")}>
         {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (
           <>
-            <h3 className="text-meta font-medium text-ink-3">Charges nobody agreed to yet</h3>
+            <h3 className="text-meta font-medium text-ink-3">{conflict ? "Charges where the sources disagree" : "Charges nobody agreed to yet"}</h3>
             <ul className="mt-2">
               {rows.map((r) => (
                 <li key={r.key} className="flex justify-between border-b border-line py-2 text-[14px] last:border-0">
@@ -105,43 +117,17 @@ export function QuestionView({ x, question: q, rows, amount, now, canReply, repl
             </ul>
             {q.citations.length > 0 && (
               <>
-                <h3 className="mt-4 text-meta font-medium text-ink-3">Closest mention</h3>
+                <h3 className="mt-4 text-meta font-medium text-ink-3">{conflict ? "What each source says" : "Closest mention"}</h3>
                 {q.citations.map((c) => (
                   <button key={c.quote} type="button" onClick={() => setOpen(c)} className="mt-1 block text-left text-[14px] leading-[22px] hover:underline">
                     <mark>{c.quote}</mark>
                   </button>
                 ))}
-                <p className="mt-1 text-xs text-ink-3">A warning, not an agreement to pay.</p>
+                {!conflict && <p className="mt-1 text-xs text-ink-3">A warning, not an agreement to pay.</p>}
               </>
             )}
           </>
         )}
-      </aside>
-    </div>
-  );
-}
-
-export function DisputeView({ draft, canApprove, onApprove }: { draft: Draft; canApprove: boolean; onApprove: (id: string) => void }) {
-  const approved = draft.status === "approved";
-  return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] gap-4">
-      <section aria-label="Dispute email" className={cx(CARD, "min-h-0 overflow-auto px-6 py-5")}>
-        <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-y-1 text-[14px]">
-          <dt className="text-ink-3">To</dt><dd>{capitalize(draft.to)}</dd>
-          <dt className="text-ink-3">Subject</dt><dd className="font-semibold">{draft.subject}</dd>
-        </dl>
-        <p className="mt-4 whitespace-pre-wrap text-[14px] leading-[22px]">{draft.body}</p>
-      </section>
-      <aside aria-label="Approval" className={cx(CARD, "flex flex-col gap-3 self-start px-5 py-5")}>
-        <div className="text-meta font-medium text-ink-3">Total disputed</div>
-        <div className="-mt-2 text-hero font-[650] text-dispute">{money(draft.totalDisputedCents)}</div>
-        <p className="text-[13px] text-ink-2">{draft.findingKeys.length} lines. Every number in the email comes from CargoOS rules.</p>
-        {approved ? (
-          <p className="rounded-lg border border-cleared px-3 py-2 text-[13.5px] font-semibold">Approved. Nothing was sent.</p>
-        ) : canApprove ? (
-          <div><button type="button" className={PRIMARY} onClick={() => onApprove(draft._id)}>Approve</button></div>
-        ) : null}
-        <p className="text-xs text-ink-3">Not sent. CargoOS never sends email.</p>
       </aside>
     </div>
   );

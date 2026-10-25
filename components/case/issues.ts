@@ -1,7 +1,7 @@
 // What the operator has to decide, one tab each (docs/design.md §0, layout A "tabs per issue").
 // Pure: derived from the case so the tabs and the Overview list always agree.
 import type { Draft, Question } from "@/lib/types";
-import { delta, money } from "./format";
+import { delta, inCurrency, money } from "./format";
 import { groupTotals } from "./totals";
 import { currencyOf, groupsOf, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
 
@@ -14,16 +14,27 @@ export type Issue =
 export const openQuestions = (x: CaseInput): Question[] =>
   x.questions.filter((q) => q.status === "open").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
+/** "Your answer" when the case only ever had one question; else "Question 2", "Follow-up". Stable as questions get answered. */
+export function questionTitle(x: CaseInput, q: Question): string {
+  if (q.followupOf) return "Follow-up";
+  const asked = x.questions.filter((o) => !o.followupOf).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return asked.length > 1 ? `Question ${asked.findIndex((o) => o._id === q._id) + 1}` : "Your answer";
+}
+
 export function issuesOf(x: CaseInput): Issue[] {
   const rows = toRows(x);
+  const open = openQuestions(x);
+  const asked = new Set(open.flatMap((q) => q.findingKeys));
   const out: Issue[] = rows
     .filter((r) => r.group === "dispute")
     .map((r) => ({ id: r.key, kind: "line", row: r, title: r.description, amount: delta(r.deltaCents), isNew: r.tag === "Moved from Waiting" }));
-  const open = openQuestions(x);
-  open.forEach((q, i) => {
+  // A waiting line no open question covers (e.g. billed in another currency) still needs a decision.
+  rows.filter((r) => r.group === "waiting" && !asked.has(r.key)).forEach((r) => out.push({
+    id: r.key, kind: "line", row: r, title: r.description, amount: inCurrency(r.billedCents, r.currency), isNew: false }));
+  open.forEach((q) => {
     const asked = rows.filter((r) => q.findingKeys.includes(r.key) && r.group === "waiting");
     out.push({ id: q._id, kind: "question", question: q, rows: asked,
-      title: open.length > 1 ? `Question ${i + 1}` : "Your answer",
+      title: questionTitle(x, q),
       amount: money(groupTotals(asked.map((r) => r.finding), currencyOf(x)).billedCents) });
   });
   const d = latestDraft(x);

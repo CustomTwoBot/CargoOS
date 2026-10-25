@@ -40,6 +40,12 @@ export const REASON: Record<RuleId, { code: string; plain: string }> = {
   R9_REJECTED: { code: "R9", plain: "You said it was never agreed" },
 };
 
+/** The plain reason, refined where one rule can land a line in two groups. */
+const reasonOf = (f: Finding) =>
+  f.ruleId === "R4_PERMITTED_SURCHARGE" && DISCREPANCY.includes(f.status) ? { code: "R4", plain: "More than the quote allows" }
+  : f.ruleId === "R8_APPROVED" && DISCREPANCY.includes(f.status) ? { code: "R8", plain: "More than you approved" }
+  : REASON[f.ruleId];
+
 export type RowTag = "Moved from Waiting" | "Just cleared" | "Dismissed by clerk" | "Finding confirmed by clerk";
 
 export type Row = {
@@ -92,7 +98,7 @@ export function toRows(x: CaseInput): Row[] {
       : undefined;
     return {
       key: f.key, lineNo: f.lineNo, description: charges.get(f.chargeId)?.description ?? `Line ${f.lineNo}`,
-      group, why: f.explanation, reason: REASON[f.ruleId],
+      group, why: f.explanation, reason: reasonOf(f),
       billedCents: f.billedCents, deltaCents: f.deltaCents, currency: charges.get(f.chargeId)?.currency ?? "USD", tag, finding: f,
     };
   });
@@ -138,7 +144,9 @@ export function casePill(x: CaseInput): { label: string; tone: "waiting" | "neut
   if (x.questions.some((q) => q.status === "open")) return { label: "Waiting for your answer", tone: "waiting" };
   if (d?.status === "approved") return { label: "Approved", tone: "neutral" };
   if (d && (d.status === "draft" || d.status === "pending_approval")) return { label: "Ready to approve", tone: "neutral" };
-  return { label: totalsOf(x).atStakeCents > 0 ? "Ready to dispute" : "Nothing to dispute", tone: "neutral" };
+  const waiting = toRows(x).filter((r) => r.group === "waiting").length;
+  if (totalsOf(x).atStakeCents > 0) return { label: waiting ? `Ready to dispute · ${waiting} waiting` : "Ready to dispute", tone: "neutral" };
+  return waiting ? { label: "Waiting on answers", tone: "waiting" } : { label: "Nothing to dispute", tone: "neutral" };
 }
 
 /** Line above the bar: when the engine last checked and why. */
@@ -189,7 +197,14 @@ export function checkedAgainst(x: CaseInput): string {
   const sources = x.documents
     .filter((d) => d.type !== "freight_invoice")
     .sort((a, b) => instant(a.sentAt ?? "") - instant(b.sentAt ?? ""))
-    .map((d) => (d.type === "quote" ? d.title : SOURCE_LABEL[d.type] ?? d.title));
+    .map((d) => (d.type === "quote" ? d.title : SOURCE_LABEL[d.type] ?? d.title))
+    // Several answers or emails read as one source: "email, chat, your answers (3)".
+    .reduce<{ label: string; n: number }[]>((acc, label) => {
+      const hit = acc.find((a) => a.label === label);
+      if (hit) hit.n++; else acc.push({ label, n: 1 });
+      return acc;
+    }, [])
+    .map(({ label, n }) => (n === 1 ? label : `${label === "your answer" ? "your answers" : label} (${n})`));
   const head = invoice?.title ?? "Invoice";
   return sources.length ? `${head}, checked against ${sources.join(", ")}.` : `${head}.`;
 }

@@ -93,7 +93,7 @@ export function historyEntries(x: CaseInput): Entry[] {
       case "facts_extracted": {
         const terms = strs(p.factIds).length, charges = strs(p.chargeIds).length;
         const found = charges ? `${charges} ${charges === 1 ? "charge" : "charges"}` : `${terms} ${terms === 1 ? "term" : "terms"}`;
-        what = `Read ${name(doc)}: ${found}`; break;
+        what = !charges && !terms ? `Read ${name(doc)}: nothing it could use` : `Read ${name(doc)}: ${found}`; break;
       }
       case "extraction_failed": {
         const where = str(p.locator);
@@ -107,7 +107,7 @@ export function historyEntries(x: CaseInput): Entry[] {
         what = `Edited ${linesOf(strs([p.chargeId]))}`; break;
       case "recomputed": {
         const cs = changesOf(e);
-        if (cs.every((c) => !c.from)) {
+        if (cs.length && cs.every((c) => !c.from)) {
           const n = (g: UiGroup) => cs.filter((c) => uiGroup(c.to) === g).length;
           what = `Checked ${cs.length} lines: ${n("dispute")} to dispute, ${n("waiting")} waiting, ${n("cleared")} cleared`;
           quotes = [...new Set(quotesOf(cs.filter((c) => uiGroup(c.to) === "dispute").flatMap((c) => c.causedByFactIds)))];
@@ -135,7 +135,8 @@ export function historyEntries(x: CaseInput): Entry[] {
         // With one question "the question" is enough; with several, say which lines it was about.
         const q = questions.get(str(p.questionId) ?? "");
         lines = q ? nums(q.findingKeys) : [];
-        what = q && x.questions.length > 1 ? `Answered the question about ${linesPhrase(lines)}` : "Answered the question";
+        const unclear = p.interpretation === "ambiguous" ? ", not clear enough to settle it" : "";
+        what = `${q && x.questions.length > 1 ? `Answered the question about ${linesPhrase(lines)}` : "Answered the question"}${unclear}`;
         quotes = doc ? [doc.text] : quotesOf(strs(p.factIds));
         break;
       }

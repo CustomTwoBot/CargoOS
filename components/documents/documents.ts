@@ -121,7 +121,7 @@ function factText(f: Fact, x: CaseInput, billed?: string): string {
   const amount = f.amountCents !== undefined ? ` at ${amountIn(f.amountCents, f.currency)}` : "";
   switch (f.kind) {
     case "agreed_rate": return `${name} agreed${amount}${f.condition?.bookedBy ? ` if booked by ${formatShortDate(f.condition.bookedBy)}` : ""}`;
-    case "permitted_surcharge": return other ? `Allowed: ${quote}` : `Allowed: ${name} as filed`;
+    case "permitted_surcharge": return other ? `Allowed: ${quote}` : f.amountCents !== undefined ? `Allowed: ${name} up to ${amountIn(f.amountCents, f.currency)}` : `Allowed: ${name} as filed`;
     case "exclusion": return other ? (/^not included/i.test(quote) ? quote : `Not included: ${quote}`) : `Not included: ${name}`;
     case "approval": return `${invoiced} approved${amount}`;
     case "rejection": return `${invoiced} not agreed`;

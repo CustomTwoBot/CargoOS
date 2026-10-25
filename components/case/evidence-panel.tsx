@@ -78,7 +78,7 @@ export function Timeline({ x, onQuote }: { x: CaseInput; onQuote: OnQuote }) {
           <div className="min-w-0">
             <div className="text-[14px] font-[650] leading-5">{e.where}<span className="ml-1.5 text-xs font-normal text-ink-3">{e.title}</span></div>
             {e.quotes.map((q) => (
-              <div key={q.span.quote}>
+              <div key={q.id}>
                 {q.struck ? (
                   <p className="mt-[3px] text-[14px] leading-[21px] text-ink-2"><s className="mr-1 text-ink-3">{q.span.quote.replace(/\s+/g, " ")}</s>{q.note}</p>
                 ) : (

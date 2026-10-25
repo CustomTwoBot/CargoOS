@@ -26,7 +26,7 @@ import { CaseHeader, DraftButton } from "./chrome";
 import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
 import { SCENARIO_A } from "./fixture";
-import { changeNotes, clearedSummary, issuesOf, openQuestions, type Issue } from "./issues";
+import { changeNotes, clearedSummary, issuesOf, openQuestions, questionTitle, type Issue } from "./issues";
 import { LineIssueView, QuestionView } from "./issue-views";
 import { AtStakeCard } from "./overview";
 import { AgreedCard, AllCharges, ChangedBanner, IssueList } from "./overview-tab";
@@ -176,7 +176,7 @@ function CaseWorkspace({ demo, x, local, actions, roles, view, now: clock, tab, 
             <AtStakeCard totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
           </div>
           <div className="mx-6 mt-2.5"><CaseTabs issues={issues} tab={current ? tab : "overview"} onTab={onTab} /></div>
-          <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-14 pt-3">
+          <div role="tabpanel" aria-labelledby={`tab-${current?.id ?? "overview"}`} className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-14 pt-3">
             {!current ? (
               <>
                 {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => onTab(issues.some((i) => i.id === k) ? k : "overview")} />}
@@ -195,7 +195,7 @@ function CaseWorkspace({ demo, x, local, actions, roles, view, now: clock, tab, 
                 onDismiss={(k) => { actions.verdict(k, "false_positive"); onTab("overview"); }} />
             ) : current.kind === "question" ? (
               <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
-                canReply={canAct(roles, "reply")}
+                canReply={canAct(roles, "reply")} blockedReason={answerBlocked(demo, x, current.id)}
                 replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
                 onReply={(qid) => { actions.reply(qid); onTab("overview"); }} />
             ) : approval ? (
@@ -213,6 +213,18 @@ function CaseWorkspace({ demo, x, local, actions, roles, view, now: clock, tab, 
       <DemoControls demo={demo} stage={local.stage} onGo={actions.reset} />
     </div>
   );
+}
+
+/**
+ * A replay plays answers in the order they were recorded; answering a later question first would
+ * jump to a snapshot that already holds the earlier answer. Live mode has no such limit.
+ */
+function answerBlocked(demo: DemoCase, x: CaseInput, questionId: string): string | undefined {
+  if (!demo.answers[questionId]) return undefined;
+  const open = new Set(openQuestions(x).map((q) => q._id));
+  const next = Object.keys(demo.answers).find((id) => open.has(id));
+  const nextQ = next && x.questions.find((q) => q._id === next);
+  return nextQ && next !== questionId ? `Answer ${questionTitle(x, nextQ)} first. In this replay the answers play in the order they were recorded.` : undefined;
 }
 
 /** Presenter controls for the replay (SPEC W3 step 1). Not part of the product UI. */

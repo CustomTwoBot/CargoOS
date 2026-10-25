@@ -31,7 +31,15 @@ export function ChangedBanner({ notes, onOpen }: { notes: ChangeNote[]; onOpen: 
   );
 }
 
-const sectionCount = (issues: Issue[], kind: Issue["kind"]) => issues.filter((i) => i.kind === kind).length;
+type Section = "dispute" | "waiting" | "question";
+const sectionOf = (i: Issue): Section => (i.kind === "question" ? "question" : i.kind === "line" && i.row.group === "waiting" ? "waiting" : "dispute");
+const SECTION_LABEL: Record<Section, string> = { dispute: "To dispute", waiting: "Waiting", question: "Questions for you" };
+const ORDER: Section[] = ["dispute", "question", "waiting"];
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The second line of a question item: what it covers, saying when sources disagree. */
+const covers = (rows: Row[]) =>
+  rows.map((r) => (r.finding.ruleId === "R7_CONFLICT" ? `${r.description} (sources disagree)` : r.description)).join(", ");
 
 type ListProps = {
   issues: Issue[]; cleared: { count: number; billed: string };
@@ -43,37 +51,45 @@ export function IssueList({ issues, cleared, onOpen, moveMs, movingKey, allCharg
   const ref = useRef<HTMLUListElement>(null);
   const [showAll, setShowAll] = useState(false);
   useRowMoves(ref, moveMs, movingKey);
-  const toDecide = issues.filter((i) => i.kind !== "dispute");
+  const toDecide = issues.filter((i) => i.kind !== "dispute")
+    .sort((a, b) => ORDER.indexOf(sectionOf(a)) - ORDER.indexOf(sectionOf(b)));
+  const count = (s: Section) => toDecide.filter((i) => sectionOf(i) === s).length;
+  const several = new Set(toDecide.map(sectionOf)).size > 1 || toDecide.length > 3;
   return (
     <section aria-label="To decide" className={cx(CARD, "min-h-0 overflow-auto")}>
       <h2 className="px-5 pb-2 pt-4 text-meta font-medium text-ink-3">
         {toDecide.length ? `To decide (${toDecide.length})` : "Nothing left to decide"}
       </h2>
       <ul ref={ref}>
-        {toDecide.map((i, n) => [
-          (n === 0 || toDecide[n - 1].kind !== i.kind) && sectionCount(toDecide, i.kind) > 1 && (
-            <li key={`h-${i.kind}`} data-key={`h-${i.kind}`} className="border-t border-line bg-sunken px-5 py-1.5 text-xs font-medium text-ink-3">
-              {i.kind === "line" ? `To dispute (${sectionCount(toDecide, "line")})` : `Questions for you (${sectionCount(toDecide, "question")})`}
-            </li>
-          ),
-          <li key={i.id} data-key={i.id} className="border-t border-line">
-            <button type="button" onClick={() => onOpen(i.id)}
-              className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">
-              {i.kind === "line" ? <StatusTag group="dispute" /> : <StatusTag group="waiting" label="Your answer" />}
-              <span className="min-w-0">
-                <span className="flex items-center gap-2 text-row font-semibold">
-                  {i.kind === "line" ? i.title : `${i.rows.length} charges need your answer`}
-                  {i.kind === "line" && i.isNew && <RowTagChip>New</RowTagChip>}
+        {toDecide.map((i, n) => {
+          const sec = sectionOf(i);
+          return [
+            several && (n === 0 || sectionOf(toDecide[n - 1]) !== sec) && (
+              <li key={`h-${sec}`} data-key={`h-${sec}`} className="border-t border-line bg-sunken px-5 py-1.5 text-xs font-medium text-ink-3">
+                {SECTION_LABEL[sec]} ({count(sec)})
+              </li>
+            ),
+            <li key={i.id} data-key={i.id} className="border-t border-line">
+              <button type="button" onClick={() => onOpen(i.id)}
+                className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">
+                {sec === "question" ? <StatusTag group="waiting" label="Your answer" /> : <StatusTag group={sec} />}
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 text-row font-semibold">
+                    <span className="truncate">
+                      {i.kind === "question" ? `${i.title}: ${plural(i.rows.length, "charge needs", "charges need")} your answer` : i.title}
+                    </span>
+                    {i.kind === "line" && i.isNew && <RowTagChip>New</RowTagChip>}
+                  </span>
+                  <span className="block truncate text-[13px] text-ink-2">
+                    {i.kind === "question" ? covers(i.rows) : i.kind === "line" ? i.row.reason.plain : ""}
+                  </span>
                 </span>
-                <span className="block text-[13px] text-ink-2">
-                  {i.kind === "line" ? i.row.reason.plain : i.rows.map((r) => r.description).join(", ")}
-                </span>
-              </span>
-              <span className={cx("text-[15px] font-semibold", i.kind === "line" ? "text-dispute" : "text-waiting")}>{i.amount}</span>
-              <span aria-hidden="true" className="text-ink-3">›</span>
-            </button>
-          </li>,
-        ])}
+                <span className={cx("text-[15px] font-semibold", sec === "dispute" ? "text-dispute" : "text-waiting")}>{i.amount}</span>
+                <span aria-hidden="true" className="text-ink-3">›</span>
+              </button>
+            </li>,
+          ];
+        })}
         <li data-key="cleared" className="border-t border-line">
           <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
             className="grid w-full grid-cols-[112px_minmax(0,1fr)_auto_16px] items-center gap-3 px-5 py-3.5 text-left hover:bg-sunken">

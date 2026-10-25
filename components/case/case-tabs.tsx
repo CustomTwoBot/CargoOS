@@ -16,10 +16,10 @@ export function CaseTabs({ issues, tab, onTab }: Props) {
       {issues.length > 0 && <span aria-hidden="true" className="mx-1 my-1.5 w-px flex-none bg-line-strong" />}
       {issues.map((i) => (
         <Tab key={i.id} id={i.id} on={tab === i.id} onTab={onTab} isNew={i.kind === "line" && i.isNew}
-          icon={i.kind === "line" ? <span className="text-dispute"><StatusGlyph group="dispute" /></span>
+          icon={i.kind === "line" ? <span className={i.row.group === "waiting" ? "text-waiting" : "text-dispute"}><StatusGlyph group={i.row.group} /></span>
             : i.kind === "question" ? <span className="text-waiting"><StatusGlyph group="waiting" /></span>
             : <DraftIcon />}
-          amount={<span className={cx("font-semibold", i.kind === "question" ? "text-waiting" : "text-dispute")}>{i.amount}</span>}>
+          amount={<span className={cx("font-semibold", i.kind === "question" || (i.kind === "line" && i.row.group === "waiting") ? "text-waiting" : "text-dispute")}>{i.amount}</span>}>
           {i.title}
         </Tab>
       ))}
@@ -31,7 +31,8 @@ type TabProps = { id: string; on: boolean; onTab: (id: string) => void; icon: Re
 
 function Tab({ id, on, onTab, icon, amount, isNew, children }: TabProps) {
   return (
-    <button type="button" role="tab" aria-selected={on} onClick={() => onTab(id)}
+    <button type="button" role="tab" aria-selected={on} onClick={() => onTab(id)} id={`tab-${id}`}
+      ref={(el) => { if (on) el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); }}
       className={cx("flex h-8 max-w-[260px] flex-none items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium",
         on ? "border border-line bg-surface text-ink shadow-card" : "border border-transparent text-ink-2 hover:bg-surface/60 hover:text-ink")}>
       <span className={cx("flex-none", !on && "opacity-80")}>{icon}</span>
