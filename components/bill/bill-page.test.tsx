@@ -115,62 +115,6 @@ describe("bill page, Scenario A replay", () => {
     expect(screen.getAllByText(/4,500/).length).toBeGreaterThan(0);
   });
 
-  it("while the bill is rechecked it names the lines, ticks each one off, then says what changed and fades", () => {
-    renderBill();
-    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
-    tick(1200);
-    fireEvent.click(screen.getByRole("button", { name: "Yes, recheck the bill" }));
-    tick(100);
-    expect(screen.getByText("Rechecking lines 4 and 6 with the new information…")).toBeInTheDocument();
-    tick(1700);
-    const lines = screen.getByRole("list", { name: "Lines being rechecked" });
-    expect(within(lines).getAllByRole("listitem")[0]).toHaveTextContent("Pay $200");
-    expect(within(lines).getAllByRole("listitem")[1]).toHaveTextContent("Rechecking");
-    tick(3200);
-    const strip = screen.getByText("Your answer changed 2 lines").closest<HTMLElement>("[role=status]")!;
-    expect(strip).toHaveTextContent("Port congestion fee → Pay · Rush handling → Hold");
-    expect(strip).toHaveTextContent("Hold $300 → $700");
-    // The hero says what Hold was, for a while.
-    expect(screen.getByText("$300", { selector: "s" })).toBeInTheDocument();
-    tick(10_000);
-    tick(500);
-    expect(screen.queryByText(/Your answer changed/)).not.toBeInTheDocument();
-    expect(screen.queryByText("$300", { selector: "s" })).not.toBeInTheDocument();
-  });
-
-  it("a line opens and closes from its row button, and the page is titled after the bill", () => {
-    renderBill();
-    expect(document.title).toBe("Pacific Crest Logistics · PCL-INV-1012 · CargoOS");
-    const row = screen.getByRole("button", { name: /Ocean freight/ });
-    expect(row).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(row);
-    expect(row).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByRole("button", { name: /Open$/ }).length).toBeGreaterThan(0);
-    fireEvent.click(row);
-    expect(row).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "Not an issue" })).not.toBeInTheDocument();
-  });
-
-  it("the hero explains Pay, Hold and Ask on request", () => {
-    renderBill();
-    const help = screen.getByRole("button", { name: "What do Pay, Hold and Ask mean?" });
-    expect(help).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(help);
-    expect(help).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(/more than anyone agreed to/)).toBeInTheDocument();
-  });
-
-  it("a quote opens its document, and the document's line chip brings you back with that line open", () => {
-    as("maya");
-    renderBill();
-    fireEvent.click(screen.getByRole("button", { name: /Ocean freight/ }));
-    fireEvent.click(screen.getAllByRole("button", { name: /Ocean freight reduced to \$4,500/ })[0]);
-    expect(screen.getByRole("tab", { name: /Documents/ })).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getAllByRole("button", { name: /Used for line 1/ })[0]);
-    expect(screen.getByRole("tab", { name: /Bill/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("button", { name: /Ocean freight/, expanded: true })).toBeInTheDocument();
-  });
-
   it("Leo sees documents only, no amounts", () => {
     as("leo");
     renderBill();

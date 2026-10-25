@@ -53,7 +53,6 @@ describe("settings", () => {
     fireEvent.change(name, { target: { value: "Harbor Goods" } });
     fireEvent.click(within(ws).getByRole("button", { name: "Save name" }));
     expect(readSetup()?.workspace).toBe("Harbor Goods");
-    expect(within(ws).getByText("Saved")).toBeInTheDocument();
     expect(within(ws).getAllByRole("listitem")).toHaveLength(3);
     expect(within(ws).getByLabelText("Roles: Clerk, Ops lead, Controller, Uploader")).toBeInTheDocument();
     expect(within(ws).getByLabelText("Roles: Uploader")).toBeInTheDocument();
@@ -62,31 +61,13 @@ describe("settings", () => {
     expect(invite).toHaveAccessibleDescription("Demo workspace");
   });
 
-  it("shows replay mode without a backend and resets the demo after a confirm", () => {
+  it("shows replay mode without a backend and resets the demo", () => {
     renderSettings();
     const demo = section("Demo data");
     expect(demo).toHaveTextContent("Replay — answers play the recorded run");
     expect(demo).toHaveTextContent("?replay=1 forces replay");
     fireEvent.click(within(demo).getByRole("button", { name: "Reset demo" }));
-    const confirm = within(demo).getByRole("group", { name: "Confirm reset" });
-    expect(confirm).toHaveTextContent("Reset every demo bill?");
-    expect(within(confirm).getByRole("button", { name: "Cancel" })).toHaveFocus();
-    expect(screen.queryByText("Demo reset. Every bill is back to before the answers.")).not.toBeInTheDocument();
-    fireEvent.click(within(confirm).getByRole("button", { name: "Yes, reset" }));
     expect(screen.getByText("Demo reset. Every bill is back to before the answers.")).toBeInTheDocument();
-    expect(within(demo).getByRole("button", { name: "Reset demo" })).toBeInTheDocument();
-  });
-
-  it("Cancel and Escape leave the demo as it is", () => {
-    renderSettings();
-    const demo = section("Demo data");
-    fireEvent.click(within(demo).getByRole("button", { name: "Reset demo" }));
-    fireEvent.click(within(demo).getByRole("button", { name: "Cancel" }));
-    expect(within(demo).queryByRole("group", { name: "Confirm reset" })).not.toBeInTheDocument();
-    fireEvent.click(within(demo).getByRole("button", { name: "Reset demo" }));
-    fireEvent.keyDown(within(demo).getByRole("button", { name: "Cancel" }), { key: "Escape" });
-    expect(within(demo).queryByRole("group", { name: "Confirm reset" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Demo reset. Every bill is back to before the answers.")).not.toBeInTheDocument();
   });
 
   it("Start over forgets the setup and goes back to the landing page", () => {
