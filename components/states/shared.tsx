@@ -13,10 +13,13 @@ export function Busy({ label, className }: { label: string; className?: string }
   );
 }
 
-/** Bottom-right stack for toasts (QuietToast). */
+/**
+ * Bottom-right stack for toasts (QuietToast). Below 1280px a toast is wide enough to reach the
+ * case's demo bar (bottom-centre), so the stack sits above it there.
+ */
 export function ToastRegion({ children }: { children: ReactNode }) {
   return (
-    <div aria-live="polite" aria-label="Notifications" role="region" className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+    <div aria-live="polite" aria-label="Notifications" role="region" className="fixed bottom-16 right-5 z-50 flex flex-col items-end gap-2 xl:bottom-5">
       {children}
     </div>
   );
