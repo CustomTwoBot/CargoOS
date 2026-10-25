@@ -1,13 +1,12 @@
 // Inbox inputs for tests and the temporary preview: Scenario A at several stages, plus a second
 // synthetic case (two questions, then a one-line dispute) built from Scenario A's documents.
 // Maya requests approval, Sam accepts or rejects (SPEC "Changes on Oct 24 evening"). The decision
-// fields are the local SPEC §5.5 stand-ins from people.ts. Synthetic data; nothing here is a real shipment.
+// fields are lib/types Draft's (SPEC §5.5). Synthetic data; nothing here is a real shipment.
 import type { DemoCase } from "@/components/case/demo-case";
 import { SCENARIO_A, scenarioA, scenarioAAt, scenarioADraft } from "@/components/case/fixture";
 import type { CaseInput } from "@/components/case/view-model";
 import type { CaseEvent, Draft, Question, Reply, SourceDoc } from "@/lib/types";
 import type { InboxCase } from "./items";
-import type { DraftDecision } from "./people";
 
 const FORWARDER = "Pacific Crest Logistics";
 
@@ -24,16 +23,17 @@ export function scenarioAWithDraft(decision: Decision = "requested", requestedBy
   const x = scenarioAAt("after");
   const d = scenarioADraft();
   const at = "2026-10-24T14:10:00-07:00";
-  const draft: Draft & DraftDecision = {
+  const draft: Draft = {
     ...d, requestedBy,
     status: decision === "requested" ? "pending_approval" : decision === "accepted" ? "approved" : "rejected",
-    ...(decision === "accepted" && { approvedBy: "controller" as const, acceptedBy: "sam" }),
-    ...(decision === "rejected" && { rejectedBy: "sam", rejectedAt: at, rejectionReason: DEMO_REJECTION }),
+    ...(decision === "accepted" && { approvedBy: "sam" }),
+    ...(decision === "rejected" && { rejectedBy: "sam", rejectionReason: DEMO_REJECTION }),
   };
   const events = [...x.events,
     event("case_A", 1, "2026-10-24T14:07:00-07:00", "clerk", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents }),
     event("case_A", 2, "2026-10-24T14:07:05-07:00", "clerk", "approval_requested", { draftId: d._id, personId: requestedBy }),
     ...(decision === "accepted" ? [event("case_A", 3, at, "controller", "approved", { draftId: d._id, personId: "sam" })] : []),
+    ...(decision === "rejected" ? [event("case_A", 3, at, "controller", "draft_rejected", { draftId: d._id, personId: "sam", reason: DEMO_REJECTION })] : []),
   ];
   return { ...x, drafts: [draft], events };
 }
@@ -64,7 +64,7 @@ const reply = (q: Question): Reply =>
 
 const ANSWERED_AT: Record<string, string> = { qB_1: "2026-10-24T10:02:00-07:00", qB_2: "2026-10-24T10:04:00-07:00" };
 
-const DRAFT_B: Draft & DraftDecision = {
+const DRAFT_B: Draft = {
   _id: "draft_B", caseId: B, to: "forwarder", status: "pending_approval", createdBy: "clerk", requestedBy: "maya",
   subject: "Invoice PCL-INV-2210: 1 disputed line ($400)",
   findingKeys: ["chg_6"], totalDisputedCents: 40000,
@@ -87,7 +87,7 @@ export function caseB(stage: CaseBStage): CaseInput {
     ...QB.map((q, i) => event(B, 10 + i, q.createdAt, "agent", "question_asked", { questionId: q._id })),
     ...done.map((q, i) => event(B, 20 + i, ANSWERED_AT[q._id], "ops_lead", "reply_received", { questionId: q._id })),
   ];
-  const draft = stage === "approved" ? { ...DRAFT_B, status: "approved" as const, approvedBy: "controller" as const, acceptedBy: "sam" } : DRAFT_B;
+  const draft = stage === "approved" ? { ...DRAFT_B, status: "approved" as const, approvedBy: "sam" } : DRAFT_B;
   if (rechecked) {
     events.push(event(B, 30, "2026-10-24T11:40:00-07:00", "clerk", "draft_created", { draftId: DRAFT_B._id }));
     events.push(event(B, 31, "2026-10-24T11:40:05-07:00", "clerk", "approval_requested", { draftId: DRAFT_B._id, personId: "maya" }));
