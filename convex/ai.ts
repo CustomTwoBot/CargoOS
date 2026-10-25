@@ -7,6 +7,7 @@ import { extractDocument } from "../lib/ai/extract";
 import { interpretReply as interpretWithClaude, resolveReply } from "../lib/ai/interpretReply";
 import { planQuestion as planWithClaude } from "../lib/ai/planQuestion";
 import { transcribeImage } from "../lib/ai/transcribe";
+import { holdsRole } from "../lib/people";
 import type { CaseState } from "../lib/ai/types";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -205,18 +206,22 @@ export const saveQuestion = internalMutation({
 // The ops-lead inbox calls this. Saves the reply as a document and interprets it in the background.
 export const submitReply = mutation({
   args: { role, personId, questionId: v.id("questions"), text: v.string() },
-  handler: async (ctx, { role: actor, questionId, text }) => {
+  handler: async (ctx, { role: actor, personId: person, questionId, text }) => {
     const question = await ctx.db.get(questionId);
     if (!question) throw new ConvexError("Question not found");
     if (question.status !== "open") throw new ConvexError("This question is no longer open");
     if (actor !== question.to) throw new ConvexError(`Only the ${question.to.replace("_", " ")} can answer this question`);
+    // TODO(Pranav): make personId required once every caller passes it (convex/ai.test.ts still calls without one).
+    if (person !== undefined && !holdsRole(person, question.to)) {
+      throw new ConvexError(`${person} does not hold the ${question.to} role, so they can't answer this question`);
+    }
     if (text.trim() === "") throw new ConvexError("Reply is empty");
 
     const sentAt = now();
     const docId = await ctx.db.insert("documents", {
       caseId: question.caseId, type: "reply", title: "Reply from ops lead", sender: actor, sentAt, text,
     });
-    await logEvent(ctx, question.caseId, actor, "reply_received", { questionId, docId });
+    await logEvent(ctx, question.caseId, actor, "reply_received", { questionId, docId, personId: person });
     await ctx.scheduler.runAfter(0, internal.ai.interpretReply, { questionId, docId });
     return docId;
   },
@@ -303,14 +308,15 @@ export const createDraft = mutation({
   },
 });
 
+// With draftId (an approved dispute, convex/drafts.ts), fills that draft instead of creating one.
 export const draftDispute = internalAction({
-  args: { caseId: v.id("cases"), role },
-  handler: async (ctx, { caseId, role: createdBy }): Promise<null> => {
+  args: { caseId: v.id("cases"), role, draftId: v.optional(v.id("drafts")) },
+  handler: async (ctx, { caseId, role: createdBy, draftId }): Promise<null> => {
     const state: CaseState | null = await ctx.runQuery(internal.ai.caseState, { caseId });
     if (!state) return null;
     try {
       const draft = await draftWithClaude(state.findings, state);
-      await ctx.runMutation(internal.ai.saveDraft, { caseId, createdBy, ...draft });
+      await ctx.runMutation(internal.ai.saveDraft, { caseId, createdBy, draftId, ...draft });
     } catch (e) {
       await ctx.runMutation(internal.ai.logFailure, { caseId, stage: "draftDispute", error: message(e) });
     }
@@ -320,11 +326,18 @@ export const draftDispute = internalAction({
 
 export const saveDraft = internalMutation({
   args: {
-    caseId: v.id("cases"), createdBy: role,
+    caseId: v.id("cases"), createdBy: role, draftId: v.optional(v.id("drafts")),
     subject: v.string(), body: v.string(), findingKeys: v.array(v.string()), totalDisputedCents: v.number(),
   },
-  handler: async (ctx, { caseId, createdBy, ...draft }) => {
-    const draftId = await ctx.db.insert("drafts", { caseId, to: "forwarder", status: "draft", createdBy, ...draft });
+  handler: async (ctx, { caseId, createdBy, draftId: existingId, ...draft }) => {
+    let draftId = existingId;
+    if (draftId) {
+      const existing = await ctx.db.get(draftId);
+      if (!existing || existing.caseId !== caseId) throw new Error("saveDraft: the draft to fill is not on this case");
+      await ctx.db.patch(draftId, draft);
+    } else {
+      draftId = await ctx.db.insert("drafts", { caseId, to: "forwarder", status: "draft", createdBy, ...draft });
+    }
     await logEvent(ctx, caseId, createdBy, "draft_created", { draftId, findingKeys: draft.findingKeys, totalDisputedCents: draft.totalDisputedCents });
     return draftId;
   },
