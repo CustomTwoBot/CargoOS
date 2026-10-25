@@ -1,0 +1,63 @@
+{
+  "name": "planQuestion-A-nopss",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T03:00:53.849Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You help an accounts-payable clerk check a freight invoice before it is paid.\nSome invoice lines are waiting on answers: the documents (quote, emails, chats) do not settle them.\nCode has already decided which lines a person could resolve and who to ask. You decide whether one\nquestion to that person can resolve them, and you write it.\n\nRules:\n- Write one short, specific question covering every waiting line you are given. Name each line by its\n  line number and what it is, and say plainly what is missing.\n- You may mention a line's billed amount exactly as given. Never calculate, total or invent amounts.\n- Cite the passages that make the question necessary. Each citation's \"quote\" must be copied word for\n  word from the document text (same docId), with no changes. Cite nothing rather than paraphrase.\n- Set \"ask\" to false only if no person could resolve these lines by answering (then explain in \"reason\"\n  and leave \"text\" empty). Otherwise set \"ask\" to true and use \"reason\" for one sentence on why.\n- Do not decide whether a charge is valid; only ask.",
+        "user": "{\n  \"askWho\": \"ops_lead\",\n  \"invoiceRef\": \"PCL-INV-1012\",\n  \"linesWaiting\": [\n    {\n      \"key\": \"chg_2\",\n      \"line\": 2,\n      \"description\": \"PSS peak season surcharge\",\n      \"billed\": \"$400\",\n      \"rule\": \"R6_NO_EVIDENCE\",\n      \"missing\": [\n        \"no agreement found for pss\"\n      ]\n    },\n    {\n      \"key\": \"chg_4\",\n      \"line\": 4,\n      \"description\": \"Port congestion fee\",\n      \"billed\": \"$200\",\n      \"rule\": \"R6_NO_EVIDENCE\",\n      \"missing\": [\n        \"no agreement found for congestion\"\n      ]\n    },\n    {\n      \"key\": \"chg_6\",\n      \"line\": 6,\n      \"description\": \"Rush handling\",\n      \"billed\": \"$400\",\n      \"rule\": \"R6_NO_EVIDENCE\",\n      \"missing\": [\n        \"no agreement found for handling\"\n      ]\n    }\n  ],\n  \"documents\": [\n    {\n      \"docId\": \"doc_quote\",\n      \"type\": \"quote\",\n      \"title\": \"Quote Q-PCL-0902\",\n      \"sentAt\": \"2026-09-02T10:00:00-07:00\",\n      \"text\": \"PACIFIC CREST LOGISTICS - QUOTATION Q-PCL-0902\\nDate: 2026-09-02   To: Bayline Home Goods   Valid until: 2026-09-30\\n1x40HC FOB Ningbo -> Ontario, CA warehouse\\nOcean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00\\nDestination THC                                    USD   650.00\\nCustoms entry                                      USD   125.00\\nDrayage Long Beach -> Ontario CA                   USD   850.00\\nDocumentation fee                                  USD    75.00\\nTOTAL                                              USD 6,500.00\"\n    },\n    {\n      \"docId\": \"doc_email\",\n      \"type\": \"email\",\n      \"title\": \"Email: RE: Q-PCL-0902 revised\",\n      \"sentAt\": \"2026-09-05T14:21:00-07:00\",\n      \"text\": \"Subject: RE: Q-PCL-0902 revised\\nHi Maya, we can do better on ocean. Ocean freight reduced to $4,500 if booked by Sep 10. Everything else unchanged. - Derek\"\n    },\n    {\n      \"docId\": \"doc_chat\",\n      \"type\": \"chat\",\n      \"title\": \"WhatsApp: Derek PCL / Sam Bayline\",\n      \"sentAt\": \"2026-09-28T10:30:00-07:00\",\n      \"text\": \"9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\\n9/8/26, 9:15 AM - Sam Bayline: great thanks\\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\\n9/28/26, 10:30 AM - Sam Bayline: ok keep me posted\"\n    },\n    {\n      \"docId\": \"doc_invoice\",\n      \"type\": \"freight_invoice\",\n      \"title\": \"Invoice PCL-INV-1012\",\n      \"sentAt\": \"2026-10-12T09:00:00-07:00\",\n      \"text\": \"PACIFIC CREST LOGISTICS - INVOICE PCL-INV-1012   Date: 2026-10-12   Ref: Q-PCL-0902\\n1  Ocean freight 40HC Ningbo-Long Beach      4,800.00\\n2  PSS peak season surcharge                   400.00\\n3  Destination THC                             650.00\\n4  Port congestion fee                         200.00\\n5  Drayage Long Beach -> Ontario CA            850.00\\n6  Rush handling                               400.00\\n7  Customs entry                               125.00\\n8  Documentation fee                            75.00\\n   TOTAL DUE USD                             7,500.00\"\n    }\n  ]\n}",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "ask": {
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "citations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "docId": {
+                    "type": "string"
+                  },
+                  "locator": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "docId",
+                  "locator",
+                  "quote"
+                ]
+              }
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ask",
+            "text",
+            "citations",
+            "reason"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"ask\":true,\"text\":\"Invoice PCL-INV-1012 bills three charges that the quote, email and chat do not clearly cover: line 2 PSS peak season surcharge ($400), line 4 Port congestion fee ($200), and line 6 Rush handling ($400). Was any of these charges agreed with Pacific Crest Logistics (e.g., by phone or in writing), and if so, what was the agreed amount and where is it documented? For line 4, Derek only said on 9/28 that congestion \\\"may be extra\\\" and no fee amount was agreed in the chat. For lines 2 and 6, nothing in the documents mentions them.\",\"citations\":[{\"docId\":\"doc_chat\",\"locator\":\"9/28/26, 10:02 AM message\",\"quote\":\"heads up, possible congestion at LB terminal, may be extra\"},{\"docId\":\"doc_email\",\"locator\":\"body\",\"quote\":\"Everything else unchanged.\"},{\"docId\":\"doc_invoice\",\"locator\":\"line 2\",\"quote\":\"2  PSS peak season surcharge                   400.00\"},{\"docId\":\"doc_invoice\",\"locator\":\"line 4\",\"quote\":\"4  Port congestion fee                         200.00\"},{\"docId\":\"doc_invoice\",\"locator\":\"line 6\",\"quote\":\"6  Rush handling                               400.00\"}],\"reason\":\"The ops lead may know of verbal or other agreements for these three charges that are not in the documents, so one question can resolve them.\"}"
+      }
+    }
+  ]
+}

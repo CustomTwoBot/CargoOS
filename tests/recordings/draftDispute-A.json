@@ -1,0 +1,59 @@
+{
+  "name": "draftDispute-A",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T03:01:10.371Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You write the wording of a short, polite email from a buyer's accounts-payable clerk to their\nfreight forwarder, disputing some lines on an invoice before it is paid. Code inserts every number, amount,\nline number and source quote; you write words only.\n\n- Never write a digit anywhere. Do not write amounts, dates, line numbers or reference numbers.\n  Use {invoiceRef} for the invoice reference and {total} for the total disputed amount if you need them.\n- subject: one line, for example \"Disputed charges on invoice {invoiceRef}\".\n- intro: a greeting and one or two sentences saying some lines need correcting before payment.\n- lines: one entry per disputed line key you are given, with \"reason\": one sentence, in your own words,\n  on why the line is disputed, based on its \"why\" and sources. Code adds the amounts and quotes after it.\n- closing: ask for a corrected invoice, thank them, and sign off as the accounts-payable team.\n- Be factual and courteous. Do not threaten, and do not promise payment.",
+        "user": "{\n  \"to\": \"forwarder\",\n  \"invoiceRef\": \"PCL-INV-1012\",\n  \"disputedLines\": [\n    {\n      \"key\": \"chg_1\",\n      \"description\": \"Ocean freight 40HC Ningbo-Long Beach\",\n      \"rule\": \"R2_RATE_MISMATCH\",\n      \"why\": \"Billed $4,800. Agreed $4,500 (email, Sep 5, if booked by Sep 10; booked Sep 8). Over by $300.\",\n      \"sources\": [\n        {\n          \"document\": \"Email: RE: Q-PCL-0902 revised\",\n          \"quote\": \"Ocean freight reduced to $4,500 if booked by Sep 10\"\n        },\n        {\n          \"document\": \"WhatsApp: Derek PCL / Sam Bayline\",\n          \"quote\": \"Booking confirmed for your 40HC, booked today Sep 8\"\n        }\n      ]\n    },\n    {\n      \"key\": \"chg_6\",\n      \"description\": \"Rush handling\",\n      \"rule\": \"R9_REJECTED\",\n      \"why\": \"Billed $400. The ops lead said this was not agreed on Oct 24: \\\"nobody agreed to $400 rush handling\\\". Over by $400.\",\n      \"sources\": [\n        {\n          \"document\": \"Reply from ops lead\",\n          \"quote\": \"nobody agreed to $400 rush handling\"\n        }\n      ]\n    }\n  ]\n}",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string"
+            },
+            "intro": {
+              "type": "string"
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "reason"
+                ]
+              }
+            },
+            "closing": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "subject",
+            "intro",
+            "lines",
+            "closing"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"subject\":\"Disputed charges on invoice {invoiceRef}\",\"intro\":\"Hello, thank you for sending invoice {invoiceRef}. After reviewing it against our records, a couple of lines need correcting before we can proceed with payment.\",\"lines\":[{\"key\":\"chg_1\",\"reason\":\"The ocean freight rate billed is higher than the discounted rate confirmed in our email exchange, and our booking was made within the window that qualified for that reduced rate.\"},{\"key\":\"chg_6\",\"reason\":\"The rush handling charge does not appear to have been agreed with us, and our operations lead has confirmed that no such fee was approved.\"}],\"closing\":\"Could you please review these lines and send us a corrected invoice? The total in question is {total}. Thank you for your help and understanding. Kind regards, The Accounts Payable Team\"}"
+      }
+    }
+  ]
+}
