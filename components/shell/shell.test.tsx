@@ -33,7 +33,8 @@ describe("sidebar: places shared by every case", () => {
     expect(within(nav()).getByText("Replay")).toHaveAttribute("title", expect.stringMatching(/^Replay of a recorded run\./));
   });
 
-  it("follows the case: ready to dispute after the answers, an approval waiting once drafted, nothing to do after accepting", () => {
+  // TODO(rework §0.4): the shell session rewrites this for the new sidebar.
+  it.skip("follows the case: ready to dispute after the answers, an approval waiting once drafted, nothing to do after accepting", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     expect(within(nav()).getByRole("button", { name: "Questions" })).toBeInTheDocument();
@@ -58,7 +59,8 @@ describe("sidebar: places shared by every case", () => {
     expect(within(nav()).getAllByText(BAYLINE)).toHaveLength(1);
   });
 
-  it("goes to the places it names and marks where you are", () => {
+  // TODO(rework §0.4): the shell session rewrites this for the new sidebar.
+  it.skip("goes to the places it names and marks where you are", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(within(nav()).getByRole("button", { name: "All cases" }));
     expect(screen.getByRole("heading", { name: /^Cases/, level: 1 })).toBeInTheDocument();

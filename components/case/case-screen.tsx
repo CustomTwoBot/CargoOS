@@ -120,8 +120,7 @@ export function CaseScreen({ cases = DEMO_CASES, roles: rolesOverride }: Props) 
         {view === "settings" && <SettingsView person={person} caseCount={cases.length} onReset={resetAll} />}
         {demo && (view === "case" || view === "documents" || view === "history") && (
           <CaseWorkspace key={demo.id} demo={demo} x={store.inputs[demo.id]} local={store.state[demo.id]}
-            actions={actions(demo.id)} viewer={viewer} view={view} now={clock}
-            tab={tabOf(demo.id)} onTab={(t) => setTab(demo.id, t)} onView={setView}
+            actions={actions(demo.id)} viewer={viewer} now={clock}
             inbox={{ demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] }} />
         )}
         <ToastRegion>

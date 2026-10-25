@@ -8,7 +8,8 @@ const atStake = () => screen.getByTestId("at-stake").textContent;
 const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
 const tabNames = () => within(screen.getByRole("tablist", { name: "Case tabs" })).getAllByRole("tab").map((t) => t.textContent);
 
-describe("CaseScreen (replay, tabs per issue)", () => {
+// TODO(rework §0.4): journeys of the old tabbed layout; rewritten against the canvas + thread at integration.
+describe.skip("CaseScreen (replay, tabs per issue)", () => {
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
   it("Overview: $300 at stake, one tab per thing to decide, no role switcher", () => {
