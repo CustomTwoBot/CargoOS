@@ -45,12 +45,13 @@ const REV4: Record<number, Expect> = { ...REV3, 9: [D, "R8_APPROVED", 30000] }; 
 
 const EXPECTED = [REV1, REV2, REV3, REV4];
 
+const CNY = [{ currency: "CNY", cents: 420000 }];
 const TOTALS = [
-  // billedCents adds the CNY line as if it were USD (see the report: totals.ts sums billedCents as is).
-  { billedCents: 3152500, agreedCents: 1647000, atStakeCents: 334000, waitingCents: 1171500, waivedCents: 0 },
-  { billedCents: 3152500, agreedCents: 1761000, atStakeCents: 386500, waitingCents: 1005000, waivedCents: 0 },
-  { billedCents: 3152500, agreedCents: 1761000, atStakeCents: 386500, waitingCents: 1005000, waivedCents: 0 },
-  { billedCents: 3152500, agreedCents: 2316000, atStakeCents: 416500, waitingCents: 420000, waivedCents: 0 },
+  // The CNY line (CNY 4,200) stays out of every USD sum and is listed as not converted (SPEC §6 step 1).
+  { billedCents: 2732500, agreedCents: 1647000, atStakeCents: 334000, waitingCents: 751500, waivedCents: 0, unconverted: CNY },
+  { billedCents: 2732500, agreedCents: 1761000, atStakeCents: 386500, waitingCents: 585000, waivedCents: 0, unconverted: CNY },
+  { billedCents: 2732500, agreedCents: 1761000, atStakeCents: 386500, waitingCents: 585000, waivedCents: 0, unconverted: CNY },
+  { billedCents: 2732500, agreedCents: 2316000, atStakeCents: 416500, waitingCents: 0, waivedCents: 0, unconverted: CNY },
 ];
 
 const row = (f: Finding): Expect => (f.deltaCents === undefined ? [f.status, f.ruleId] : [f.status, f.ruleId, f.deltaCents]);
@@ -68,7 +69,8 @@ describe("Scenario B findings come from the engine", () => {
   });
 
   it.each(TOTALS.map((t, i) => [i + 1, t] as const))("revision %i totals", (rev, totals) => {
-    expect(caseTotals(SCENARIO_B_REVISIONS[rev - 1].findings)).toEqual(totals);
+    const currency = new Map(CHARGES.map((c) => [c._id, c.currency]));
+    expect(caseTotals(SCENARIO_B_REVISIONS[rev - 1].findings, (f) => currency.get(f.chargeId) ?? "USD")).toEqual(totals);
   });
 
   it("each recompute lists exactly the lines that moved", () => {

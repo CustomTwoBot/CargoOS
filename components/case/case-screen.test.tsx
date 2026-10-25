@@ -1,6 +1,8 @@
+import { Profiler } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen } from "./case-screen";
+import { SCENARIO_A } from "./fixture";
 
 const atStake = () => screen.getByTestId("at-stake").textContent;
 const tab = (name: RegExp | string) => screen.getByRole("tab", { name });
@@ -10,7 +12,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
   it("Overview: $300 at stake, one tab per thing to decide, no role switcher", () => {
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     expect(atStake()).toBe("$300");
     expect(screen.getByText("1 to dispute · 2 waiting on answers · 5 cleared")).toBeInTheDocument();
     expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Your answer$600"]);
@@ -20,7 +22,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   });
 
   it("a line's tab shows its evidence and opens the email with the quote highlighted", () => {
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(tab(/Ocean freight/));
     expect(screen.getByText("What the forwarder promised")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ocean freight reduced to $4,500 if booked by Sep 10" }));
@@ -29,7 +31,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   });
 
   it("Not an issue clears the line, lowers At stake, and Undo puts it back", () => {
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(tab(/Ocean freight/));
     fireEvent.click(screen.getByRole("button", { name: "Not an issue" }));
     expect(atStake()).toBe("$0");
@@ -40,7 +42,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
 
   it("answering replays the recorded run: recheck, then $700, a change banner and a new tab", () => {
     vi.useFakeTimers();
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(tab(/Your answer/));
     fireEvent.change(screen.getByLabelText("Your answer"), { target: { value: "approved congestion, not rush handling" } });
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
@@ -55,7 +57,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   });
 
   it("one operator drafts and approves; nothing is sent", () => {
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
     expect(tab(/Dispute/)).toHaveAttribute("aria-selected", "true");
@@ -65,7 +67,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   });
 
   it("the rail switches to Documents and History without losing the case state", () => {
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
     fireEvent.click(screen.getByRole("button", { name: /^History/ }));
@@ -76,7 +78,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
   });
 
   it("a screen holding only ops lead can answer but sees no dispute, verdict, evidence or approve controls", () => {
-    render(<CaseScreen roles={["ops_lead"]} />);
+    render(<CaseScreen cases={[SCENARIO_A]} roles={["ops_lead"]} />);
     expect(screen.queryByRole("button", { name: "Draft dispute" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add evidence" })).not.toBeInTheDocument();
     fireEvent.click(tab(/Ocean freight/));
@@ -91,7 +93,7 @@ describe("sidebar", () => {
 
   it("names the case with what is at stake and collapses to the icon rail", () => {
     localStorage.removeItem("cargoos.sidebar");
-    render(<CaseScreen />);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
     const nav = screen.getByRole("navigation", { name: "Sections" });
     expect(within(nav).getAllByText("Bayline 40HC Ningbo-LB").length).toBeGreaterThan(0);
     expect(within(nav).getByText("$300")).toBeInTheDocument();
@@ -101,5 +103,19 @@ describe("sidebar", () => {
     expect(localStorage.getItem("cargoos.sidebar")).toBe("collapsed");
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+  });
+});
+
+describe("several cases", () => {
+  afterEach(cleanup);
+
+  it("settles after mounting two cases instead of re-rendering forever", async () => {
+    let renders = 0;
+    render(<Profiler id="app" onRender={() => { renders++; }}><CaseScreen /></Profiler>);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    const settled = renders;
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(renders).toBe(settled);
+    expect(screen.getAllByText("Juniper Peak 3x40HC Shanghai-Oakland").length).toBeGreaterThan(0);
   });
 });

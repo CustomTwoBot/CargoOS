@@ -21,6 +21,7 @@ import { Sidebar, type View } from "./sidebar";
 import { CasesList, type CaseSummary } from "./cases-list";
 import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
+import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { SCENARIO_A } from "./fixture";
 import { changeNotes, clearedSummary, issuesOf, openQuestions, type Issue } from "./issues";
 import { DisputeView, LineIssueView, QuestionView } from "./issue-views";
@@ -42,7 +43,10 @@ const KIND_TITLE: Record<NewEvidence["type"], string> = { email: "Email", chat: 
 
 type Props = { cases?: DemoCase[]; roles?: readonly Role[] };
 
-export function CaseScreen({ cases = [SCENARIO_A], roles = ALL_ROLES }: Props) {
+/** The recorded cases the demo opens with. Defined here because a DemoCase holds functions, which a server page can't pass. */
+const DEMO_CASES: DemoCase[] = [SCENARIO_A, SCENARIO_B];
+
+export function CaseScreen({ cases = DEMO_CASES, roles = ALL_ROLES }: Props) {
   const [activeId, setActiveId] = useState(cases[0].id);
   const [view, setView] = useState<View>("case");
   const [summaries, setSummaries] = useState<Record<string, CaseSummary>>({});
@@ -123,10 +127,16 @@ function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: 
   const pill = casePill(x);
   const toDecide = issues.filter((i) => i.kind !== "dispute").length;
 
-  useEffect(() => {
-    onSummary({ atStakeCents: totals.atStakeCents, billedCents: totals.billedCents, pill: pill.label, openQuestions: questions.length, toDecide,
-      documents: x.documents.length, events: x.events.length });
-  });
+  // Report the case's summary to the list only when one of its numbers changes. An effect that ran
+  // after every render looped: the parent's update re-rendered every case, which reported again.
+  const summary: CaseSummary = {
+    atStakeCents: totals.atStakeCents, billedCents: totals.billedCents, pill: pill.label, openQuestions: questions.length, toDecide,
+    documents: x.documents.length, events: x.events.length,
+  };
+  const summaryKey = JSON.stringify(summary);
+  const report = useRef(onSummary);
+  useEffect(() => { report.current = onSummary; });
+  useEffect(() => { report.current(JSON.parse(summaryKey) as CaseSummary); }, [summaryKey]);
 
   // The rail's Questions button opens the first open question (state adjusted during render).
   const [seenNudge, setSeenNudge] = useState(questionNudge);
