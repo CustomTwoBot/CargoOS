@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { ago, approvalItems, inboxCounts, questionItems } from "./items";
+import { ago, approvalItems, inboxCounts, questionItems, replayNow } from "./items";
 import { allAsking, CASE_B, caseB, DEMO_REJECTION, inboxCase, scenarioAWithDraft } from "./sample";
 
 describe("questionItems", () => {
@@ -141,5 +141,14 @@ describe("ago", () => {
     expect(ago("2026-10-23T09:10:00-07:00", now)).toBe("yesterday");
     expect(ago("2026-10-20T09:10:00-07:00", now)).toBe("4 days ago");
     expect(ago("2026-10-24T16:30:00-07:00", now)).toBe("just now");
+  });
+});
+
+describe("replayNow", () => {
+  it("is a minute after the latest thing any listed case shows, so ages follow the replay, not the wall clock", () => {
+    expect(replayNow(questionItems(allAsking()))?.toISOString()).toBe("2026-10-24T20:56:00.000Z"); // 1:56 PM, after A's 1:55 PM question
+    const requested = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("drafted"))]);
+    expect(replayNow(requested)?.toISOString()).toBe("2026-10-24T21:08:05.000Z"); // after the 2:07 PM request
+    expect(replayNow([])).toBeUndefined();
   });
 });

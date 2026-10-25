@@ -7,9 +7,9 @@ import { cx } from "@/components/case/cx";
 import { capitalize, timeOf, whenAt } from "@/components/case/format";
 import { StatusGlyph } from "@/components/case/glyphs";
 import { canAct } from "@/components/case/roles";
-import { ago, type ApprovalItem, type InboxLine } from "./items";
+import { ago, replayNow, type ApprovalItem, type InboxLine } from "./items";
 import { CARD, DetailHead, Fold, InboxEmpty, InboxFrame, Item, ItemList, LineRows, PRIMARY, SECONDARY, useNow, useWide } from "./parts";
-import { DECIDER, firstName, SAM, who, type Person } from "./people";
+import { DECIDER, firstName, reasonFor, SAM, who, type Person } from "./people";
 import { SellerMessage } from "./seller-message";
 
 type Props = {
@@ -56,11 +56,13 @@ const atTime = (iso: string | undefined, now: Date | null) =>
   !iso || !now ? "" : whenAt(iso, now).startsWith("today") ? ` at ${timeOf(iso)}` : ` on ${whenAt(iso, now)}`;
 
 /** One chip per line, like the Overview rows: "Agreed $4,500 → Billed $4,800", or the plain reason. The delta sits in the amount column. */
-export const lineChip = (l: InboxLine) => (l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed}` : l.reason);
+export const lineChip = (l: InboxLine, viewer: Person = SAM) =>
+  l.agreed !== undefined ? `Agreed ${l.agreed} → Billed ${l.billed}` : reasonFor(l.reason, viewer);
 
 export function ApprovalsInbox({ items, onOpen, onAccept, onReject, onMessageChange, viewer = SAM, now: fixed, print }: Props) {
   const clock = useNow();
-  const now = fixed ?? clock;
+  // A replay has its own clock (recorded times); the wall clock only when the items carry none.
+  const now = fixed ?? replayNow(items) ?? clock;
   const wide = useWide();
   const canDecide = canAct(viewer.roles, "approve");
   // A bookkeeper follows their own requests; an owner sees them all.
@@ -128,7 +130,9 @@ type DetailProps = {
 };
 
 /** One dispute's decision: lines, total, Accept / Reject, then the message to the seller. Also the case's Dispute tab. */
-export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
+export function ApprovalDetail({ d, now: given, viewer, print, onOpen, onAccept, onReject, onMessageChange }: DetailProps) {
+  // The case's Dispute tab passes the wall clock; times read on the replay's clock ("at 2:07 PM", not "on Oct 24").
+  const now = replayNow([d]) ?? given;
   const canDecide = canAct(viewer.roles, "approve");
   const ownRequest = !!d.requestedBy && d.requestedBy === viewer.id;
   // One operator drafts and decides; nobody requested it, so there is no requester to name (docs/design.md §0).
@@ -148,7 +152,7 @@ export function ApprovalDetail({ d, now, viewer, print, onOpen, onAccept, onReje
           <section aria-label="Lines to dispute" className={cx(CARD, "px-5 py-5 md:px-6")}>
             <h3 className="text-meta font-medium text-ink-3">{lines(d.lineCount)} to dispute with {d.forwarder}</h3>
             <div className="mt-1">
-              <LineRows label="Lines" rows={d.lines.map((l) => ({ ...l, chip: lineChip(l), amount: l.delta }))} />
+              <LineRows label="Lines" rows={d.lines.map((l) => ({ ...l, chip: lineChip(l, viewer), amount: l.delta }))} />
             </div>
           </section>
         </div>
