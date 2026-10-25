@@ -17,7 +17,8 @@ export function MoneyStrip({ totals: t, countLine, checked, rechecking, chargeCo
   const figures: { label: string; cents: number; swatch?: string; value?: string }[] = [
     { label: "Matches", cents: t.agreedCents, swatch: "bg-line-strong" },
     { label: "At stake", cents: t.atStakeCents, swatch: "bg-dispute", value: "text-dispute" },
-    { label: "Waiting", cents: t.waitingCents, swatch: HATCH, value: t.waitingCents ? "" : "text-ink-3" },
+    // Nothing waiting: the figure goes, like its segment in the bar.
+    ...(t.waitingCents ? [{ label: "Waiting", cents: t.waitingCents, swatch: HATCH }] : []),
     ...(t.waivedCents ? [{ label: "Not an issue", cents: t.waivedCents, swatch: "border border-line-strong" }] : []),
     { label: "Invoice", cents: t.billedCents },
   ];

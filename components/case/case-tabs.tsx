@@ -2,7 +2,7 @@
 // History, each with an icon and a count. Inside Review, the segmented strip: Overview and one tab
 // per issue, each saying what it is by shape (status glyph), its name and its amount; it scrolls
 // sideways when a big case has many issues or the window is narrow.
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "./cx";
 import { DocumentsIcon, DraftIcon, HistoryIcon, ListIcon, OverviewIcon, StatusGlyph } from "./glyphs";
 import type { Issue } from "./issues";
@@ -38,22 +38,52 @@ type Props = {
   answerer?: string;
 };
 
-/** Overview and the issues; shown only in Review. */
+/** Which ends of a sideways scroller still hide tabs, kept current on scroll, resize and when `content` changes. */
+function useHiddenEnds(content: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ends, setEnds] = useState({ start: false, end: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setEnds((was) => {
+      const next = { start: el.scrollLeft > 1, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 };
+      return next.start === was.start && next.end === was.end ? was : next;
+    });
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(read);
+    ro?.observe(el);
+    return () => { el.removeEventListener("scroll", read); ro?.disconnect(); };
+  }, [content]);
+  return { ref, ends };
+}
+
+const FADE = 28;
+const fade = ({ start, end }: { start: boolean; end: boolean }) => {
+  if (!start && !end) return undefined;
+  const mask = `linear-gradient(to right, ${start ? `transparent, black ${FADE}px` : "black"}, ${end ? `black calc(100% - ${FADE}px), transparent` : "black"})`;
+  return { maskImage: mask, WebkitMaskImage: mask };
+};
+
+/** Overview and the issues; shown only in Review. Overview stays put; the issues scroll, faded where more hide. */
 export function CaseTabs({ issues, tab, onTab, answerer }: Props) {
+  const { ref, ends } = useHiddenEnds(issues.map((i) => `${i.id}:${i.title}`).join("|"));
   return (
-    <nav role="tablist" aria-label="Case tabs"
-      className="flex gap-1 overflow-x-auto rounded-[11px] border border-line bg-sunken p-1 [scrollbar-width:none]">
+    <nav role="tablist" aria-label="Case tabs" className="flex rounded-[11px] border border-line bg-sunken p-1">
       <Tab id="overview" on={tab === "overview"} onTab={onTab} icon={<OverviewIcon />}>Overview</Tab>
-      {issues.length > 0 && <span aria-hidden="true" className="mx-1 my-1.5 w-px flex-none bg-line-strong" />}
-      {issues.map((i) => (
-        <Tab key={i.id} id={i.id} on={tab === i.id} onTab={onTab} isNew={i.kind === "line" && i.isNew}
-          icon={i.kind === "line" ? <span className={i.row.group === "waiting" ? "text-waiting" : "text-dispute"}><StatusGlyph group={i.row.group} /></span>
-            : i.kind === "question" ? <span className="text-waiting"><StatusGlyph group="waiting" /></span>
-            : <DraftIcon />}
-          amount={<span className={cx("font-semibold", i.kind === "question" || (i.kind === "line" && i.row.group === "waiting") ? "text-waiting" : "text-dispute")}>{i.amount}</span>}>
-          {answerer && i.title === "Your answer" ? `${answerer}'s answer` : i.title}
-        </Tab>
-      ))}
+      {issues.length > 0 && <span aria-hidden="true" className="mx-2 my-1.5 w-px flex-none bg-line-strong" />}
+      <div ref={ref} data-testid="issue-tabs" style={fade(ends)}
+        className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
+        {issues.map((i) => (
+          <Tab key={i.id} id={i.id} on={tab === i.id} onTab={onTab} isNew={i.kind === "line" && i.isNew}
+            icon={i.kind === "line" ? <span className={i.row.group === "waiting" ? "text-waiting" : "text-dispute"}><StatusGlyph group={i.row.group} /></span>
+              : i.kind === "question" ? <span className="text-waiting"><StatusGlyph group="waiting" /></span>
+              : <DraftIcon />}
+            amount={<span className={cx("font-semibold", i.kind === "question" || (i.kind === "line" && i.row.group === "waiting") ? "text-waiting" : "text-dispute")}>{i.amount}</span>}>
+            {answerer && i.title === "Your answer" ? `${answerer}'s answer` : i.title}
+          </Tab>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -64,7 +94,7 @@ function Tab({ id, on, onTab, icon, amount, isNew, children }: TabProps) {
   return (
     <button type="button" role="tab" aria-selected={on} onClick={() => onTab(id)} id={`tab-${id}`}
       ref={(el) => { if (on) el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); }}
-      className={cx("flex h-8 max-w-[260px] flex-none items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium",
+      className={cx("flex h-8 max-w-[300px] flex-none items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium",
         on ? "border border-line bg-surface text-ink shadow-card" : "border border-transparent text-ink-2 hover:bg-surface/60 hover:text-ink")}>
       <span className={cx("flex-none", !on && "opacity-80")}>{icon}</span>
       <span className="truncate">{children}</span>

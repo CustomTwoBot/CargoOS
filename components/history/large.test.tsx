@@ -17,7 +17,7 @@ describe("HistoryView on Scenario A", () => {
 
   it("separates the checks with a thin divider, newest first, and has no search box", () => {
     render(<HistoryView x={scenarioAHistory()} />);
-    expect(dividers()).toEqual(["Since the last check", "Rechecked at 2:05 PM after your answerrevision 2", "Checked at 1:50 PMrevision 1"]);
+    expect(dividers()).toEqual(["Since the last check", "Rechecked at 2:05 PM after your answer", "Checked at 1:50 PM"]);
     const groups = screen.getAllByRole("rowgroup");
     expect(within(groups[1]).getAllByTestId("history-entry").map(codeOf)).toEqual(["recomputed", "reply_received", "question_asked"]);
     expect(rows()).toHaveLength(15);
@@ -46,10 +46,10 @@ describe("HistoryView on a large case", () => {
     render(<HistoryView x={big} />);
     expect(dividers()).toEqual([
       "Since the last check",
-      "Rechecked at 2:31 PM after your answer about line 15revision 4",
-      "Rechecked at 2:14 PM after your answer about lines 11 and 15revision 3",
-      "Rechecked at 2:05 PM after your answer about lines 12 and 14revision 2",
-      "Checked at 1:52 PMrevision 1",
+      "Rechecked at 2:31 PM after your answer about line 15",
+      "Rechecked at 2:14 PM after your answer about lines 11 and 15",
+      "Rechecked at 2:05 PM after your answer about lines 12 and 14",
+      "Checked at 1:52 PM",
     ]);
     expect(rows()).toHaveLength(total);
     expect(codeOf(rows()[0])).toBe("doc_added");
