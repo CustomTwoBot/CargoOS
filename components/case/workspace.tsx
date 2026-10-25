@@ -9,6 +9,8 @@ import { personById } from "@/lib/people";
 import { CaseCanvas } from "@/components/canvas/case-canvas";
 import type { InboxCase } from "@/components/inboxes/items";
 import { caseHeading, caseSubline, pendingFor } from "@/components/shell/case-status";
+import { isUploaderOnly } from "@/components/shell/person";
+import { ToastRegion } from "@/components/states/shared";
 import { CaseThread } from "@/components/thread/case-thread";
 import { CaseMenu } from "./case-menu";
 import type { CaseActions, CaseLocal } from "./case-store";
@@ -33,7 +35,9 @@ export type WorkspaceProps = {
   now: Date | null; inbox: InboxCase;
   /** Focus to open with (a line, a document); the invoice when left out. */
   focus?: Focus;
-  /** The toasts, placed over the canvas. */
+  /** Puts every case back to before the answers (Reset demo); this case only when left out. */
+  onResetAll?: () => void;
+  /** The toasts; the workspace places them where they cover neither the thread's dock nor its header. */
   toasts?: ReactNode;
 };
 
@@ -41,16 +45,20 @@ type Pane = "invoice" | "thread";
 
 const TRUST = "Synthetic data. Nothing is sent or paid automatically.";
 
-export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, now, inbox, focus: initial, toasts }: WorkspaceProps) {
+export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, now, inbox, focus: initial, onResetAll, toasts }: WorkspaceProps) {
   const person: Person = roles ? { ...viewer, roles: [...roles] } : viewer;
   const waiting = pendingFor(x, person);
   const [focus, setFocus] = useState<Focus>(initial ?? INVOICE);
-  const [pane, setPane] = useState<Pane>(waiting > 0 ? "thread" : "invoice");
+  // Below 1024 the pane follows what waits on this person (the case may load after the first render)
+  // until they pick one.
+  const [picked, setPane] = useState<Pane>();
+  const pane: Pane = picked ?? (waiting > 0 ? "thread" : "invoice");
   const ctx: CaseContext = { demo, x, local, actions, viewer: person, now, forwarder: inbox.forwarder };
   // A link in the thread shows its line or document on the canvas; below 1024 that means switching to it.
   const focusFromThread = (f: Focus) => { setFocus(f); setPane("invoice"); };
   // Resetting or jumping the replay changes what exists (a message, a line's state): start again on the invoice.
   const go = (stage: string) => { setFocus(INVOICE); actions.reset(stage); };
+  const resetAll = () => { setFocus(INVOICE); if (onResetAll) onResetAll(); else actions.reset(demo.start); };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-surface">
@@ -63,7 +71,7 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
           <span title={demo.live ? "Live: read from the backend." : "Replay of a recorded run. Nothing here reaches the backend or Claude."}
             className="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">{demo.live ? "Live" : "Replay"}</span>
           <CaseMenu x={x} onAddEvidence={canAct(person.roles, "addEvidence") ? actions.addEvidence : undefined}
-            onReset={() => go(demo.start)} />
+            onReset={resetAll} />
         </div>
       </header>
 
@@ -79,19 +87,17 @@ export function CaseWorkspace({ demo, x, local, actions, viewer = SAM, roles, no
       <div className="relative flex min-h-0 flex-1">
         <div className={cx("relative flex min-w-0 flex-1", pane === "thread" && "max-lg:hidden")}>
           <CaseCanvas {...ctx} focus={focus} onFocus={setFocus} />
-          <DemoControls demo={demo} stage={local.stage} onGo={go} />
+          <DemoControls demo={demo} stage={local.stage} onGo={go} onReset={resetAll} stages={!demo.live && !isUploaderOnly(person)} />
         </div>
         <div className={cx("flex min-h-0 w-[420px] flex-none max-xl:w-[360px] max-lg:w-full", pane === "invoice" && "max-lg:hidden")}>
           <CaseThread {...ctx} onFocus={focusFromThread} />
         </div>
-        {toasts}
+        <ToastRegion className={cx("absolute bottom-14 right-[436px] max-xl:right-[376px] max-lg:right-4",
+          pane === "thread" && "max-lg:bottom-auto max-lg:top-[92px]")}>{toasts}</ToastRegion>
       </div>
     </div>
   );
 }
-
-/** Where the case's toasts go: over the canvas, right of centre, above the demo bar; at the top below 1024. */
-export const CASE_TOASTS = "absolute bottom-14 right-[436px] max-xl:right-[376px] max-lg:inset-x-4 max-lg:bottom-auto max-lg:top-3";
 
 const PaneButton = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) => (
   <button type="button" aria-pressed={on} onClick={onClick}
@@ -100,8 +106,13 @@ const PaneButton = ({ on, onClick, children }: { on: boolean; onClick: () => voi
   </button>
 );
 
-/** Presenter controls for the replay (SPEC W3 step 1), centred over the canvas. Not part of the product UI. */
-function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; onGo: (s: string) => void }) {
+/**
+ * Presenter controls for the replay (SPEC W3 step 1), centred over the canvas. Not part of the product
+ * UI. Reset demo puts every case back; the live case and an uploader get only that.
+ */
+function DemoControls({ demo, stage, onGo, onReset, stages }: {
+  demo: DemoCase; stage: string; onGo: (s: string) => void; onReset: () => void; stages: boolean;
+}) {
   const seg = (s: string, label: string) => (
     <button type="button" aria-pressed={stage === s} onClick={() => onGo(s)}
       className={cx("rounded-[6px] px-2 py-0.5", stage === s ? "bg-line-strong text-ink" : "text-ink-3")}>{label}</button>
@@ -110,8 +121,8 @@ function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; on
     <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
-      {!demo.live && <>{seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}</>}
-      <button type="button" onClick={() => onGo(demo.start)} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
+      {stages && <>{seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}</>}
+      <button type="button" onClick={onReset} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
     </div>
   );
 }

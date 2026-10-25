@@ -1,5 +1,5 @@
 // Pieces of the New case flow: buttons, a document row, drop handling, the phone card, recorded cases.
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   AGREEMENT_TYPES, NEW_CASE_COPY, TYPE_LABEL, describeDoc, docMeta, keepsFile,
   type AgreementType, type NewCaseDocType, type PendingDoc, type RecordedExample,
@@ -79,22 +79,22 @@ export function DropArea({ label, as, onDocs, className, children }: {
   );
 }
 
+/** This site's host ("cargoos.app"), read on the client; empty while prerendering. */
+const useHost = () => useSyncExternalStore(() => () => {}, () => window.location.host, () => "");
+
 /**
- * The phone uploader's address. A real QR code needs a library (Pranav's OK), so for now a plain box
- * stands where it will go, with the address under it.
+ * The phone uploader's address, written out to type on the phone. A drawn QR code needs a library
+ * (Pranav's OK) or an encoder; until then the full address stands on its own, never a bare route.
  */
 export function PhoneCard({ url }: { url: string }) {
+  const host = useHost();
   return (
     <section aria-label={NEW_CASE_COPY.phone} className="rounded-xl border border-line bg-surface px-4 py-3.5 shadow-card">
       <h2 className="text-body font-semibold text-ink">{NEW_CASE_COPY.phone}</h2>
       <p className="mt-0.5 text-meta text-ink-3">{NEW_CASE_COPY.phoneBody}</p>
-      <div className="mt-3 flex items-center gap-3">
-        <div role="img" aria-label={`${NEW_CASE_COPY.qr} for ${url}`}
-          className="grid size-[104px] flex-none place-items-center rounded-lg border border-line-strong bg-sunken text-meta text-ink-3">
-          {NEW_CASE_COPY.qr}
-        </div>
-        <p className="min-w-0 break-all text-meta font-medium text-ink-2">{url}</p>
-      </div>
+      <p aria-label="Address for your phone" className="mt-3 break-all rounded-lg border border-line bg-sunken px-3 py-2 text-[14px] font-semibold text-ink">
+        {host ? `${host}${url}` : "…"}
+      </p>
     </section>
   );
 }

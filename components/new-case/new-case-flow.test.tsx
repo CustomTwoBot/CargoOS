@@ -44,7 +44,8 @@ describe("New case, like a new chat (§0.4 п.6)", () => {
   it("drops on the canvas, CargoOS says what it will do, and the recorded cases are there to load", () => {
     mount();
     expect(screen.getByRole("heading", { name: "New case", level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Drop the invoice and everything that was agreed — quotes, emails, chats" })).toBeInTheDocument();
+    // A no-break space keeps the dash with "agreed" when the heading wraps.
+    expect(screen.getByRole("heading", { name: "Drop the invoice and everything that was agreed\u00a0— quotes, emails, chats" })).toBeInTheDocument();
     expect(thread()).toHaveTextContent("I'll read each one and check every charge against them. Nothing is sent or paid.");
     const examples = screen.getByRole("region", { name: "Recorded cases" });
     expect(within(examples).getAllByRole("button", { name: "Load example" })).toHaveLength(2);
@@ -78,9 +79,9 @@ describe("New case, like a new chat (§0.4 п.6)", () => {
     expect(rows[1]).toHaveTextContent("WhatsApp chat");
   });
 
-  it("shows the phone uploader's address where the QR code goes, when there is one", () => {
+  it("writes out the phone uploader's full address, never a bare route", () => {
     mount({ uploadUrl: "/upload/new" });
-    expect(screen.getByRole("img", { name: "QR code for /upload/new" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Address for your phone")).toHaveTextContent(`${window.location.host}/upload/new`);
   });
 });
 
@@ -209,7 +210,7 @@ describe("Empty case in live mode", () => {
     render(<EmptyCaseUpload onAdd={onAdd} uploadUrl="/upload/case_A" counts={{ quote: 1 }} onLoadScenarioA={onLoadScenarioA} />);
     expect(screen.getByRole("heading", { name: "No invoice in this case yet." })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Quote" })).toHaveTextContent("Added 1");
-    expect(screen.getByRole("img", { name: "QR code for /upload/case_A" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Address for your phone")).toHaveTextContent(`${window.location.host}/upload/case_A`);
     const pdf = new File(["%PDF"], "invoice-PCL-INV-1012.pdf", { type: "application/pdf" });
     await choose("Invoice files", [pdf]);
     expect(onAdd).toHaveBeenCalledWith([{ type: "freight_invoice", title: "Invoice PCL-INV-1012", text: "", file: pdf }]);

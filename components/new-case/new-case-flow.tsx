@@ -138,7 +138,7 @@ export function NewCaseFlow({ onLoadExample, onCreate, onRead, examples = RECORD
                     over ? "border-ink bg-surface" : "border-line-strong bg-surface")}>
                   {(pick) => (
                     <div className="mx-auto max-w-[460px]">
-                      <h2 className="text-[19px] font-[650] leading-[26px] tracking-[-0.01em] text-ink">{T.dropTitle}</h2>
+                      <h2 className="text-balance text-[19px] font-[650] leading-[26px] tracking-[-0.01em] text-ink">{T.dropTitle}</h2>
                       <p className="mt-1.5 text-[13.5px] text-ink-2">{T.dropBody}</p>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                         <Secondary onClick={pick}>{T.chooseFiles}</Secondary>
@@ -204,10 +204,13 @@ export function NewCaseFlow({ onLoadExample, onCreate, onRead, examples = RECORD
         </section>
 
         <aside aria-label="CargoOS" className="flex min-h-0 w-[420px] flex-none flex-col border-l border-line bg-surface max-xl:w-[360px] max-lg:w-full max-lg:border-l-0 max-lg:border-t">
-          <div className="border-b border-line px-[18px] pb-3 pt-3.5">
-            <p className="text-[14.5px] font-[650]">CargoOS</p>
-            <p className="text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
-          </div>
+          {/* Same header as the case's thread (components/thread/case-thread.tsx). */}
+          <header className="flex-none border-b border-line px-[18px] pb-3 pt-3.5">
+            <p className="flex items-center gap-2 text-[14.5px] font-[650]">
+              <span aria-hidden="true" className="size-[18px] rounded-[5px] bg-ink" />CargoOS
+            </p>
+            <p className="mt-0.5 text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
+          </header>
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-[18px] py-4 text-body">
             <p className="leading-[21px] text-ink">{T.intro}</p>
             {playing ? (

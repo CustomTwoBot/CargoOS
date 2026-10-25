@@ -22,7 +22,7 @@ import { useCaseStore } from "./case-store";
 import type { DemoCase } from "./demo-case";
 import { SCENARIO_A } from "./fixture";
 import { Sidebar, type View } from "./sidebar";
-import { CASE_TOASTS, CaseWorkspace } from "./workspace";
+import { CaseWorkspace } from "./workspace";
 
 type ToastItem = { id: number; text: string; undo?: () => void };
 
@@ -106,7 +106,7 @@ export function CaseScreen({ cases: recorded = DEMO_CASES, roles, live }: Props)
           <CaseWorkspace key={`${demo.id}-${opened}`} demo={demo} x={store.inputs[demo.id]} local={store.state[demo.id]}
             actions={actions(demo.id)} viewer={viewer} now={clock}
             inbox={{ demo, x: store.inputs[demo.id], forwarder: FORWARDER[demo.id] }}
-            toasts={<ToastRegion className={CASE_TOASTS}>{toastList}</ToastRegion>} />
+            onResetAll={resetAll} toasts={toastList} />
         )}
         {!demo && <ToastRegion>{toastList}</ToastRegion>}
       </AppShell>
