@@ -10,6 +10,7 @@
 
 import type * as ai from "../ai.js";
 import type * as cases from "../cases.js";
+import type * as demoCases from "../demoCases.js";
 import type * as drafts from "../drafts.js";
 import type * as files from "../files.js";
 import type * as learnedRules from "../learnedRules.js";
@@ -26,6 +27,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   cases: typeof cases;
+  demoCases: typeof demoCases;
   drafts: typeof drafts;
   files: typeof files;
   learnedRules: typeof learnedRules;

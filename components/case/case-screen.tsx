@@ -27,7 +27,7 @@ import { CasesList, type CaseSummary } from "./cases-list";
 import type { DemoCase } from "./demo-case";
 import { SCENARIO_A } from "./fixture";
 import { issuesOf, openQuestions } from "./issues";
-import { useLiveCase, type LiveCase } from "./live-store";
+import { useLiveCase, useOtherLiveCases, type LiveCase } from "./live-store";
 import { Sidebar, type Place, type View } from "./sidebar";
 import { CaseWorkspace } from "./workspace";
 import { latestDraft, totalsOf, type CaseInput } from "./view-model";
@@ -75,18 +75,21 @@ export function CaseScreen(props: Props) {
   const toasts = useToasts();
   const hasConvex = useHasConvex();
   const replayOnly = useReplayParam();
-  const screen = (live?: LiveCase) => <Screen {...props} person={person} toasts={toasts} live={live} />;
+  const screen = (live?: LiveCase, more: LiveCase[] = []) => <Screen {...props} person={person} toasts={toasts} live={live} more={more} />;
   return hasConvex && !replayOnly ? <LiveSource person={person} toast={toasts.toast} render={screen} /> : screen();
 }
 
 /** Only rendered under a Convex provider: convex/react's hooks throw outside one. */
-function LiveSource({ person, toast, render }: { person: Person; toast: Toast; render: (live?: LiveCase) => ReactNode }) {
-  return render(useLiveCase(person, toast));
+function LiveSource({ person, toast, render }: { person: Person; toast: Toast; render: (live?: LiveCase, more?: LiveCase[]) => ReactNode }) {
+  const live = useLiveCase(person, toast);
+  const more = useOtherLiveCases(person, toast);
+  return render(live, more);
 }
 
-type ScreenProps = Props & { person: Person; toasts: Toasts; live?: LiveCase };
+/** `live` takes Scenario A's slot; `more` are the backend's other cases, listed after the recorded ones. */
+type ScreenProps = Props & { person: Person; toasts: Toasts; live?: LiveCase; more?: LiveCase[] };
 
-function Screen({ cases: given = DEMO_CASES, roles: rolesOverride, person, toasts: { items: toasts, setItems: setToasts, toast }, live }: ScreenProps) {
+function Screen({ cases: given = DEMO_CASES, roles: rolesOverride, person, toasts: { items: toasts, setItems: setToasts, toast }, live, more = [] }: ScreenProps) {
   const uploader = isUploaderOnly(person);
   const [activeId, setActiveId] = useState(given[0]?.id ?? "");
   const [chosen, setView] = useState<View>(given.length ? "case" : "cases");
@@ -97,10 +100,12 @@ function Screen({ cases: given = DEMO_CASES, roles: rolesOverride, person, toast
   const isLive = !!live;
   const replayCases = useMemo(() => (isLive ? given.filter((c) => c.id !== LIVE_SLOT) : given), [given, isLive]);
   const store = useCaseStore(replayCases, toast, person);
-  const cases = live ? given.map((c) => (c.id === LIVE_SLOT ? live.demo : c)) : given;
-  const inputs: Record<string, CaseInput> = live ? { ...store.inputs, [live.demo.id]: live.x } : store.inputs;
-  const localOf = (id: string) => (live && id === live.demo.id ? live.local : store.state[id]);
-  const actions = (id: string) => (live && id === live.demo.id ? live.actions : store.actionsFor(cases.find((c) => c.id === id)!));
+  const lives = [...(live ? [live] : []), ...more];
+  const liveOf = (id: string) => lives.find((l) => l.demo.id === id);
+  const cases = [...(live ? given.map((c) => (c.id === LIVE_SLOT ? live.demo : c)) : given), ...more.map((l) => l.demo)];
+  const inputs: Record<string, CaseInput> = { ...store.inputs, ...Object.fromEntries(lives.map((l) => [l.demo.id, l.x])) };
+  const localOf = (id: string) => liveOf(id)?.local ?? store.state[id];
+  const actions = (id: string) => liveOf(id)?.actions ?? store.actionsFor(cases.find((c) => c.id === id)!);
   const forwarderOf = (id: string) => FORWARDER[id] ?? inputs[id]?.case.forwarder;
 
   // An uploader has no inboxes and works on a case's documents (docs/design.md §0.3).

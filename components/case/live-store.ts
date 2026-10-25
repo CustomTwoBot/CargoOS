@@ -2,7 +2,7 @@
 // actions as mutations, each acted on as the device's person. The backend holds the real state, so the
 // CaseLocal is empty; only the wait after a reply or a pasted document (shown as the usual "rechecking") and the
 // owner's edits to the seller message are kept here.
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQueries, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { useState } from "react";
@@ -64,28 +64,37 @@ type Message = { subject: string; body: string };
 
 export type LiveCase = { demo: DemoCase; x: CaseInput; local: CaseLocal; actions: CaseActions };
 
-/** The live Scenario A case, or undefined while loading and when the backend has none. */
-export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined {
-  const caseId = useQuery(api.cases.getDemoCase);
-  const view = useQuery(api.cases.getCaseView, caseId ? { caseId } : "skip");
-  const submitReply = useMutation(api.ai.submitReply);
-  const confirmFinding = useMutation(api.pipeline.confirmFinding);
-  const dismissFinding = useMutation(api.pipeline.dismissFinding);
-  const requestApproval = useMutation(api.drafts.requestApproval);
-  const approveDraft = useMutation(api.drafts.approveDraft);
-  const rejectDraft = useMutation(api.drafts.rejectDraft);
-  const editCharge = useMutation(api.pipeline.editCharge);
-  const addPastedText = useMutation(api.uploads.addPastedText);
-  const resetLiveDemo = useMutation(api.seed.resetLiveDemo);
-  const [waiting, setWaiting] = useState<Waiting>();
-  // No backend stores the owner's edited wording yet, so the edits stay on this screen until a reset.
-  const [messages, setMessages] = useState<Record<string, Message>>({});
-  if (!caseId || !view) return undefined;
+/** The mutations a live case's actions call; one set serves every live case on the screen. */
+function useLiveMutations() {
+  return {
+    submitReply: useMutation(api.ai.submitReply),
+    confirmFinding: useMutation(api.pipeline.confirmFinding),
+    dismissFinding: useMutation(api.pipeline.dismissFinding),
+    requestApproval: useMutation(api.drafts.requestApproval),
+    approveDraft: useMutation(api.drafts.approveDraft),
+    rejectDraft: useMutation(api.drafts.rejectDraft),
+    editCharge: useMutation(api.pipeline.editCharge),
+    addPastedText: useMutation(api.uploads.addPastedText),
+    resetLiveDemo: useMutation(api.seed.resetLiveDemo),
+  };
+}
+type Mutations = ReturnType<typeof useLiveMutations>;
 
+/** What a live case keeps on this screen: the wait after a reply or a paste, and the owner's edited wording. */
+type ScreenState = {
+  waiting: Waiting | undefined; setWaiting: (w: Waiting | undefined) => void;
+  messages: Record<string, Message>; setMessages: (f: (m: Record<string, Message>) => Record<string, Message>) => void;
+};
+
+/**
+ * One live case from its view: the CaseInput with this screen's edited wording, and its actions as mutations.
+ * `resettable` is the Scenario A case, whose reset is resetLiveDemo; the other seeded cases have no reset.
+ */
+function liveCaseOf(view: CaseView, person: Person, toast: Toast, m: Mutations, s: ScreenState, resettable: boolean): LiveCase {
   const base = caseInputOf(view);
   const x: CaseInput = {
     ...base,
-    drafts: base.drafts.map((d) => (messages[d._id] ? { ...d, subject: messages[d._id].subject, editedBody: messages[d._id].body } : d)),
+    drafts: base.drafts.map((d) => (s.messages[d._id] ? { ...d, subject: s.messages[d._id].subject, editedBody: s.messages[d._id].body } : d)),
   };
   const id = view.case._id, personId = person.id;
 
@@ -109,50 +118,83 @@ export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined 
 
   const actions: CaseActions = {
     reset: () => {
-      setWaiting(undefined);
-      setMessages({});
-      run(() => resetLiveDemo({ personId }));
+      s.setWaiting(undefined);
+      s.setMessages(() => ({}));
+      if (resettable) run(() => m.resetLiveDemo({ personId }));
     },
 
     reply: (questionId, text) => {
-      setWaiting({ kind: "revision", from: x.case.revision, failures: failures(x) });
-      run(() => submitReply({ role: "ops_lead", personId, questionId: questionId as Id<"questions">, text }), undefined, () => setWaiting(undefined));
+      s.setWaiting({ kind: "revision", from: x.case.revision, failures: failures(x) });
+      run(() => m.submitReply({ role: "ops_lead", personId, questionId: questionId as Id<"questions">, text }), undefined, () => s.setWaiting(undefined));
     },
 
     verdict: (key, v) => {
       const args = { role: "clerk" as const, personId, caseId: id, key };
-      run(() => (v === "confirmed" ? confirmFinding(args) : dismissFinding(args)),
+      run(() => (v === "confirmed" ? m.confirmFinding(args) : m.dismissFinding(args)),
         () => toast(v === "confirmed" ? "Kept in dispute. Saved to case history." : "Marked as not an issue. Saved to case history."));
     },
 
     // The draft arrives through getCaseView; the owner decides it (CLAUDE.md rule 8).
     draftDispute: () => {
-      run(() => requestApproval({ caseId: id, personId }), () => toast(`Approval requested from ${firstName(OWNER)}. Nothing was sent.`));
+      run(() => m.requestApproval({ caseId: id, personId }), () => toast(`Approval requested from ${firstName(OWNER)}. Nothing was sent.`));
       return undefined;
     },
 
-    accept: (draftId) => run(() => approveDraft({ draftId: draftId as Id<"drafts">, personId }), decided("Accepted. Nothing was sent.")),
+    accept: (draftId) => run(() => m.approveDraft({ draftId: draftId as Id<"drafts">, personId }), decided("Accepted. Nothing was sent.")),
 
     reject: (draftId, reason) =>
-      run(() => rejectDraft({ draftId: draftId as Id<"drafts">, personId, reason }), decided("Rejected. Nothing went to the seller.")),
+      run(() => m.rejectDraft({ draftId: draftId as Id<"drafts">, personId, reason }), decided("Rejected. Nothing went to the seller.")),
 
-    editMessage: (draftId, text) => setMessages((m) => ({ ...m, [draftId]: text })),
+    editMessage: (draftId, text) => s.setMessages((all) => ({ ...all, [draftId]: text })),
 
     addEvidence: (e) => {
       const before = failures(x);
-      run(() => addPastedText({ caseId: id, personId, text: e.text, docType: e.type, title: `${KIND_TITLE[e.type]} you added` }),
-        (docId) => setWaiting({ kind: "document", docId, failures: before }));
+      run(() => m.addPastedText({ caseId: id, personId, text: e.text, docType: e.type, title: `${KIND_TITLE[e.type]} you added` }),
+        (docId) => s.setWaiting({ kind: "document", docId, failures: before }));
       return { kind: "live" };
     },
 
     saveLine: (key, change) => {
       const chargeId = (x.findings.find((f) => f.key === key)?.chargeId ?? key) as Id<"charges">;
-      run(() => editCharge({ role: "clerk", personId, caseId: id, chargeId, amountCents: change.amountCents, description: change.description }));
+      run(() => m.editCharge({ role: "clerk", personId, caseId: id, chargeId, amountCents: change.amountCents, description: change.description }));
     },
   };
 
   const local: CaseLocal = {
-    stage: "live", replaying: !!waiting && stillWaiting(x, waiting), verdicts: {}, drafts: [], added: [], edits: {}, log: [],
+    stage: "live", replaying: !!s.waiting && stillWaiting(x, s.waiting), verdicts: {}, drafts: [], added: [], edits: {}, log: [],
   };
   return { demo: liveDemoCase(x), x, local, actions };
+}
+
+/** The live Scenario A case, or undefined while loading and when the backend has none. */
+export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined {
+  const caseId = useQuery(api.cases.getDemoCase);
+  const view = useQuery(api.cases.getCaseView, caseId ? { caseId } : "skip");
+  const m = useLiveMutations();
+  const [waiting, setWaiting] = useState<Waiting>();
+  // No backend stores the owner's edited wording yet, so the edits stay on this screen until a reset.
+  const [messages, setMessages] = useState<Record<string, Message>>({});
+  if (!caseId || !view) return undefined;
+  return liveCaseOf(view, person, toast, m, { waiting, setWaiting, messages, setMessages }, true);
+}
+
+/**
+ * Every other case in the backend (the seeded design cases, cases made by uploads), in the order
+ * listCaseIds gives, each with its own actions. Empty while loading or when there are none.
+ */
+export function useOtherLiveCases(person: Person, toast: Toast): LiveCase[] {
+  const demoId = useQuery(api.cases.getDemoCase);
+  const ids = useQuery(api.demoCases.listCaseIds);
+  const others = (ids ?? []).filter((id) => id !== demoId);
+  const views = useQueries(Object.fromEntries(others.map((id) => [id, { query: api.cases.getCaseView, args: { caseId: id } }])));
+  const m = useLiveMutations();
+  const [waiting, setWaiting] = useState<Record<string, Waiting | undefined>>({});
+  const [messages, setMessages] = useState<Record<string, Message>>({});
+  return others.flatMap((id) => {
+    const view = views[id] as CaseView | null | undefined | Error;
+    if (!view || view instanceof Error) return [];
+    return [liveCaseOf(view, person, toast, m, {
+      waiting: waiting[id], setWaiting: (w) => setWaiting((all) => ({ ...all, [id]: w })), messages, setMessages,
+    }, false)];
+  });
 }
