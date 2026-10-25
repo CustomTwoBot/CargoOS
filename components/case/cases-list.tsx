@@ -4,7 +4,9 @@ import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
 import { money } from "./format";
 
-export type CaseSummary = { atStakeCents: number; billedCents: number; pill: string; openQuestions: number; toDecide: number };
+export type CaseSummary = {
+  atStakeCents: number; billedCents: number; pill: string; openQuestions: number; toDecide: number; documents: number; events: number;
+};
 
 type Props = { cases: DemoCase[]; summaries: Record<string, CaseSummary>; onOpen: (id: string) => void };
 

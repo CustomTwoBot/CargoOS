@@ -15,7 +15,9 @@ import type { LineChange } from "@/components/inputs/line-edit";
 import { TOASTS } from "@/components/states/copy";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
-import { CaseHeader, DraftButton, Rail, type View } from "./chrome";
+import { CaseHeader, DraftButton } from "./chrome";
+import { CaseTabs } from "./case-tabs";
+import { Sidebar, type View } from "./sidebar";
 import { CasesList, type CaseSummary } from "./cases-list";
 import { cx } from "./cx";
 import type { DemoCase } from "./demo-case";
@@ -50,8 +52,10 @@ export function CaseScreen({ cases = [SCENARIO_A], roles = ALL_ROLES }: Props) {
   return (
     <Tooltip.Provider delay={150}>
       <div className="flex h-dvh min-w-[1280px] overflow-hidden bg-bg text-ink">
-        <Rail view={view} onView={setView} multiCase={cases.length > 1}
-          openQuestion={!!active?.openQuestions}
+        <Sidebar view={view} onView={setView} activeId={activeId}
+          cases={cases.map((c) => ({ id: c.id, title: c.title, atStakeCents: summaries[c.id]?.atStakeCents ?? 0, openQuestions: summaries[c.id]?.openQuestions ?? 0 }))}
+          onOpenCase={(id) => { setActiveId(id); setView("case"); }}
+          counts={{ questions: active?.openQuestions ?? 0, documents: active?.documents ?? 0, events: active?.events ?? 0 }}
           onQuestion={() => { setView("case"); setQuestionNudge((n) => n + 1); }} />
         <main className="flex min-w-0 flex-1 flex-col">
           {view === "cases" && (
@@ -70,7 +74,7 @@ export function CaseScreen({ cases = [SCENARIO_A], roles = ALL_ROLES }: Props) {
 }
 
 const sameSummary = (a: CaseSummary | undefined, b: CaseSummary) =>
-  !!a && a.atStakeCents === b.atStakeCents && a.pill === b.pill && a.openQuestions === b.openQuestions && a.toDecide === b.toDecide;
+  !!a && (Object.keys(b) as (keyof CaseSummary)[]).every((k) => a[k] === b[k]);
 
 type WorkspaceProps = {
   demo: DemoCase; roles: readonly Role[]; hidden: boolean; view: Exclude<View, "cases">;
@@ -120,7 +124,8 @@ function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: 
   const toDecide = issues.filter((i) => i.kind !== "dispute").length;
 
   useEffect(() => {
-    onSummary({ atStakeCents: totals.atStakeCents, billedCents: totals.billedCents, pill: pill.label, openQuestions: questions.length, toDecide });
+    onSummary({ atStakeCents: totals.atStakeCents, billedCents: totals.billedCents, pill: pill.label, openQuestions: questions.length, toDecide,
+      documents: x.documents.length, events: x.events.length });
   });
 
   // The rail's Questions button opens the first open question (state adjusted during render).
@@ -219,15 +224,7 @@ function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: 
           <div className="px-6">
             <AtStakeCard totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
           </div>
-          <nav role="tablist" aria-label="Case tabs" className="mx-6 mt-2 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:thin]">
-            <TabButton id="overview" tab={tab} onTab={setTab}>Overview</TabButton>
-            {issues.map((i) => (
-              <TabButton key={i.id} id={i.id} tab={tab} onTab={setTab} isNew={i.kind === "line" && i.isNew}>
-                <span className="max-w-[200px] truncate">{i.title}</span>
-                <span className={cx("ml-1.5 font-semibold", i.kind === "question" ? "text-waiting" : "text-dispute")}>{i.amount}</span>
-              </TabButton>
-            ))}
-          </nav>
+          <div className="mx-6 mt-2.5"><CaseTabs issues={issues} tab={tab} onTab={setTab} /></div>
           <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-3">
             {!current ? (
               <>
@@ -272,18 +269,6 @@ function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: 
   );
 }
 
-function TabButton({ id, tab, onTab, isNew, children }: { id: string; tab: string; onTab: (id: string) => void; isNew?: boolean; children: React.ReactNode }) {
-  const on = tab === id;
-  return (
-    <button type="button" role="tab" aria-selected={on} onClick={() => onTab(id)}
-      className={cx("relative -mb-px flex flex-none items-center whitespace-nowrap border-b-2 px-3 pb-2 pt-1.5 text-[13.5px] font-medium",
-        on ? "border-primary text-ink" : "border-transparent text-ink-3 hover:text-ink")}>
-      {children}
-      {isNew && <b aria-label="New" className="ml-1.5 size-1.5 rounded-full bg-dispute" />}
-    </button>
-  );
-}
-
 /** Presenter controls for the replay (SPEC W3 step 1). Not part of the product UI. */
 function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; onGo: (s: string) => void }) {
   const seg = (s: string, label: string) => (
@@ -291,7 +276,7 @@ function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; on
       className={cx("rounded-[6px] px-2 py-0.5", stage === s ? "bg-line-strong text-ink" : "text-ink-3")}>{label}</button>
   );
   return (
-    <div className="fixed bottom-3 left-[72px] z-40 flex items-center gap-1 rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
+    <div className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
       {seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}

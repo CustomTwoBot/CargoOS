@@ -51,7 +51,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     act(() => { vi.advanceTimersByTime(2600); });
     expect(atStake()).toBe("$700");
     expect(screen.getByText("Your answer changed 2 charges")).toBeInTheDocument();
-    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400"]);
+    expect(tabNames()).toEqual(["Overview", "Ocean freight 40HC Ningbo-Long Beach+$300", "Rush handling+$400New"]);
   });
 
   it("one operator drafts and approves; nothing is sent", () => {
@@ -68,10 +68,10 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     render(<CaseScreen />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.click(screen.getByRole("button", { name: /^History/ }));
     expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
     expect(screen.getAllByText("draft_created").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Documents" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Documents/ }));
     expect(within(screen.getByRole("list", { name: "Documents" })).getByText("Invoice PCL-INV-1012")).toBeInTheDocument();
   });
 
@@ -83,5 +83,23 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     expect(screen.queryByRole("button", { name: "Not an issue" })).not.toBeInTheDocument();
     fireEvent.click(tab(/Your answer/));
     expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
+  });
+});
+
+describe("sidebar", () => {
+  afterEach(cleanup);
+
+  it("names the case with what is at stake and collapses to the icon rail", () => {
+    localStorage.removeItem("cargoos.sidebar");
+    render(<CaseScreen />);
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    expect(within(nav).getAllByText("Bayline 40HC Ningbo-LB").length).toBeGreaterThan(0);
+    expect(within(nav).getByText("$300")).toBeInTheDocument();
+    expect(within(nav).getByText("1 waiting on you")).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "Collapse sidebar" }));
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    expect(localStorage.getItem("cargoos.sidebar")).toBe("collapsed");
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
   });
 });

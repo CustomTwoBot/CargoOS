@@ -50,3 +50,9 @@ export const ChainGlyph = ({ icon }: { icon: "invoice" | "mail" | "chat" | "quot
   if (icon === "check") return <Line size={15}><circle cx="9" cy="9" r="5" /><path d="M13 13l4 4" /></Line>;
   return <Line size={15}><path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2M8 10h4.5M8 13h4.5" /></Line>;
 };
+
+export const CollapseIcon = () => <Line size={16}><rect x="3" y="4" width="14" height="12" rx="2" /><path d="M8 4v12M13.5 8l-2 2 2 2" /></Line>;
+export const ExpandIcon = () => <Line size={16}><rect x="3" y="4" width="14" height="12" rx="2" /><path d="M8 4v12M11.5 8l2 2-2 2" /></Line>;
+export const PlusIcon = () => <Line size={14}><path d="M10 4.5v11M4.5 10h11" /></Line>;
+export const OverviewIcon = () => <Line size={14}><rect x="3.5" y="3.5" width="5.5" height="5.5" rx="1.2" /><rect x="11" y="3.5" width="5.5" height="5.5" rx="1.2" /><rect x="3.5" y="11" width="5.5" height="5.5" rx="1.2" /><rect x="11" y="11" width="5.5" height="5.5" rx="1.2" /></Line>;
+export const DraftIcon = () => <Line size={14}><rect x="2.8" y="4.5" width="14.4" height="11" rx="1.5" /><path d="M3.2 5.5l6.8 5 6.8-5" /></Line>;
