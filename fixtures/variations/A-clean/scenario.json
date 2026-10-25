@@ -1,0 +1,120 @@
+{
+  "scenarioId": "A-clean",
+  "description": "The invoice matches the amended quote exactly: ocean $4,500 plus destination THC, drayage, customs and doc fee at quote rates, with no PSS, congestion or handling lines. The email rate applies (booked Sep 8, by Sep 10) and equals billed, so line 1 is R0. Every other line matches its quote rate (R0). Nothing is waiting, so no question; nothing is at stake, so no draft.",
+  "case": {
+    "title": "Bayline 40HC Ningbo-LB (A-clean)",
+    "shipmentRef": "PCL-INV-1012",
+    "incoterm": "FOB Ningbo",
+    "baseCurrency": "USD"
+  },
+  "documents": [
+    {
+      "id": "doc_quote",
+      "type": "quote",
+      "title": "Quote Q-PCL-0902",
+      "sender": "forwarder",
+      "sentAt": "2026-09-02T10:00:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - QUOTATION Q-PCL-0902\nDate: 2026-09-02   To: Bayline Home Goods   Valid until: 2026-09-30\n1x40HC FOB Ningbo -> Ontario, CA warehouse\nOcean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00\nDestination THC                                    USD   650.00\nCustoms entry                                      USD   125.00\nDrayage Long Beach -> Ontario CA                   USD   850.00\nDocumentation fee                                  USD    75.00\nTOTAL                                              USD 6,500.00\nTerms: PSS/GRI as filed by carrier at time of shipment apply."
+    },
+    {
+      "id": "doc_email",
+      "type": "email",
+      "title": "Email: RE: Q-PCL-0902 revised",
+      "sender": "forwarder",
+      "sentAt": "2026-09-05T14:21:00-07:00",
+      "text": "Subject: RE: Q-PCL-0902 revised\nHi Maya, we can do better on ocean. Ocean freight reduced to $4,500 if booked by Sep 10. Everything else unchanged. - Derek"
+    },
+    {
+      "id": "doc_chat",
+      "type": "chat",
+      "title": "WhatsApp: Derek PCL / Sam Bayline",
+      "sentAt": "2026-09-28T10:30:00-07:00",
+      "text": "9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\n9/8/26, 9:15 AM - Sam Bayline: great thanks\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\n9/28/26, 10:30 AM - Sam Bayline: ok keep me posted"
+    },
+    {
+      "id": "doc_invoice",
+      "type": "freight_invoice",
+      "title": "Invoice PCL-INV-1012",
+      "sender": "forwarder",
+      "sentAt": "2026-10-12T09:00:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - INVOICE PCL-INV-1012   Date: 2026-10-12   Ref: Q-PCL-0902\n1  Ocean freight 40HC Ningbo-Long Beach      4,500.00\n2  Destination THC                             650.00\n3  Drayage Long Beach -> Ontario CA            850.00\n4  Customs entry                               125.00\n5  Documentation fee                            75.00\n   TOTAL DUE USD                             6,200.00"
+    }
+  ],
+  "expected": {
+    "charges": [
+      {
+        "lineNo": 1,
+        "chargeType": "ocean_freight",
+        "amountCents": 450000
+      },
+      {
+        "lineNo": 2,
+        "chargeType": "destination_thc",
+        "amountCents": 65000
+      },
+      {
+        "lineNo": 3,
+        "chargeType": "drayage",
+        "amountCents": 85000
+      },
+      {
+        "lineNo": 4,
+        "chargeType": "customs_entry",
+        "amountCents": 12500
+      },
+      {
+        "lineNo": 5,
+        "chargeType": "doc_fee",
+        "amountCents": 7500
+      }
+    ],
+    "findings": [
+      {
+        "lineNo": 1,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 450000,
+        "expectedCents": 450000
+      },
+      {
+        "lineNo": 2,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 65000,
+        "expectedCents": 65000
+      },
+      {
+        "lineNo": 3,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 85000,
+        "expectedCents": 85000
+      },
+      {
+        "lineNo": 4,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 12500,
+        "expectedCents": 12500
+      },
+      {
+        "lineNo": 5,
+        "status": "supported",
+        "ruleId": "R0_MATCH",
+        "billedCents": 7500,
+        "expectedCents": 7500
+      }
+    ],
+    "question": {
+      "shouldAsk": false
+    },
+    "replies": [],
+    "draft": null,
+    "totals": {
+      "billedCents": 620000,
+      "agreedBeforeCents": 620000,
+      "atStakeBeforeCents": 0,
+      "waitingBeforeCents": 0
+    }
+  }
+}

@@ -1,0 +1,278 @@
+{
+  "scenarioId": "A-clean",
+  "case": {
+    "_id": "case_A-clean",
+    "title": "Bayline 40HC Ningbo-LB (A-clean)",
+    "shipmentRef": "PCL-INV-1012",
+    "incoterm": "FOB Ningbo",
+    "baseCurrency": "USD",
+    "revision": 0,
+    "status": "open"
+  },
+  "documents": [
+    {
+      "_id": "doc_quote",
+      "caseId": "case_A-clean",
+      "type": "quote",
+      "title": "Quote Q-PCL-0902",
+      "sender": "forwarder",
+      "sentAt": "2026-09-02T10:00:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - QUOTATION Q-PCL-0902\nDate: 2026-09-02   To: Bayline Home Goods   Valid until: 2026-09-30\n1x40HC FOB Ningbo -> Ontario, CA warehouse\nOcean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00\nDestination THC                                    USD   650.00\nCustoms entry                                      USD   125.00\nDrayage Long Beach -> Ontario CA                   USD   850.00\nDocumentation fee                                  USD    75.00\nTOTAL                                              USD 6,500.00\nTerms: PSS/GRI as filed by carrier at time of shipment apply."
+    },
+    {
+      "_id": "doc_email",
+      "caseId": "case_A-clean",
+      "type": "email",
+      "title": "Email: RE: Q-PCL-0902 revised",
+      "sender": "forwarder",
+      "sentAt": "2026-09-05T14:21:00-07:00",
+      "text": "Subject: RE: Q-PCL-0902 revised\nHi Maya, we can do better on ocean. Ocean freight reduced to $4,500 if booked by Sep 10. Everything else unchanged. - Derek"
+    },
+    {
+      "_id": "doc_chat",
+      "caseId": "case_A-clean",
+      "type": "chat",
+      "title": "WhatsApp: Derek PCL / Sam Bayline",
+      "sentAt": "2026-09-28T10:30:00-07:00",
+      "text": "9/8/26, 9:12 AM - Derek PCL: Booking confirmed for your 40HC, booked today Sep 8\n9/8/26, 9:15 AM - Sam Bayline: great thanks\n9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra\n9/28/26, 10:30 AM - Sam Bayline: ok keep me posted"
+    },
+    {
+      "_id": "doc_invoice",
+      "caseId": "case_A-clean",
+      "type": "freight_invoice",
+      "title": "Invoice PCL-INV-1012",
+      "sender": "forwarder",
+      "sentAt": "2026-10-12T09:00:00-07:00",
+      "text": "PACIFIC CREST LOGISTICS - INVOICE PCL-INV-1012   Date: 2026-10-12   Ref: Q-PCL-0902\n1  Ocean freight 40HC Ningbo-Long Beach      4,500.00\n2  Destination THC                             650.00\n3  Drayage Long Beach -> Ontario CA            850.00\n4  Customs entry                               125.00\n5  Documentation fee                            75.00\n   TOTAL DUE USD                             6,200.00"
+    }
+  ],
+  "facts": [
+    {
+      "_id": "fact_quote_ocean",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "ocean_freight",
+      "amountCents": 480000,
+      "currency": "USD",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Ocean freight 40HC Ningbo-Long Beach (all-in)      USD 4,800.00"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_dthc",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "destination_thc",
+      "amountCents": 65000,
+      "currency": "USD",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Destination THC                                    USD   650.00"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_customs",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "customs_entry",
+      "amountCents": 12500,
+      "currency": "USD",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Customs entry                                      USD   125.00"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_drayage",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "drayage",
+      "amountCents": 85000,
+      "currency": "USD",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Drayage Long Beach -> Ontario CA                   USD   850.00"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_docfee",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "doc_fee",
+      "amountCents": 7500,
+      "currency": "USD",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Documentation fee                                  USD    75.00"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_pss",
+      "caseId": "case_A-clean",
+      "kind": "permitted_surcharge",
+      "chargeType": "pss",
+      "validUntil": "2026-09-30",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "Terms: PSS/GRI as filed by carrier at time of shipment apply."
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_quote_incoterm",
+      "caseId": "case_A-clean",
+      "kind": "incoterm",
+      "effectiveAt": "2026-09-02T10:00:00-07:00",
+      "statedBy": "forwarder",
+      "span": {
+        "docId": "doc_quote",
+        "locator": "page 1",
+        "quote": "FOB Ningbo"
+      },
+      "origin": "extraction"
+    },
+    {
+      "_id": "fact_email_ocean",
+      "caseId": "case_A-clean",
+      "kind": "agreed_rate",
+      "chargeType": "ocean_freight",
+      "amountCents": 450000,
+      "currency": "USD",
+      "condition": {
+        "bookedBy": "2026-09-10"
+      },
+      "effectiveAt": "2026-09-05T14:21:00-07:00",
+      "statedBy": "forwarder",
+      "origin": "extraction",
+      "span": {
+        "docId": "doc_email",
+        "locator": "email body",
+        "quote": "Ocean freight reduced to $4,500 if booked by Sep 10"
+      }
+    },
+    {
+      "_id": "fact_chat_booking",
+      "caseId": "case_A-clean",
+      "kind": "booking_date",
+      "effectiveAt": "2026-09-08T09:12:00-07:00",
+      "statedBy": "forwarder",
+      "origin": "extraction",
+      "span": {
+        "docId": "doc_chat",
+        "locator": "msg 2026-09-08 09:12",
+        "quote": "Booking confirmed for your 40HC, booked today Sep 8"
+      }
+    }
+  ],
+  "charges": [
+    {
+      "_id": "chg_1",
+      "caseId": "case_A-clean",
+      "docId": "doc_invoice",
+      "lineNo": 1,
+      "billedBy": "forwarder",
+      "chargeType": "ocean_freight",
+      "description": "Ocean freight 40HC Ningbo-Long Beach",
+      "amountCents": 450000,
+      "currency": "USD",
+      "span": {
+        "docId": "doc_invoice",
+        "locator": "line 1",
+        "quote": "Ocean freight 40HC Ningbo-Long Beach      4,500.00"
+      }
+    },
+    {
+      "_id": "chg_2",
+      "caseId": "case_A-clean",
+      "docId": "doc_invoice",
+      "lineNo": 2,
+      "billedBy": "forwarder",
+      "chargeType": "destination_thc",
+      "description": "Destination THC",
+      "amountCents": 65000,
+      "currency": "USD",
+      "span": {
+        "docId": "doc_invoice",
+        "locator": "line 2",
+        "quote": "Destination THC                             650.00"
+      }
+    },
+    {
+      "_id": "chg_3",
+      "caseId": "case_A-clean",
+      "docId": "doc_invoice",
+      "lineNo": 3,
+      "billedBy": "forwarder",
+      "chargeType": "drayage",
+      "description": "Drayage Long Beach -> Ontario CA",
+      "amountCents": 85000,
+      "currency": "USD",
+      "span": {
+        "docId": "doc_invoice",
+        "locator": "line 3",
+        "quote": "Drayage Long Beach -> Ontario CA            850.00"
+      }
+    },
+    {
+      "_id": "chg_4",
+      "caseId": "case_A-clean",
+      "docId": "doc_invoice",
+      "lineNo": 4,
+      "billedBy": "forwarder",
+      "chargeType": "customs_entry",
+      "description": "Customs entry",
+      "amountCents": 12500,
+      "currency": "USD",
+      "span": {
+        "docId": "doc_invoice",
+        "locator": "line 4",
+        "quote": "Customs entry                               125.00"
+      }
+    },
+    {
+      "_id": "chg_5",
+      "caseId": "case_A-clean",
+      "docId": "doc_invoice",
+      "lineNo": 5,
+      "billedBy": "forwarder",
+      "chargeType": "doc_fee",
+      "description": "Documentation fee",
+      "amountCents": 7500,
+      "currency": "USD",
+      "span": {
+        "docId": "doc_invoice",
+        "locator": "line 5",
+        "quote": "Documentation fee                            75.00"
+      }
+    }
+  ]
+}
