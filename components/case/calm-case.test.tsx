@@ -130,9 +130,13 @@ describe("tabs and views", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Bayline 40HC Ningbo-LB");
   });
 
-  it("scrolls the tab strip sideways instead of wrapping", () => {
+  it("scrolls the issue tabs sideways and keeps Documents and History outside the scroll", () => {
     render(<CaseScreen cases={[SCENARIO_B]} />);
-    expect(screen.getByRole("tablist", { name: "Case tabs" })).toHaveClass("overflow-x-auto");
+    const scroller = screen.getByTestId("issue-tabs");
+    expect(scroller).toHaveClass("overflow-x-auto");
+    expect(within(scroller).getByRole("tab", { name: "Overview" })).toBeInTheDocument();
+    expect(within(scroller).queryByRole("tab", { name: "Documents" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("tablist", { name: "Case tabs" })).getByRole("tab", { name: "History" })).toBeInTheDocument();
   });
 });
 

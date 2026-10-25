@@ -88,7 +88,7 @@ export function CaseWorkspace({ demo, x, local, actions, roles, view: shown, onV
           ) : approval ? (
             // ApprovalDetail (components/inboxes) has a fixed two-column grid; below 1024px this stacks the
             // message above the decision. TODO(merge): drop once ApprovalDetail stacks on its own.
-            <div data-testid="dispute-stack" className="flex min-h-0 flex-1 flex-col max-lg:[&>div>.grid]:grid-cols-1">
+            <div data-testid="dispute-stack" className="flex min-h-0 flex-1 flex-col max-lg:[&>div>.grid]:grid-cols-1 max-lg:[&>div>.grid]:content-start">
               <ApprovalDetail d={approval} now={clock} viewer={OPERATOR}
                 onAccept={() => actions.accept(approval.draftId)}
                 onReject={(reason) => actions.reject(approval.draftId, reason)}

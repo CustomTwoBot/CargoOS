@@ -11,7 +11,7 @@ import type { CaseInput, Row } from "./view-model";
 
 const CARD = "rounded-xl border border-line bg-surface shadow-card";
 /** Two columns from 1024px; below that the story stacks: evidence or question first, then the rest (§0.2). */
-export const ISSUE_GRID = "grid min-h-0 flex-1 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]";
+export const ISSUE_GRID = "grid min-h-0 flex-1 grid-cols-1 content-start items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]";
 const PRIMARY = "rounded-md bg-primary px-3.5 py-[7px] text-[13.5px] font-semibold text-primary-ink";
 const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5 py-[7px] text-[13.5px] font-semibold text-ink hover:bg-sunken";
 
