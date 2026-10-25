@@ -3,7 +3,7 @@ import { SCENARIO_A } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { LEO, MAYA, SAM } from "@/components/inboxes/people";
 import { withDraft } from "./sample";
-import { answerBlocked, dockOf, itemText, threadOf, type ThreadItem } from "./thread";
+import { answerBlocked, dockOf, itemText, threadOf, whyShort, type ThreadItem } from "./thread";
 
 const PC = "Pacific Crest Logistics";
 const texts = (items: ThreadItem[]) => items.map(itemText);
@@ -19,7 +19,8 @@ describe("threadOf, Scenario A before the answer", () => {
     expect(texts(items)).toEqual([
       "4 documents added · Oct 24, 1:50 PM",
       "I read the quote, the email, the WhatsApp chat and the invoice, and checked all 8 charges.",
-      "5 charges match what was agreed.\nLine 1, Ocean freight 40HC Ningbo-Long Beach: $300 over. Billed $4,800. Agreed $4,500 (email, Sep 5, if booked by Sep 10; booked Sep 8). Over by $300.",
+      // The canvas shows billed and over-by next to the line, so the sentence keeps only the reason.
+      "5 charges match what was agreed.\nLine 1, Ocean freight 40HC Ningbo-Long Beach: $300 over. Agreed $4,500 (email, Sep 5, if booked by Sep 10; booked Sep 8).",
       expect.stringMatching(/^Question for you\nInvoice line 4 bills a \$200 congestion fee/),
     ]);
     const q = items[3] as Extract<ThreadItem, { kind: "question" }>;
@@ -38,8 +39,12 @@ describe("threadOf, Scenario A before the answer", () => {
     expect(q.foot).toBe("Lines 4 and 6 · $600 wait for Sam’s answer");
   });
 
-  it("Leo: only the documents, no amounts or findings", () => {
-    expect(texts(threadOf(x, LEO, null, PC))).toEqual(["4 documents added · Oct 24, 1:50 PM"]);
+  it("Leo: one line per document and what was read from it, as the canvas lists them; no amounts or findings", () => {
+    expect(texts(threadOf(x, LEO, null, PC))).toEqual([
+      "Read Quote Q-PCL-0902 · 7 facts", "Read Email: RE: Q-PCL-0902 revised · 1 fact",
+      "Read WhatsApp: Derek PCL / Sam Bayline · 1 fact", "Read Invoice PCL-INV-1012 · 8 invoice lines",
+    ]);
+    expect(texts(threadOf(SCENARIO_A.at("after"), LEO, null, PC)).at(-1)).toBe("Read Reply from ops lead · 2 facts");
   });
 });
 
@@ -84,7 +89,7 @@ describe("threadOf, Scenario B", () => {
 
   it("after: Maya reads the last answer's change in Sam's name", () => {
     expect(texts(threadOf(SCENARIO_B.at("after"), MAYA, null)).at(-1)).toBe(
-      "Sam’s answer changed 1 charge:\n· Line 9, Drayage Oakland -> Reno NV 3x40HC $5,850 → $300 over. More than Sam approved.\nAt stake is now $4,165.");
+      "Sam’s answer changed 1 charge:\n· Line 9, Drayage Oakland → Reno NV 3×40HC $5,850 → $300 over. More than Sam approved.\nAt stake is now $4,165.");
   });
 });
 
@@ -105,14 +110,14 @@ describe("threadOf, the dispute", () => {
 
   it("rejected: the decision with its reason", () => {
     const x = withDraft("rejected", "maya", { rejectedBy: "sam", rejectionReason: "They really did expedite it." });
-    expect(texts(threadOf(x, MAYA, null, PC)).at(-1)).toBe("Sam rejected the dispute. “They really did expedite it.”");
+    expect(texts(threadOf(x, MAYA, null, PC)).at(-1)).toBe("Sam rejected the dispute.\n“They really did expedite it.”");
   });
 });
 
 describe("dockOf", () => {
   it("an open question to this person: the answer box, in the recorded order", () => {
     expect(dockOf(SCENARIO_A, SCENARIO_A.at("before"), idle, SAM)).toEqual(
-      { kind: "answer", questionId: "q_1", label: undefined, replay: "In this replay CargoOS reads the recorded answer." });
+      { kind: "answer", questionId: "q_1", label: undefined });
     const b = SCENARIO_B.at("before");
     expect(dockOf(SCENARIO_B, b, idle, SAM)).toMatchObject({ kind: "answer", questionId: "b_q_1", label: "Answering Question 1" });
     expect(answerBlocked(SCENARIO_B, b, "b_q_2")).toBe("Answer Question 1 first. In this replay the answers play in the order they were recorded.");
@@ -124,7 +129,7 @@ describe("dockOf", () => {
 
   it("live case: no recorded order or replay note; rechecking from the answer until the server's recheck", () => {
     const live = { ...SCENARIO_A, live: true, answers: {} };
-    expect(dockOf(live, SCENARIO_A.at("before"), idle, SAM)).toEqual({ kind: "answer", questionId: "q_1", label: undefined, replay: undefined });
+    expect(dockOf(live, SCENARIO_A.at("before"), idle, SAM)).toEqual({ kind: "answer", questionId: "q_1", label: undefined });
     expect(dockOf(live, SCENARIO_A.at("before"), idle, SAM, PC, "q_1")).toMatchObject({ kind: "rechecking" });
     expect(dockOf(live, SCENARIO_A.at("answered"), idle, SAM)).toMatchObject({ kind: "rechecking" });
     expect(dockOf(live, SCENARIO_A.at("after"), idle, SAM, PC, "q_1")).toMatchObject({ kind: "request" });
@@ -151,11 +156,20 @@ describe("dockOf", () => {
     expect(dockOf(SCENARIO_A, own, idle, SAM, PC)).toEqual({ kind: "quiet", text: "You requested this. Another owner decides." });
   });
 
-  it("accepted: the message is ready; rejected: the reason", () => {
+  it("accepted: the message is ready; rejected: fix the lines and ask again (the reason is in the thread)", () => {
     expect(dockOf(SCENARIO_A, withDraft("approved", "maya", { approvedBy: "sam" }), idle, MAYA, PC))
       .toEqual({ kind: "message", draftId: "draft_1", text: "The message to Pacific Crest Logistics is ready." });
-    expect(dockOf(SCENARIO_A, withDraft("rejected", "maya", { rejectedBy: "sam", rejectionReason: "Pay it this time." }), idle, MAYA, PC))
-      .toEqual({ kind: "quiet", text: "Sam rejected the dispute: “Pay it this time.”" });
+    const rejected = withDraft("rejected", "maya", { rejectedBy: "sam", rejectionReason: "Pay it this time." });
+    expect(dockOf(SCENARIO_A, rejected, idle, MAYA, PC))
+      .toEqual({ kind: "request", text: "Sam rejected it. Fix the lines, then ask again.", button: "Ask Sam again" });
+    expect(dockOf(SCENARIO_A, rejected, idle, SAM, PC))
+      .toEqual({ kind: "request", text: "You rejected it. Fix the lines, then ask again.", button: "Draft again" });
+  });
+
+  it("whyShort drops the numbers the canvas shows, and keeps a reason that has none", () => {
+    expect(whyShort("Billed $4,800. Agreed $4,500 (email, Sep 5). Over by $300.")).toBe("Agreed $4,500 (email, Sep 5).");
+    expect(whyShort("Billed $1,950. Same charge already billed on line 6.")).toBe("Same charge already billed on line 6.");
+    expect(whyShort("Billed in CNY. No exchange rate was agreed, so it cannot be checked yet.")).toBe("Billed in CNY. No exchange rate was agreed, so it cannot be checked yet.");
   });
 
   it("Leo: no next step", () => {

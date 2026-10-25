@@ -29,8 +29,7 @@ describe("CaseThread", () => {
     render(<CaseThread {...ctxFor(SAM, "before", undefined, { reply })} onFocus={vi.fn()} />);
     const box = screen.getByRole("textbox", { name: "Your answer" });
     expect(box).toHaveAttribute("placeholder", "Answer CargoOS… e.g. “approved on WhatsApp”");
-    expect(screen.getByText("Your answer becomes evidence. CargoOS rechecks the lines; nothing is sent.")).toBeInTheDocument();
-    expect(screen.getByText("In this replay CargoOS reads the recorded answer.")).toBeInTheDocument();
+    expect(screen.getByText("Your answer becomes evidence. Nothing is sent.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Send answer" }));
     expect(reply).not.toHaveBeenCalled();
     fireEvent.change(box, { target: { value: "approved congestion, not rush" } });
@@ -68,7 +67,10 @@ describe("CaseThread", () => {
   it("Sam on Maya's request: Accept, or Reject with a required reason", () => {
     const accept = vi.fn(), reject = vi.fn();
     render(<CaseThread {...ctxFor(SAM, draftLocal("pending_approval", "maya"), undefined, { accept, reject })} onFocus={vi.fn()} />);
-    expect(within(thread()).getByText("Maya asked you to approve a dispute: $700 with Pacific Crest Logistics, lines 1 and 6.")).toBeInTheDocument();
+    // Said like a system line, with the name in weight.
+    const asked = within(thread()).getByText(/asked you to approve a dispute: \$700 with Pacific Crest Logistics, lines 1 and 6\./);
+    expect(asked).toHaveTextContent(/^Maya asked you/);
+    expect(within(asked).getByText("Maya").tagName).toBe("B");
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(accept).toHaveBeenCalledWith("draft_1");
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
@@ -89,7 +91,7 @@ describe("CaseThread", () => {
   it("after Accept: the message is ready and opens on the canvas", () => {
     const onFocus = vi.fn();
     render(<CaseThread {...ctxFor(MAYA, draftLocal("approved", "maya", { approvedBy: "sam" }))} onFocus={onFocus} />);
-    expect(within(thread()).getByText("Sam accepted the dispute.")).toBeInTheDocument();
+    expect(within(thread()).getByText(/accepted the dispute\./)).toHaveTextContent("Sam accepted the dispute.");
     const card = screen.getByRole("region", { name: "Next step" });
     expect(card).toHaveTextContent("The message to Pacific Crest Logistics is ready.");
     fireEvent.click(within(card).getByRole("button", { name: "Open the message" }));
@@ -98,7 +100,8 @@ describe("CaseThread", () => {
 
   it("Leo: only what happened to documents, no amounts, no next step", () => {
     render(<CaseThread {...ctxFor(LEO, "before")} onFocus={vi.fn()} />);
-    expect(within(thread()).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["4 documents added · Oct 24, 1:50 PM"]);
+    expect(within(thread()).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(thread()).getAllByRole("listitem")[0]).toHaveTextContent("Read Quote Q-PCL-0902 · 7 facts");
     expect(screen.queryByText(/\$\d/)).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
