@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { personById } from "@/lib/people";
 import { SCENARIO_A } from "@/components/case/fixture";
 import { toRows, totalsOf } from "@/components/case/view-model";
-import { agreedText, askedName, chargeName, changedKeys, previousAtStake, shortForwarder, sourceChips, verdictSentence } from "./model";
+import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
+import { agreedText, askedName, chargeName, changedKeys, firstAtStake, shortForwarder, sourceChips, verdictSentence } from "./model";
 
 const before = SCENARIO_A.at(SCENARIO_A.start);
 const after = SCENARIO_A.at(SCENARIO_A.end);
@@ -24,10 +25,13 @@ describe("canvas model", () => {
   });
 
   it("knows what the latest recheck changed and what was at stake before", () => {
-    expect(previousAtStake(before)).toBeUndefined();
-    expect(previousAtStake(after)).toBe(30000);
-    // A live case carries only its current findings; the recomputed event is enough.
-    expect(previousAtStake({ ...after, findings: after.findings.filter((f) => f.revision === after.case.revision) })).toBe(30000);
+    expect(firstAtStake(before)).toBeUndefined();
+    expect(firstAtStake(after)).toBe(30000);
+    // A live case carries only its current findings; the recomputed events are enough.
+    expect(firstAtStake({ ...after, findings: after.findings.filter((f) => f.revision === after.case.revision) })).toBe(30000);
+    // Scenario B was rechecked three times: "was" is what the reader saw first ($3,340), not the step before ($3,865).
+    const b = SCENARIO_B.at(SCENARIO_B.end);
+    expect(firstAtStake({ ...b, findings: b.findings.filter((f) => f.revision === b.case.revision) })).toBe(334000);
     expect(changedKeys(after).sort()).toEqual(["chg_4", "chg_6"]);
   });
 
@@ -43,6 +47,9 @@ describe("canvas model", () => {
   it("labels the sources checked against, the answer per viewer", () => {
     expect(sourceChips(after, "Sam").map((c) => c.label)).toEqual(["Quote · Sep 2", "Email · Sep 5", "WhatsApp · Sep 8–28", "Invoice · Oct 12", "Sam's answer · Oct 24"]);
     expect(sourceChips(after, "you").at(-1)?.label).toBe("Your answer · Oct 24");
+    // Several answers on one day: one chip each, told apart by the time.
+    expect(sourceChips(SCENARIO_B.at(SCENARIO_B.end), "you").map((c) => c.label).filter((l) => l.startsWith("Your answer")))
+      .toEqual(["Your answer · 2:20 PM", "Your answer · 2:31 PM", "Your answer · 2:44 PM"]);
   });
 
   it("writes names as the invoice means them", () => {

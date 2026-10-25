@@ -23,12 +23,28 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
   const reply = (questionId: string, text: string) => { setSent(questionId); actions.reply(questionId, text); };
   const list = useRef<HTMLOListElement>(null);
   const last = items.at(-1)?.id;
+  // Whether the list was scrolled to its end: then it stays there when the list gets shorter.
+  const pinned = useRef(true);
 
   // Keep the newest item in view, as a chat does.
   useBrowserLayoutEffect(() => {
     const el = list.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) { el.scrollTop = el.scrollHeight; pinned.current = true; }
   }, [last, items.length, dock.kind]);
+
+  // The list also gets shorter without a new item: a smaller window, or a taller dock (the reject
+  // reason, a wrapped line). If it was at its end, keep it there; if the person scrolled up, leave it.
+  useEffect(() => {
+    const el = list.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { if (pinned.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const onScroll = () => {
+    const el = list.current;
+    if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
 
   return (
     // Fills the workspace's thread column (420px from 1280, 360px from 1024, the whole pane below); the
@@ -38,9 +54,9 @@ export function CaseThread({ demo, x, local, actions, viewer, now, forwarder, on
         <p className="flex items-center gap-2 text-[14.5px] font-[650]">
           <span aria-hidden="true" className="size-[18px] rounded-[5px] bg-ink" />CargoOS
         </p>
-        <p className="mt-0.5 text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
+        <p className="mt-0.5 text-balance text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
       </header>
-      <ol ref={list} aria-label="What CargoOS did" aria-live="polite"
+      <ol ref={list} aria-label="What CargoOS did" aria-live="polite" onScroll={onScroll}
         className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto px-[18px] py-4">
         {items.map((it) => <Item key={it.id} it={it} onFocus={onFocus} />)}
       </ol>
@@ -59,7 +75,7 @@ function Sentence({ para, onFocus }: { para: Para; onFocus: OnFocus }) {
   return para.map((s, i) => {
     if (s.t === "line") {
       return <button key={i} type="button" onClick={() => onFocus({ kind: "line", key: s.key })}
-        className="font-medium text-link underline decoration-line-strong underline-offset-[3px] hover:decoration-current">{s.text}</button>;
+        className="font-medium text-link underline decoration-dotted underline-offset-[3px] hover:decoration-solid">{s.text}</button>;
     }
     if (s.t === "word") return <b key={i} className={cx("font-semibold", TONE_TEXT[s.tone])}>{s.text}</b>;
     if (s.t === "quote") {
@@ -110,9 +126,10 @@ function Item({ it, onFocus }: { it: ThreadItem; onFocus: OnFocus }) {
         </li>
       );
     case "decision":
+      // Said like the other system lines, with the person's name in weight; a reason on its own line.
       return (
-        <li className="self-center text-center text-[13px] text-ink-2">
-          <p className="font-semibold text-ink">{it.text}</p>
+        <li className="self-center text-center text-[13px] leading-5 text-ink-2">
+          <p><b className="font-semibold text-ink">{it.who}</b>{it.text}</p>
           {it.reason && <p className="mt-0.5">“{it.reason}”</p>}
         </li>
       );
@@ -126,7 +143,7 @@ function DockView({ dock, actions, onReply, onFocus }: DockProps) {
   if (dock.kind === "none") return null;
   return (
     <div className="flex-none border-t border-line px-3.5 pb-3.5 pt-3">
-      {dock.kind === "answer" ? <Composer questionId={dock.questionId} label={dock.label} replay={dock.replay} onReply={onReply} />
+      {dock.kind === "answer" ? <Composer questionId={dock.questionId} label={dock.label} onReply={onReply} />
         : dock.kind === "request" ? (
           <Card title="Next step" text={dock.text}>
             <button type="button" className={PRIMARY} onClick={() => actions.draftDispute()}>{dock.button}</button>
@@ -156,10 +173,10 @@ function Card({ title, text, children }: { title: string; text: string; children
   );
 }
 
-type ComposerProps = { questionId: string; label?: string; replay?: string; onReply: (questionId: string, text: string) => void };
+type ComposerProps = { questionId: string; label?: string; onReply: (questionId: string, text: string) => void };
 
 /** The answer box: only open when CargoOS waits on this person. Enter sends; Shift+Enter starts a new line. */
-function Composer({ questionId, label, replay, onReply }: ComposerProps) {
+function Composer({ questionId, label, onReply }: ComposerProps) {
   const [text, setText] = useState("");
   const empty = !text.trim();
   const send = () => { if (!empty) { onReply(questionId, text.trim()); setText(""); } };
@@ -174,8 +191,7 @@ function Composer({ questionId, label, replay, onReply }: ComposerProps) {
         <button type="submit" aria-label="Send answer" aria-disabled={empty || undefined}
           className="grid size-8 flex-none place-items-center rounded-full bg-primary text-[15px] font-semibold text-primary-ink aria-disabled:opacity-40">↑</button>
       </div>
-      <p className="mt-1.5 text-center text-[11.5px] text-ink-3">Your answer becomes evidence. CargoOS rechecks the lines; nothing is sent.</p>
-      {replay && <p className="text-center text-[11.5px] text-ink-3">{replay}</p>}
+      <p className="mt-1.5 text-center text-[11.5px] text-ink-3">Your answer becomes evidence. Nothing is sent.</p>
     </form>
   );
 }

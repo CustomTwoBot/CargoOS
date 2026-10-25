@@ -28,6 +28,10 @@ export function Proof({ x, row, charge, asked, live, canDecide, onVerdict, onSav
   const chain = chainOf(x, row, asked);
   // The first step is the invoice line itself, already in the row.
   const steps = chain.steps.slice(1).filter((s) => s.quote || s.text || s.struck);
+  // One conclusion: when the booking date settles the price ("Sep 8 is before Sep 10, so the lower price
+  // applies.") that sentence says it best; otherwise the engine's why line.
+  const booked = steps.find((s) => s.title === "When you booked" && s.text);
+  const conclusion = booked?.text ?? row.why;
   const verdict = row.finding.userVerdict;
   return (
     <div data-testid="proof" className={cx("border-l-2 py-1 pl-3 text-[13.5px] leading-[21px] text-ink-2", EDGE[row.group])}>
@@ -43,7 +47,7 @@ export function Proof({ x, row, charge, asked, live, canDecide, onVerdict, onSav
                   className="text-left hover:underline hover:decoration-ink-3 hover:underline-offset-4">
                   <mark>{s.quote.quote.replace(/\s+/g, " ")}</mark>
                 </button>
-                {s.text && s.icon !== "invoice" && <span className="text-ink-3"> {s.text}</span>}
+                {s.text && s.icon !== "invoice" && s !== booked && <span className="text-ink-3"> {s.text}</span>}
               </>
             ) : (
               <span>{s.where ?? s.title}: {s.struck && <s className="mr-1 text-ink-3">{s.struck}</s>}{s.text}</span>
@@ -51,7 +55,7 @@ export function Proof({ x, row, charge, asked, live, canDecide, onVerdict, onSav
           </li>
         ))}
       </ul>
-      <p data-testid="why" className="mt-1.5 text-ink">{row.why}</p>
+      <p data-testid="why" className="mt-1.5 text-ink">{conclusion}</p>
       {canDecide && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {row.group === "dispute" && verdict !== "confirmed" && (

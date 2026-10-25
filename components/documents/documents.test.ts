@@ -16,8 +16,12 @@ describe("docRows", () => {
       ["Email", "Sep 5", "Forwarder", "Read, 1 fact", [1]],
       ["Chat", "Sep 28", undefined, "Read, 1 fact", [1]],
       ["Invoice", "Oct 12", "Forwarder", "Read, 8 invoice lines", []],
-      ["Your answer", "Oct 24", "You", "Read, 2 facts", [4, 6]],
+      ["Your answer", "Oct 24", undefined, "Read, 2 facts", [4, 6]],
     ]);
+  });
+
+  it("names the answer after who gave it on a screen that doesn't answer", () => {
+    expect(docRows(x, "Sam").at(-1)).toMatchObject({ kind: "Sam's answer", sender: undefined });
   });
 
   it("before the answer there is no reply document", () => {

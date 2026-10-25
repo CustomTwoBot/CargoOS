@@ -59,7 +59,7 @@ export type ReadingItem = {
 
 export const NEW_CASE_COPY = {
   heading: "New case",
-  dropTitle: "Drop the invoice and everything that was agreed — quotes, emails, chats",
+  dropTitle: "Drop the invoice and everything that was agreed\u00a0— quotes, emails, chats",
   dropBody: "PDFs, photos, .eml files, WhatsApp exports or text. Several at once.",
   chooseFiles: "Choose files",
   pasteBox: "Paste text",
@@ -81,8 +81,7 @@ export const NEW_CASE_COPY = {
   severalHint: "Several at once: separate them with a line of three dashes.",
   added: "Added",
   phone: "Add from your phone",
-  phoneBody: "Scan to upload a WhatsApp export, a PDF or a photo.",
-  qr: "QR code",
+  phoneBody: "Open this address on your phone to upload a WhatsApp export, a PDF or a photo.",
   noAgreements: "Without a quote, email or chat, every charge waits on answers.",
   needInvoice: "Add the forwarder's invoice to continue.",
   read: "Read documents",

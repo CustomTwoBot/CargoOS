@@ -33,6 +33,24 @@ describe("sidebar like ChatGPT (§0.4 п.1)", () => {
     for (const name of [/^Questions/, /^Approvals/, /^All cases/]) expect(within(nav()).queryByRole("button", { name })).not.toBeInTheDocument();
   });
 
+  it("Reset demo in the demo bar puts every case back to before the answers, not just the open one", () => {
+    render(<CaseScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
+    fireEvent.click(within(nav()).getByRole("button", { name: new RegExp(`^${KBL}`) }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
+    expect(within(group("Needs you")).getByRole("button", { name: `${PCL}. Answer 1 question` })).toBeInTheDocument();
+    expect(screen.getByText("Demo reset. Every case is back to before the answers.")).toBeInTheDocument();
+    fireEvent.click(within(nav()).getByRole("button", { name: new RegExp(`^${PCL}`) }));
+    expect(screen.getByRole("button", { name: "Before answers" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("an uploader's demo bar has only Reset demo", () => {
+    act(() => setDevicePerson("leo"));
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const bar = screen.getByRole("group", { name: "Demo controls" });
+    expect(within(bar).getAllByRole("button").map((b) => b.textContent)).toEqual(["Reset demo"]);
+  });
+
   it("follows the case: after the answers it is ready to dispute $700, and Reset demo brings the question back", () => {
     render(<CaseScreen cases={[SCENARIO_A]} />);
     fireEvent.click(screen.getByRole("button", { name: "After answers" }));
@@ -97,6 +115,30 @@ describe("the open case (§0.4 п.2, п.7)", () => {
     expect(within(show).getByRole("button", { name: "CargoOS1" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(within(show).getByRole("button", { name: "Invoice" }));
     expect(within(show).getByRole("button", { name: "Invoice" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("follows what waits on this person until they pick a pane (the case may load after the first render)", () => {
+    act(() => setDevicePerson("maya"));
+    atWidth(900);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const pressed = () => within(screen.getByRole("group", { name: "Show" })).getAllByRole("button").find((b) => b.getAttribute("aria-pressed") === "true")?.textContent;
+    expect(pressed()).toBe("Invoice");
+    act(() => setDevicePerson("sam"));
+    expect(pressed()).toBe("CargoOS1");
+    fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Invoice" }));
+    act(() => setDevicePerson("maya"));
+    act(() => setDevicePerson("sam"));
+    expect(pressed()).toBe("Invoice");
+  });
+
+  it("keeps toasts off the thread's header below 1024: under it when CargoOS is shown, at the bottom over the invoice", () => {
+    atWidth(900);
+    render(<CaseScreen cases={[SCENARIO_A]} />);
+    const region = () => screen.getByRole("region", { name: "Notifications" });
+    expect(region().className).toContain("max-lg:top-[92px]");
+    fireEvent.click(within(screen.getByRole("group", { name: "Show" })).getByRole("button", { name: "Invoice" }));
+    expect(region().className).not.toContain("max-lg:top-[92px]");
+    expect(region().className).toContain("bottom-14");
   });
 
   it("opens on the invoice for someone nothing waits on", () => {

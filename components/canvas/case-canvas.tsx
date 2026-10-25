@@ -8,7 +8,7 @@ import { isRechecking, toRows, totalsOf } from "@/components/case/view-model";
 import { DocView } from "./doc-view";
 import { InvoiceLines } from "./lines";
 import { MessageView } from "./message-view";
-import { askedName, changedKeys, previousAtStake, seesFindings, sourceChips } from "./model";
+import { askedName, changedKeys, firstAtStake, seesFindings, sourceChips } from "./model";
 import { Proof } from "./proof";
 import { UploaderCanvas } from "./uploader";
 import { Verdict } from "./verdict";
@@ -29,9 +29,9 @@ export function CaseCanvas({ demo, x, actions, viewer, forwarder, focus, onFocus
 
   let content: React.ReactNode;
   if (focus.kind === "doc") {
-    content = <DocView x={x} docId={focus.docId} quote={focus.quote} onBack={back} marks={reviews} />;
+    content = <DocView x={x} docId={focus.docId} quote={focus.quote} onBack={back} marks={reviews} asked={asked} />;
   } else if (!reviews) {
-    content = <UploaderCanvas x={x} onAdd={actions.addEvidence} onFocus={onFocus} />;
+    content = <UploaderCanvas x={x} asked={asked} onAdd={actions.addEvidence} onFocus={onFocus} />;
   } else if (focus.kind === "message") {
     content = <MessageView demo={demo} x={x} forwarder={forwarder} actions={actions} viewer={viewer} draftId={focus.draftId} onBack={back} />;
   } else {
@@ -39,7 +39,7 @@ export function CaseCanvas({ demo, x, actions, viewer, forwarder, focus, onFocus
     const decides = canAct(viewer.roles, "dismiss");
     content = (
       <>
-        <Verdict totals={totalsOf(x)} forwarder={forwarder} asked={asked} was={previousAtStake(x)}
+        <Verdict totals={totalsOf(x)} forwarder={forwarder} asked={asked} was={firstAtStake(x)}
           rechecking={isRechecking(x)} chargeCount={x.charges.length} sources={sourceChips(x, asked)} onFocus={onFocus} />
         <InvoiceLines rows={rows} charges={x.charges} asked={asked} changed={changedKeys(x)}
           open={focus.kind === "line" ? focus.key : undefined} onFocus={onFocus}

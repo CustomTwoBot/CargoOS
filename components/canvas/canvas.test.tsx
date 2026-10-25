@@ -98,7 +98,9 @@ describe("Scenario A before the answer (Sam)", () => {
     const proof = screen.getByTestId("proof");
     expect(proof).toHaveTextContent("Email, Sep 5: Ocean freight reduced to $4,500 if booked by Sep 10");
     expect(proof).toHaveTextContent("Chat, Sep 8: Booking confirmed for your 40HC, booked today Sep 8");
-    expect(within(proof).getByTestId("why")).toHaveTextContent(/Over by \$300/);
+    // One conclusion, on its own line: the booking date settles it.
+    expect(within(proof).getByTestId("why")).toHaveTextContent("Sep 8 is before Sep 10, so the lower price applies.");
+    expect(proof.textContent?.match(/so the lower price applies/g)).toHaveLength(1);
     expect(within(proof).getByRole("button", { name: "Keep in dispute" })).toBeInTheDocument();
     expect(within(proof).getByRole("button", { name: "Not an issue" })).toBeInTheDocument();
     expect(within(proof).getByRole("button", { name: "Edit line" })).toBeInTheDocument();
@@ -122,6 +124,12 @@ describe("Scenario A before the answer (Sam)", () => {
     expect(marked?.textContent).toBe("Ocean freight reduced to $4,500 if booked by Sep 10");
     fireEvent.click(screen.getByRole("button", { name: "← Invoice" }));
     expect(screen.getByRole("region", { name: "Invoice lines" })).toBeInTheDocument();
+  });
+
+  it("a quote overlapping one CargoOS read is still marked in full", () => {
+    render(<Canvas viewer={SAM} start={{ kind: "doc", docId: SCENARIO_A.at(SCENARIO_A.start).documents.find((d) => d.type === "quote")!._id, quote: "Ocean freight 40HC Ningbo-Long Beach (all-in)" }} />);
+    const marked = document.querySelector("mark[data-selected]");
+    expect(marked?.textContent).toBe("Ocean freight 40HC Ningbo-Long Beach (all-in)");
   });
 
   it("a source chip opens the whole document", () => {
@@ -210,6 +218,13 @@ describe("uploader (Leo)", () => {
     expect(screen.queryByTestId("at-stake")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Invoice lines" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/may not be owed|over|Matches/);
+  });
+
+  it("names Sam's answer in the list, since Leo didn't give it", () => {
+    at(SCENARIO_A.end, LEO);
+    const docs = screen.getByRole("region", { name: "Documents" });
+    expect(docs).toHaveTextContent("Sam's answer · Oct 24");
+    expect(docs.textContent).not.toMatch(/Your answer|· You ·/);
   });
 
   it("opens a document without CargoOS's marks, and can paste text as evidence", () => {

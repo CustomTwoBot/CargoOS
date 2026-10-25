@@ -25,9 +25,9 @@ describe("DocumentsView on a large case", () => {
     expect(rows[6]).toBe("WhatsApp: Lin Trucking / Sam BaylineChat · Carrier · Oct 6Partly read, 4 facts· lines 8–10, 13 and 15");
     // Three answers on one day: the time tells them apart.
     expect(rows.slice(8, 11)).toEqual([
-      "Reply from ops leadYour answer · You · Oct 24, 2:05 PMRead, 2 facts· lines 12 and 14",
-      "Reply from ops leadYour answer · You · Oct 24, 2:14 PMRead, 1 fact· line 11",
-      "Reply from ops leadYour answer · You · Oct 24, 2:31 PMRead, 1 fact· line 15",
+      "Reply from ops leadYour answer · Oct 24, 2:05 PMRead, 2 facts· lines 12 and 14",
+      "Reply from ops leadYour answer · Oct 24, 2:14 PMRead, 1 fact· line 11",
+      "Reply from ops leadYour answer · Oct 24, 2:31 PMRead, 1 fact· line 15",
     ]);
     // Added in replay, after the last check: undated, so last, and not read yet.
     expect(rows.at(-1)).toBe("Email you addedEmail · YouWaiting to be read");
