@@ -119,15 +119,15 @@ export function SaveCancel({ ed }: { ed: LineEditor }) {
   );
 }
 
-/** "Saved. $4,800 → $4,500." and what happens next: a live case is rechecked on the server, a replay isn't. */
-export function SavedNote({ saved, className, live }: { saved: SavedEdit; className?: string; live?: boolean }) {
+/** "Saved. $4,800 → $4,500." and what happens next. */
+export function SavedNote({ saved, className }: { saved: SavedEdit; className?: string }) {
   const amountChanged = saved.fromCents !== saved.toCents;
   return (
     <p role="status" className={cx("text-xs leading-[17px] text-ink-2", className)}>
       <span className="font-semibold text-ink">
         Saved. {amountChanged ? <>{money(saved.fromCents)} → {money(saved.toCents)}.</> : "Description updated."}
       </span>{" "}
-      <span className="text-ink-3">{live ? "CargoOS rechecks the line." : "In this replay the line isn't rechecked."}</span>
+      <span className="text-ink-3">In this replay the line isn&apos;t rechecked.</span>
     </p>
   );
 }

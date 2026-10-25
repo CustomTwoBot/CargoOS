@@ -31,6 +31,4 @@ export interface DemoCase {
   answers: Record<string, RecordedAnswer>;
   /** The dispute draft for the case as it stands, or undefined when nothing is disputed yet. */
   draft(x: CaseInput): Draft | undefined;
-  /** True for the live case read from Convex: no snapshots to jump between, no recorded answers. */
-  live?: boolean;
 }

@@ -1,21 +1,21 @@
-// New case, like a new chat (docs/design.md §0.4 п.6): the same two panes as a case. On the canvas a
-// big drop zone for the invoice and everything that was agreed, a paste box, the phone QR and the
-// recorded examples; on the CargoOS side the conversation starts: "Reading 4 documents…" with a
-// tick per file, then the check. Live, reading goes through `onRead`. In replay nothing is read:
-// Load example plays the reading of a recorded case's documents, then opens it.
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { DocType } from "@/lib/types";
+// New case at 1280: name the shipment, drop the documents on four typed targets (the invoice is
+// required), read them ("Reading documents… 2 of 4"), then check the invoice. One card, one main
+// button per step. Presentational: reading goes through `onRead`; without it (replay) nothing is
+// read and the flow says so, offering the recorded cases instead.
+import { useRef, useState } from "react";
 import { cx } from "@/components/case/cx";
 import { INPUT } from "@/components/inputs/fields";
+import { DropTargets, pastedDocs, type PasteDraft } from "./drop-targets";
 import {
-  NEW_CASE_COPY as T, RECORDED_EXAMPLES, describeDoc, invoiceCharges, placeDocs, readySummary, splitPastes, startBlock,
-  toDraft, toReadingItem, type NewCaseDocument, type NewCaseDraft, type PendingDoc, type ReadDocument, type ReadResult,
-  type ReadingItem, type RecordedExample,
+  NEW_CASE_COPY as T, RECORDED_EXAMPLES, defaultTitle, describeDoc, invoiceCharges, placeDocs, readySummary, startBlock,
+  toDraft, toReadingItem, type NewCaseDocType, type NewCaseDocument, type NewCaseDraft, type PendingDoc, type ReadDocument,
+  type ReadResult, type RecordedExample,
 } from "./model";
-import { DocRow, DropArea, PhoneCard, Primary, Secondary, TEXT_BUTTON, TypeSelect } from "./parts";
+import { DocRow, ExampleButtons, ExamplesCard, PhoneCard, Primary, Secondary, TEXT_BUTTON, TypeSelect } from "./parts";
 import { ReadingProgress } from "./reading-progress";
 
 export type NewCaseFlowProps = {
+  onCancel: () => void;
   /** Opens a recorded case by its DemoCase id. */
   onLoadExample: (id: string) => void;
   /** The case to create and check, after every document was read. */
@@ -24,53 +24,27 @@ export type NewCaseFlowProps = {
   onRead?: ReadDocument;
   /** Recorded cases to offer; defaults to Scenario A and the 3-container case. */
   examples?: RecordedExample[];
-  /** Each recorded case's documents, so Load example can show them being read. */
-  exampleDocs?: Record<string, { title: string; type: DocType }[]>;
   /** The phone uploader for this case (`/upload/[caseId]`); shows the QR card when given. */
   uploadUrl?: string;
 };
 
+type Stage = "start" | "reading";
 type DocSet = { invoice?: PendingDoc; agreements: PendingDoc[] };
-/** A recorded case being "read" in replay: how many of its documents are done. */
-type Playing = { id: string; docs: { title: string; type: DocType }[]; done: number };
-
-/** Time per document while a recorded case plays its reading, and the pause before it opens. */
-export const PLAY_STEP_MS = 450;
-export const PLAY_OPEN_MS = 700;
 
 const strip = ({ type, title, text, file }: PendingDoc): NewCaseDocument => (file ? { type, title, text, file } : { type, title, text });
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
-export function NewCaseFlow({ onLoadExample, onCreate, onRead, examples = RECORDED_EXAMPLES, exampleDocs = {}, uploadUrl }: NewCaseFlowProps) {
+export function NewCaseFlow({ onCancel, onLoadExample, onCreate, onRead, examples = RECORDED_EXAMPLES, uploadUrl }: NewCaseFlowProps) {
   const replay = !onRead;
+  const [stage, setStage] = useState<Stage>("start");
+  const [name, setName] = useState("");
   const [docSet, setDocSet] = useState<DocSet>({ agreements: [] });
-  const [paste, setPaste] = useState<string>();
-  const [reading, setReading] = useState(false);
+  const [paste, setPaste] = useState<PasteDraft>();
   const [results, setResults] = useState<Record<string, ReadResult>>({});
-  const [playing, setPlaying] = useState<Playing>();
   const run = useRef(0);
 
   const { invoice, agreements } = docSet;
   const docs = invoice ? [invoice, ...agreements] : agreements;
   const addDocs = (added: PendingDoc[]) => setDocSet((cur) => placeDocs(cur, added));
-  const pasted = () => (paste ? splitPastes(paste).map((t) => describeDoc(t)) : []);
-
-  // A recorded case reads its documents one by one, then opens.
-  useEffect(() => {
-    if (!playing) return;
-    const t = playing.done < playing.docs.length
-      ? setTimeout(() => setPlaying((p) => p && { ...p, done: p.done + 1 }), PLAY_STEP_MS)
-      : setTimeout(() => onLoadExample(playing.id), PLAY_OPEN_MS);
-    return () => clearTimeout(t);
-  }, [playing, onLoadExample]);
-
-  function play(id: string) {
-    const recorded = exampleDocs[id];
-    if (!recorded?.length) { onLoadExample(id); return; }
-    run.current++;
-    setReading(false);
-    setPlaying({ id, docs: recorded, done: 0 });
-  }
 
   function read(doc: PendingDoc, id = run.current) {
     if (!onRead) return;
@@ -80,20 +54,20 @@ export function NewCaseFlow({ onLoadExample, onCreate, onRead, examples = RECORD
       .then((r) => { if (run.current === id) setResults((all) => ({ ...all, [doc.key]: r })); });
   }
 
-  /** Text still in the paste box counts: it is added before reading starts. */
+  /** Text still sitting in the paste box counts: it is added before reading starts. */
   function startReading() {
-    const next = placeDocs(docSet, pasted());
+    const next = placeDocs(docSet, pastedDocs(paste));
     const all = next.invoice ? [next.invoice, ...next.agreements] : next.agreements;
     if (startBlock(all)) return;
     setDocSet(next);
     setPaste(undefined);
     const id = ++run.current;
     setResults({});
-    setReading(true);
+    setStage("reading");
     all.forEach((d) => read(d, id));
   }
 
-  function backToStart() { run.current++; setResults({}); setReading(false); }
+  function backToStart() { run.current++; setResults({}); setStage("start"); }
 
   function readAgain(key: string, text: string) {
     const doc = docs.find((d) => d.key === key);
@@ -105,152 +79,111 @@ export function NewCaseFlow({ onLoadExample, onCreate, onRead, examples = RECORD
     read(fixed);
   }
 
-  const block = paste?.trim() ? startBlock([...docs, ...pasted()]) : startBlock(docs);
-  const busy = reading || !!playing;
+  const counts: Partial<Record<NewCaseDocType, number>> = {};
+  for (const d of docs) counts[d.type] = (counts[d.type] ?? 0) + 1;
+  const pastingInvoice = paste?.type === "freight_invoice" && !!paste.text.trim();
+  const block = pastingInvoice ? undefined : startBlock(docs);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-surface">
-      <header className="flex h-[60px] flex-none items-center justify-between gap-4 border-b border-line px-4 md:px-6">
-        <div className="min-w-0">
-          <h1 className="truncate text-[17px] font-[650] tracking-[-0.01em]">{T.heading}</h1>
-          <p className="truncate text-meta text-ink-3">{T.sub} {T.trust}</p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-start justify-between gap-6 px-4 pb-3 pt-3.5 md:px-6">
+        <div>
+          <h1 className="flex items-center gap-2.5 text-title font-[650] tracking-[-0.012em]">
+            {T.heading}
+            {replay && (
+              <span title="Replay of a recorded run. Nothing here reaches the backend or Claude."
+                className="rounded-full border border-line-strong px-2 text-xs font-semibold leading-5 text-ink-2">Replay</span>
+            )}
+          </h1>
+          <p className="mt-0.5 text-[13px] text-ink-2">{T.sub} <span className="text-ink-3">{T.trust}</span></p>
         </div>
-        {replay && (
-          <span title="Replay of a recorded run. Nothing here reaches the backend or Claude."
-            className="flex-none rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-semibold text-ink-2">Replay</span>
-        )}
+        <Secondary onClick={onCancel}>{T.cancel}</Secondary>
       </header>
 
-      <div className="flex min-h-0 flex-1 max-lg:flex-col max-lg:overflow-y-auto">
-        <section aria-label="Documents" className="min-w-0 flex-1 bg-bg px-4 pb-10 pt-6 max-lg:flex-none md:px-7 lg:overflow-y-auto">
-          <div className="mx-auto grid max-w-[760px] gap-4">
-            {playing ? (
-              <Card>
-                <h2 className="text-row font-semibold text-ink">{plural(playing.docs.length, "document")}</h2>
-                <ul aria-label="Added documents" className="mt-1.5">
-                  {playing.docs.map((d) => <li key={d.title} className="border-t border-line py-2 text-body text-ink first:border-t-0">{d.title}</li>)}
-                </ul>
-              </Card>
-            ) : (
-              <>
-                <DropArea label="Files" onDocs={addDocs}
-                  className={(over) => cx("rounded-[14px] border-2 border-dashed px-6 py-10 text-center",
-                    over ? "border-ink bg-surface" : "border-line-strong bg-surface")}>
-                  {(pick) => (
-                    <div className="mx-auto max-w-[460px]">
-                      <h2 className="text-balance text-[19px] font-[650] leading-[26px] tracking-[-0.01em] text-ink">{T.dropTitle}</h2>
-                      <p className="mt-1.5 text-[13.5px] text-ink-2">{T.dropBody}</p>
-                      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                        <Secondary onClick={pick}>{T.chooseFiles}</Secondary>
-                        <button type="button" onClick={() => setPaste((p) => p ?? "")} className={TEXT_BUTTON}>{T.pasteBox}</button>
-                      </div>
-                    </div>
-                  )}
-                </DropArea>
+      <div className="grid grid-cols-1 items-start gap-4 px-4 pb-6 md:px-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section aria-label={T.heading} className="rounded-xl border border-line bg-surface shadow-card">
+          {stage === "start" ? (
+            <>
+              <div className="grid gap-1 px-5 pb-4 pt-4">
+                <label htmlFor="new-case-name" className="text-row font-semibold text-ink">{T.name}</label>
+                <input id="new-case-name" value={name} onChange={(e) => setName(e.target.value)}
+                  placeholder={invoice ? defaultTitle(invoice) : T.namePlaceholder} aria-describedby="new-case-name-hint"
+                  className={cx(INPUT, "max-w-[420px]")} />
+                <p id="new-case-name-hint" className="text-meta text-ink-3">{T.nameHint}</p>
+              </div>
 
-                {paste !== undefined && (
-                  <Card>
-                    <textarea aria-label="Pasted text" value={paste} rows={6} autoFocus onChange={(e) => setPaste(e.target.value)}
-                      placeholder={T.pastePlaceholder} className={cx(INPUT, "w-full resize-y py-2 leading-5")} />
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <p className="text-meta text-ink-3">{T.severalHint}</p>
-                      <div className="flex gap-2">
-                        <Secondary onClick={() => setPaste(undefined)}>{T.cancel}</Secondary>
-                        <Primary disabled={!paste.trim()} onClick={() => { addDocs(pasted()); setPaste(undefined); }}>{T.addPasted}</Primary>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {docs.length > 0 && (
-                  <Card>
-                    <h2 className="text-row font-semibold text-ink">{plural(docs.length, "document")}</h2>
-                    <ul aria-label="Added documents" className="mt-1">
-                      {docs.map((d) => (
-                        <DocRow key={d.key} doc={d}
-                          lead={d !== invoice ? <TypeSelect doc={d} onChange={(type) => setDocSet((c) => ({ ...c, agreements: c.agreements.map((x) => (x.key === d.key ? { ...x, type } : x)) }))} /> : undefined}
-                          aside={!reading && (
-                            <button type="button" onClick={() => setDocSet((c) => (d === c.invoice ? { ...c, invoice: undefined } : { ...c, agreements: c.agreements.filter((x) => x.key !== d.key) }))}
-                              aria-label={`Remove ${d.title}`} className={TEXT_BUTTON}>Remove</button>
-                          )} />
-                      ))}
-                    </ul>
-                  </Card>
-                )}
-
-                <div className={cx("grid gap-4", uploadUrl && "md:grid-cols-2")}>
-                  {uploadUrl && <PhoneCard url={uploadUrl} />}
-                  {examples.length > 0 && (
-                    <section aria-label={T.examples} className="rounded-xl border border-line bg-surface px-4 py-3.5 shadow-card">
-                      <h2 className="text-body font-semibold text-ink">{T.examples}</h2>
-                      <p className="text-meta text-ink-3">{T.examplesBody}</p>
-                      <ul className="mt-1.5">
-                        {examples.map((ex) => (
-                          <li key={ex.id} className="flex items-center justify-between gap-3 border-t border-line py-2.5 first:border-t-0">
-                            <span className="min-w-0">
-                              <span className="block text-body font-semibold text-ink">{ex.label.replace(/^Load (the )?/, "").replace(/^./, (c) => c.toUpperCase())}</span>
-                              <span className="block text-meta text-ink-3">{ex.summary}</span>
-                            </span>
-                            <Secondary onClick={() => play(ex.id)}>Load example</Secondary>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
+              <div className="grid gap-3 border-t border-line px-5 py-4">
+                <div>
+                  <h2 className="text-row font-semibold text-ink">{T.documents}</h2>
+                  <p className="text-[13px] text-ink-2">{T.documentsBody}</p>
                 </div>
-              </>
-            )}
-          </div>
+                <DropTargets onAdd={addDocs} counts={counts} paste={paste} onPaste={setPaste} />
+                {docs.length > 0 && (
+                  <ul aria-label="Added documents">
+                    {invoice && <DocRow doc={invoice} aside={<Remove doc={invoice} onRemove={() => setDocSet((c) => ({ ...c, invoice: undefined }))} />} />}
+                    {agreements.map((d) => (
+                      <DocRow key={d.key} doc={d}
+                        lead={<TypeSelect doc={d} onChange={(type) => setDocSet((c) => ({ ...c, agreements: c.agreements.map((x) => (x.key === d.key ? { ...x, type } : x)) }))} />}
+                        aside={<Remove doc={d} onRemove={() => setDocSet((c) => ({ ...c, agreements: c.agreements.filter((x) => x.key !== d.key) }))} />} />
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-3">
+                {block
+                  ? <p id="new-case-block" className="text-[13px] font-medium text-ink-2">{block}</p>
+                  : <p className="text-[13px] text-ink-3">{agreements.length || (paste && !pastingInvoice) ? "" : T.noAgreements}</p>}
+                <Primary disabled={!!block} describedBy={block ? "new-case-block" : undefined} onClick={startReading}>{T.read}</Primary>
+              </footer>
+            </>
+          ) : replay ? (
+            <ReplayStep docs={docs} examples={examples} onLoadExample={onLoadExample} onEdit={backToStart} />
+          ) : (
+            <ReadingStep docs={docs} results={results} onEdit={backToStart} onReadAgain={readAgain}
+              onCheck={() => onCreate(toDraft(name, docs))} />
+          )}
         </section>
 
-        <aside aria-label="CargoOS" className="flex min-h-0 w-[420px] flex-none flex-col border-l border-line bg-surface max-xl:w-[360px] max-lg:w-full max-lg:border-l-0 max-lg:border-t">
-          {/* Same header as the case's thread (components/thread/case-thread.tsx). */}
-          <header className="flex-none border-b border-line px-[18px] pb-3 pt-3.5">
-            <p className="flex items-center gap-2 text-[14.5px] font-[650]">
-              <span aria-hidden="true" className="size-[18px] rounded-[5px] bg-ink" />CargoOS
-            </p>
-            <p className="mt-0.5 text-meta text-ink-3">Checks every line. Asks when it can’t tell. Never pays or sends.</p>
-          </header>
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-[18px] py-4 text-body">
-            <p className="leading-[21px] text-ink">{T.intro}</p>
-            {playing ? (
-              <ReadingProgress notes={false} title={playing.done < playing.docs.length ? `Reading ${plural(playing.docs.length, "document")}…` : `Read ${plural(playing.docs.length, "document")}. Opening the case…`}
-                items={playing.docs.map((d, i): ReadingItem => ({ key: d.title, title: d.title, state: i < playing.done ? "read" : "reading" }))} />
-            ) : reading && replay ? (
-              <ReplayNote count={docs.length} onEdit={backToStart} />
-            ) : reading ? (
-              <LiveReading docs={docs} results={results} onEdit={backToStart} onReadAgain={readAgain} onCheck={() => onCreate(toDraft("", docs))} />
-            ) : null}
+        {stage === "start" && (uploadUrl || examples.length > 0) && (
+          <div className="grid gap-4">
+            {uploadUrl && <PhoneCard url={uploadUrl} />}
+            {examples.length > 0 && <ExamplesCard examples={examples} onLoad={onLoadExample} />}
           </div>
-          {!busy && (
-            <div className="flex flex-none items-center justify-between gap-3 border-t border-line px-[18px] py-3">
-              {block
-                ? <p id="new-case-block" className="text-[13px] text-ink-2">{block}</p>
-                : <p className="text-[13px] text-ink-3">{agreements.length ? "" : T.noAgreements}</p>}
-              <Primary disabled={!!block} describedBy={block ? "new-case-block" : undefined} onClick={startReading}>{T.read}</Primary>
-            </div>
-          )}
-        </aside>
+        )}
       </div>
     </div>
   );
 }
 
-const Card = ({ children }: { children: ReactNode }) => (
-  <section className="rounded-xl border border-line bg-surface px-4 py-3.5 shadow-card">{children}</section>
+const Remove = ({ doc, onRemove }: { doc: PendingDoc; onRemove: () => void }) => (
+  <button type="button" onClick={onRemove} aria-label={`Remove ${doc.title}`} className={TEXT_BUTTON}>Remove</button>
 );
 
-function ReplayNote({ count, onEdit }: { count: number; onEdit: () => void }) {
+function ReplayStep({ docs, examples, onLoadExample, onEdit }: {
+  docs: PendingDoc[]; examples: RecordedExample[]; onLoadExample: (id: string) => void; onEdit: () => void;
+}) {
   return (
-    <div className="rounded-xl border border-line bg-sunken px-3.5 py-3">
-      <p className="font-semibold text-ink">{T.replayTitle}</p>
-      <p className="mt-0.5 text-[13px] text-ink-2">{plural(count, "document")} added, not read. Load an example on the left to watch a full check.</p>
-      <button type="button" onClick={onEdit} className={cx(TEXT_BUTTON, "mt-2")}>{T.edit}</button>
-    </div>
+    <>
+      <div className="px-5 pb-1 pt-4">
+        <h2 className="text-panel font-[650] text-ink">{docs.length} {docs.length === 1 ? "document" : "documents"} added</h2>
+        <ul aria-label="Documents" className="mt-1.5">
+          {docs.map((d) => <DocRow key={d.key} doc={d} aside={<span className="flex-none text-[13px] text-ink-3">{T.notRead}</span>} />)}
+        </ul>
+      </div>
+      <div className="mx-5 mb-5 mt-2 rounded-lg bg-sunken px-4 py-3.5">
+        <p className="text-body font-semibold text-ink">{T.replayTitle}</p>
+        <p className="mb-3 mt-0.5 text-[13px] text-ink-2">{T.replayBody}</p>
+        <div className="flex items-center justify-between gap-3">
+          <ExampleButtons examples={examples} onLoad={onLoadExample} />
+          <button type="button" onClick={onEdit} className={TEXT_BUTTON}>{T.edit}</button>
+        </div>
+      </div>
+    </>
   );
 }
 
-function LiveReading({ docs, results, onEdit, onReadAgain, onCheck }: {
+function ReadingStep({ docs, results, onEdit, onReadAgain, onCheck }: {
   docs: PendingDoc[]; results: Record<string, ReadResult>; onEdit: () => void;
   onReadAgain: (key: string, text: string) => void; onCheck: () => void;
 }) {
@@ -258,17 +191,19 @@ function LiveReading({ docs, results, onEdit, onReadAgain, onCheck }: {
   const settled = items.every((i) => i.state !== "reading");
   const block = !settled ? "Waiting for every document to be read." : invoiceCharges(items) === 0 ? T.noCharges : undefined;
   return (
-    <div>
-      <ReadingProgress items={items} onPasteInstead={onReadAgain} />
-      <div className="mt-3 grid gap-2">
-        {block
-          ? <p id="new-case-check-block" className="text-[13px] text-ink-2">{block}</p>
-          : <p className="font-semibold text-ink">{readySummary(items)}</p>}
-        <div className="flex gap-2">
-          <Primary disabled={!!block} describedBy={block ? "new-case-check-block" : undefined} onClick={onCheck}>{T.check}</Primary>
-          <Secondary onClick={onEdit}>{T.edit}</Secondary>
-        </div>
+    <>
+      <div className="px-5 pb-1 pt-4">
+        <ReadingProgress items={items} onPasteInstead={onReadAgain} />
       </div>
-    </div>
+      <footer className="mt-2 flex items-center justify-between gap-4 border-t border-line px-5 py-3">
+        {block
+          ? <p id="new-case-check-block" className="text-[13px] font-medium text-ink-2">{block}</p>
+          : <p className="text-body font-semibold text-ink">{readySummary(items)}</p>}
+        <div className="flex flex-none gap-2">
+          <Secondary onClick={onEdit}>{T.edit}</Secondary>
+          <Primary disabled={!!block} describedBy={block ? "new-case-check-block" : undefined} onClick={onCheck}>{T.check}</Primary>
+        </div>
+      </footer>
+    </>
   );
 }

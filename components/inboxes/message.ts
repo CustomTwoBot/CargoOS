@@ -1,6 +1,6 @@
 // The message to the seller (SPEC §8 owner page): Claude writes the words, code inserts the
 // numbers. The editor keeps every amount and line number as a locked chip; these helpers split the
-// text into words and locked parts, and build the page Save PDF prints.
+// text into words and locked parts, and build the page Export PDF prints.
 
 export type Part = { kind: "text" | "locked"; text: string };
 
