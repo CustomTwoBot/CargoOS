@@ -7,6 +7,7 @@ import {
   ReplySchema, SourceDocSchema,
 } from "@/lib/schemas";
 import type { Draft } from "@/lib/types";
+import type { DemoCase } from "./demo-case";
 import { instant, type CaseInput } from "./view-model";
 
 const FixtureSchema = z.object({
@@ -71,3 +72,25 @@ export function scenarioAAt(stage: ReplayStage): CaseInput {
 
 /** The fixture's dispute draft (written by the agent in live mode). */
 export const scenarioADraft = (): Draft => fx.draft;
+
+/** Scenario A as a replay case: one question, answered once (docs/demo-script.md). */
+export const SCENARIO_A: DemoCase = {
+  id: fx.case._id,
+  title: fx.case.title,
+  summary: "1 invoice, 8 charges, one question",
+  start: "before",
+  end: "after",
+  stages: REPLAY_STAGES,
+  at: (stage) => scenarioAAt(stage as ReplayStage),
+  answers: {
+    [fx.question._id]: {
+      text: fx.documents.find((d) => d.type === "reply")?.text ?? "",
+      beats: [
+        { at: 0, stage: "answered" },
+        { at: 1600, stage: "partial", moving: "cleared" },
+        { at: 3200, stage: "after", moving: fx.changes[1]?.key },
+      ],
+    },
+  },
+  draft: (x) => (x.case.revision === 2 ? fx.draft : undefined),
+};

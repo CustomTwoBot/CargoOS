@@ -3,7 +3,7 @@
 import { compareDates, compareInstants, formatShortDate, isoDatePart } from "@/lib/engine/money";
 import type { Fact, SourceDoc, SourceSpan } from "@/lib/types";
 import { delta, money } from "./format";
-import { latestQuestion, type CaseInput, type Row } from "./view-model";
+import { questionFor, type CaseInput, type Row } from "./view-model";
 
 export type ChainIcon = "invoice" | "mail" | "chat" | "quote" | "answer" | "check" | "result";
 export type ChainStep = {
@@ -76,7 +76,7 @@ export function chainOf(x: CaseInput, row: Row): Chain {
   }
 
   if (row.finding.ruleId === "R6_NO_EVIDENCE") {
-    const q = latestQuestion(x);
+    const q = questionFor(x, row.key);
     steps.push({ icon: "check", title: "What we checked", text: "The quote, emails and chats don't mention this charge." });
     if (q?.findingKeys.includes(row.key)) {
       for (const c of q.citations) {
@@ -120,8 +120,7 @@ export function timelineOf(x: CaseInput): TimelineEntry[] {
     e.quotes.push({ span: f.span, struck: newer && f.amountCents !== undefined ? money(f.amountCents) : undefined,
       note: newer ? `replaced by the ${KIND[docs.get(newer.span.docId)?.type ?? "other"].toLowerCase()} of ${formatShortDate(newer.effectiveAt)}` : undefined });
   }
-  const q = latestQuestion(x);
-  for (const c of q?.citations ?? []) {
+  for (const c of x.questions.flatMap((q) => q.citations)) {
     const date = locatorDate(c) ?? docs.get(c.docId)?.sentAt ?? "";
     add(`${c.docId}|${isoDatePart(date)}`, date, docs.get(c.docId)?.title ?? "Document", c.docId)
       .quotes.push({ span: c, note: "Not an agreement to pay." });

@@ -118,13 +118,17 @@ export const latestQuestion = (x: CaseInput): Question | undefined =>
 
 export const latestDraft = (x: CaseInput): Draft | undefined => x.drafts.at(-1);
 
+/** The latest question that asked about this line, if any. */
+export const questionFor = (x: CaseInput, key: string): Question | undefined =>
+  [...x.questions].filter((q) => q.findingKeys.includes(key)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+
 const answeredAt = (x: CaseInput) => latestEvent(x.events, ["reply_received"])?.at;
 
 /** Case status pill (docs/design.md §0). */
 export function casePill(x: CaseInput): { label: string; tone: "waiting" | "neutral" } {
-  const q = latestQuestion(x), d = latestDraft(x);
+  const d = latestDraft(x);
   if (isRechecking(x)) return { label: "Rechecking", tone: "neutral" };
-  if (q?.status === "open") return { label: "Waiting for your answer", tone: "waiting" };
+  if (x.questions.some((q) => q.status === "open")) return { label: "Waiting for your answer", tone: "waiting" };
   if (d?.status === "approved") return { label: "Approved", tone: "neutral" };
   if (d && (d.status === "draft" || d.status === "pending_approval")) return { label: "Ready to approve", tone: "neutral" };
   return { label: totalsOf(x).atStakeCents > 0 ? "Ready to dispute" : "Nothing to dispute", tone: "neutral" };

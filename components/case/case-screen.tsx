@@ -1,8 +1,9 @@
 "use client";
-// The case app at 1280 (docs/design.md §0, layout A "tabs per issue"): an Overview tab plus one
-// tab per thing to decide; Documents and History from the rail. Replay mode only for now:
-// Scenario A from the fixture, actions change a local copy, and an answer replays the recorded
-// run beat by beat (§9). Live Convex data replaces this in SPEC W3 step 8.
+// The case app at 1280 (docs/design.md §0.1, layout A "tabs per issue"). A list of cases; each case
+// has the At stake card pinned above an Overview tab plus one tab per thing to decide; Documents
+// and History come from the rail. Replay mode only for now: each case is a DemoCase (recorded
+// snapshots), actions change a local copy, and an answer plays that answer's beats (§9).
+// Live Convex data replaces this in SPEC W3 step 8.
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CaseEvent, Charge, Draft, Finding, Role, SourceDoc } from "@/lib/types";
@@ -15,16 +16,17 @@ import { TOASTS } from "@/components/states/copy";
 import { QuietToast } from "@/components/states/quiet";
 import { ToastRegion } from "@/components/states/shared";
 import { CaseHeader, DraftButton, Rail, type View } from "./chrome";
+import { CasesList, type CaseSummary } from "./cases-list";
 import { cx } from "./cx";
-import { scenarioAAt, scenarioADraft, type ReplayStage } from "./fixture";
-import { changeNotes, clearedSummary, issuesOf, type Issue } from "./issues";
+import type { DemoCase } from "./demo-case";
+import { SCENARIO_A } from "./fixture";
+import { changeNotes, clearedSummary, issuesOf, openQuestions, type Issue } from "./issues";
 import { DisputeView, LineIssueView, QuestionView } from "./issue-views";
 import { AtStakeCard } from "./overview";
 import { AgreedCard, AllCharges, ChangedBanner, IssueList } from "./overview-tab";
 import { ACTION_ROLE, ALL_ROLES, canAct, type Action } from "./roles";
 import {
-  casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestDraft, latestQuestion, toRows, totalsOf,
-  type CaseInput,
+  casePill, checkedAgainst, checkedLine, countLine, isRechecking, latestDraft, toRows, totalsOf, type CaseInput,
 } from "./view-model";
 
 type Verdict = NonNullable<Finding["userVerdict"]>;
@@ -34,19 +36,51 @@ type Toast = { id: number; text: string; undo?: () => void };
 let clientNow: Date | undefined;
 const useNow = () => useSyncExternalStore(() => () => {}, () => (clientNow ??= new Date()), () => null);
 
-// Replay beats after "Reply" (docs/design.md §9): recheck, line 4 clears, line 6 joins the disputes.
-const BEATS: { at: number; stage: ReplayStage; moving?: string; done?: boolean }[] = [
-  { at: 1600, stage: "partial", moving: "cleared" },
-  { at: 3200, stage: "after", moving: "chg_6" },
-  { at: 4200, stage: "after", done: true },
-];
-
 const KIND_TITLE: Record<NewEvidence["type"], string> = { email: "Email", chat: "Chat", other: "Note" };
 
-export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
+type Props = { cases?: DemoCase[]; roles?: readonly Role[] };
+
+export function CaseScreen({ cases = [SCENARIO_A], roles = ALL_ROLES }: Props) {
+  const [activeId, setActiveId] = useState(cases[0].id);
   const [view, setView] = useState<View>("case");
+  const [summaries, setSummaries] = useState<Record<string, CaseSummary>>({});
+  const [questionNudge, setQuestionNudge] = useState(0);
+  const active = summaries[activeId];
+
+  return (
+    <Tooltip.Provider delay={150}>
+      <div className="flex h-dvh min-w-[1280px] overflow-hidden bg-bg text-ink">
+        <Rail view={view} onView={setView} multiCase={cases.length > 1}
+          openQuestion={!!active?.openQuestions}
+          onQuestion={() => { setView("case"); setQuestionNudge((n) => n + 1); }} />
+        <main className="flex min-w-0 flex-1 flex-col">
+          {view === "cases" && (
+            <CasesList cases={cases} summaries={summaries}
+              onOpen={(id) => { setActiveId(id); setView("case"); }} />
+          )}
+          {cases.map((c) => (
+            <CaseWorkspace key={c.id} demo={c} roles={roles} hidden={view === "cases" || c.id !== activeId}
+              view={view === "cases" ? "case" : view} questionNudge={c.id === activeId ? questionNudge : 0}
+              onSummary={(s) => setSummaries((m) => (sameSummary(m[c.id], s) ? m : { ...m, [c.id]: s }))} />
+          ))}
+        </main>
+      </div>
+    </Tooltip.Provider>
+  );
+}
+
+const sameSummary = (a: CaseSummary | undefined, b: CaseSummary) =>
+  !!a && a.atStakeCents === b.atStakeCents && a.pill === b.pill && a.openQuestions === b.openQuestions && a.toDecide === b.toDecide;
+
+type WorkspaceProps = {
+  demo: DemoCase; roles: readonly Role[]; hidden: boolean; view: Exclude<View, "cases">;
+  questionNudge: number; onSummary: (s: CaseSummary) => void;
+};
+
+/** One case, with its own replay state. Every case stays mounted so switching keeps your work. */
+function CaseWorkspace({ demo, roles, hidden, view, questionNudge, onSummary }: WorkspaceProps) {
   const [tab, setTab] = useState("overview");
-  const [stage, setStage] = useState<ReplayStage>("before");
+  const [stage, setStage] = useState(demo.start);
   const [moving, setMoving] = useState<string>();
   const [replaying, setReplaying] = useState(false);
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>({});
@@ -61,7 +95,7 @@ export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const x: CaseInput = useMemo(() => {
-    const base = scenarioAAt(stage);
+    const base = demo.at(stage);
     return {
       ...base,
       documents: [...base.documents, ...added],
@@ -72,43 +106,58 @@ export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
       drafts,
       events: [...base.events, ...log],
     };
-  }, [stage, verdicts, drafts, added, edits, log]);
-
-  const record = (action: Action, type: CaseEvent["type"], payload: Record<string, unknown>) =>
-    setLog((l) => [...l, { _id: `local_${l.length + 1}`, caseId: x.case._id, at: new Date().toISOString(), actor: ACTION_ROLE[action], type, payload }]);
-
-  const toast = (text: string, undo?: () => void) => {
-    const id = Date.now();
-    setToasts((t) => [...t.slice(-2), { id, text, undo }]);
-    timers.current.push(setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000));
-  };
+  }, [demo, stage, verdicts, drafts, added, edits, log]);
 
   const now = clock ?? new Date(x.events.at(-1)?.at ?? x.questions[0]?.createdAt ?? 0);
   const rows = toRows(x);
   const totals = totalsOf(x);
   const issues = issuesOf(x);
-  const question = latestQuestion(x);
+  const questions = openQuestions(x);
   const draft = latestDraft(x);
   const current: Issue | undefined = issues.find((i) => i.id === tab);
   const rechecking = isRechecking(x);
+  const pill = casePill(x);
+  const toDecide = issues.filter((i) => i.kind !== "dispute").length;
 
-  const resetTo = (s: ReplayStage) => {
+  useEffect(() => {
+    onSummary({ atStakeCents: totals.atStakeCents, billedCents: totals.billedCents, pill: pill.label, openQuestions: questions.length, toDecide });
+  });
+
+  // The rail's Questions button opens the first open question (state adjusted during render).
+  const [seenNudge, setSeenNudge] = useState(questionNudge);
+  if (questionNudge !== seenNudge) {
+    setSeenNudge(questionNudge);
+    setTab(questions[0]?._id ?? "overview");
+  }
+
+  const record = (action: Action, type: CaseEvent["type"], payload: Record<string, unknown>) =>
+    setLog((l) => [...l, { _id: `local_${l.length + 1}`, caseId: x.case._id, at: new Date().toISOString(), actor: ACTION_ROLE[action], type, payload }]);
+
+  const toast = (text: string, undo?: () => void) => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t.slice(-2), { id, text, undo }]);
+    timers.current.push(setTimeout(() => setToasts((t) => t.filter((v) => v.id !== id)), 5000));
+  };
+
+  const resetTo = (s: string) => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setStage(s); setMoving(undefined); setReplaying(false);
     setVerdicts({}); setDrafts([]); setAdded([]); setEdits({}); setLog([]); setToasts([]);
-    setView("case"); setTab("overview");
+    setTab("overview");
   };
 
-  const replayAnswer = () => {
-    setStage("answered");
+  const replayAnswer = (questionId: string) => {
+    const answer = demo.answers[questionId];
+    if (!answer) return;
+    timers.current.forEach(clearTimeout);
     setReplaying(true);
     setTab("overview");
-    timers.current = BEATS.map((b) => setTimeout(() => {
-      setStage(b.stage);
-      setMoving(b.done ? undefined : b.moving);
-      if (b.done) setReplaying(false);
-    }, b.at));
+    const last = answer.beats.at(-1)?.at ?? 0;
+    timers.current = [
+      ...answer.beats.map((b) => setTimeout(() => { setStage(b.stage); setMoving(b.moving); }, b.at)),
+      setTimeout(() => { setMoving(undefined); setReplaying(false); }, last + 1000),
+    ];
   };
 
   const setVerdict = (key: string, v: Verdict) => {
@@ -123,10 +172,11 @@ export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
     }));
   };
 
+  const ready = demo.draft(x);
   const draftDispute = () => {
-    const d = scenarioADraft();
-    setDrafts([d]);
-    record("draftDispute", "draft_created", { draftId: d._id, findingKeys: d.findingKeys, totalDisputedCents: d.totalDisputedCents });
+    if (!ready) return;
+    setDrafts([ready]);
+    record("draftDispute", "draft_created", { draftId: ready._id, findingKeys: ready.findingKeys, totalDisputedCents: ready.totalDisputedCents });
     setTab("dispute");
     toast(TOASTS.drafted);
   };
@@ -154,62 +204,62 @@ export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
 
   const draftDisabledReason = totals.atStakeCents === 0 ? "Nothing to dispute. At stake is $0."
     : draft ? "A dispute is already drafted."
-    : stage !== "after" ? "In this replay, answer the question first." : undefined;
+    : !ready ? "In this replay, answer the open questions first." : undefined;
 
   return (
-    <Tooltip.Provider delay={150}>
-      <div className="flex h-dvh min-w-[1280px] overflow-hidden bg-bg text-ink">
-        <Rail view={view} onView={setView} openQuestion={question?.status === "open"}
-          onQuestion={() => { setView("case"); setTab(question?.status === "open" ? "question" : "overview"); }} />
-        <main className="flex min-w-0 flex-1 flex-col">
-          <CaseHeader title={x.case.title} checkedAgainst={checkedAgainst(x)} pill={casePill(x)} replay
-            actions={<>
-              {canAct(roles, "addEvidence") && <EvidenceDrawer onAdd={addEvidence} onSeeChanges={() => { setView("documents"); }} />}
-              {canAct(roles, "draftDispute") && <DraftButton disabledReason={draftDisabledReason} onDraft={draftDispute} />}
-            </>} />
+    <div hidden={hidden} className="flex min-h-0 flex-1 flex-col">
+      <CaseHeader title={x.case.title} checkedAgainst={checkedAgainst(x)} pill={pill} replay
+        actions={<>
+          {canAct(roles, "addEvidence") && <EvidenceDrawer onAdd={addEvidence} />}
+          {canAct(roles, "draftDispute") && <DraftButton disabledReason={draftDisabledReason} onDraft={draftDispute} />}
+        </>} />
 
-          {view === "case" && (
-            <>
-              <nav role="tablist" aria-label="Case tabs" className="mx-6 flex gap-1 border-b border-line">
-                <TabButton id="overview" tab={tab} onTab={setTab}>Overview</TabButton>
-                {issues.map((i) => (
-                  <TabButton key={i.id} id={i.id} tab={tab} onTab={setTab} isNew={i.kind === "line" && i.isNew}>
-                    {i.title}
-                    <span className={cx("ml-1.5 font-semibold", i.kind === "question" ? "text-waiting" : "text-dispute")}>{i.amount}</span>
-                  </TabButton>
-                ))}
-              </nav>
-              <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-3">
-                {!current ? (
-                  <>
-                    <AtStakeCard totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
-                    {!rechecking && stage === "after" && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => setTab(issues.some((i) => i.id === k) ? k : "overview")} />}
-                    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_404px] gap-4">
-                      <IssueList issues={issues} cleared={clearedSummary(x)} onOpen={setTab}
-                        moveMs={replaying ? 560 : 280} movingKey={moving}
-                        allCharges={<AllCharges rows={rows}
-                          lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents }))}
-                          onSave={saveLine} />} />
-                      <AgreedCard x={x} />
-                    </div>
-                  </>
-                ) : current.kind === "line" ? (
-                  <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
-                    onConfirm={(k) => setVerdict(k, "confirmed")} onDismiss={(k) => setVerdict(k, "false_positive")} />
-                ) : current.kind === "question" ? (
-                  <QuestionView x={x} question={current.question} rows={current.rows} waitingCents={totals.waitingCents} now={now}
-                    canReply={canAct(roles, "reply")} replyNote="Replay of a recorded run: CargoOS reads the recorded answer."
-                    onReply={replayAnswer} />
-                ) : (
-                  <DisputeView draft={current.draft} canApprove={canAct(roles, "approve")} onApprove={approve} />
-                )}
-              </div>
-            </>
-          )}
-          {view === "documents" && <DocumentsView x={x} />}
-          {view === "history" && <div className="min-h-0 flex-1 overflow-auto px-6 pb-4 pt-1"><HistoryView x={x} /></div>}
-        </main>
-        <DemoControls stage={stage} onGo={resetTo} />
+      {view === "case" && (
+        <>
+          <div className="px-6">
+            <AtStakeCard totals={totals} countLine={countLine(rows)} checked={checkedLine(x, now)} rechecking={rechecking} chargeCount={x.charges.length} />
+          </div>
+          <nav role="tablist" aria-label="Case tabs" className="mx-6 mt-2 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:thin]">
+            <TabButton id="overview" tab={tab} onTab={setTab}>Overview</TabButton>
+            {issues.map((i) => (
+              <TabButton key={i.id} id={i.id} tab={tab} onTab={setTab} isNew={i.kind === "line" && i.isNew}>
+                <span className="max-w-[200px] truncate">{i.title}</span>
+                <span className={cx("ml-1.5 font-semibold", i.kind === "question" ? "text-waiting" : "text-dispute")}>{i.amount}</span>
+              </TabButton>
+            ))}
+          </nav>
+          <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-3">
+            {!current ? (
+              <>
+                {!rechecking && <ChangedBanner notes={changeNotes(x)} onOpen={(k) => setTab(issues.some((i) => i.id === k) ? k : "overview")} />}
+                <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_404px] gap-4">
+                  <IssueList issues={issues} cleared={clearedSummary(x)} onOpen={setTab}
+                    moveMs={replaying ? 560 : 280} movingKey={moving}
+                    allCharges={<AllCharges rows={rows}
+                      lines={x.charges.map((c) => ({ key: c._id, lineNo: c.lineNo, description: c.description, amountCents: c.amountCents }))}
+                      onSave={saveLine} />} />
+                  <AgreedCard x={x} />
+                </div>
+              </>
+            ) : current.kind === "line" ? (
+              <LineIssueView x={x} row={current.row} canVerdict={canAct(roles, "dismiss")}
+                onConfirm={(k) => setVerdict(k, "confirmed")} onDismiss={(k) => setVerdict(k, "false_positive")} />
+            ) : current.kind === "question" ? (
+              <QuestionView key={current.id} x={x} question={current.question} rows={current.rows} amount={current.amount} now={now}
+                canReply={canAct(roles, "reply")}
+                replyNote={demo.answers[current.id] ? "Replay of a recorded run: CargoOS reads the recorded answer." : "This replay has no recorded answer for this question."}
+                onReply={replayAnswer} />
+            ) : (
+              <DisputeView draft={current.draft} canApprove={canAct(roles, "approve")} onApprove={approve} />
+            )}
+          </div>
+        </>
+      )}
+      {view === "documents" && <DocumentsView x={x} />}
+      {view === "history" && <div className="min-h-0 flex-1 overflow-auto px-6 pb-4 pt-1"><HistoryView x={x} /></div>}
+
+      {!hidden && <DemoControls demo={demo} stage={stage} onGo={resetTo} />}
+      {!hidden && (
         <ToastRegion>
           {toasts.map((t) => (
             <QuietToast key={t.id} text={t.text}
@@ -217,8 +267,8 @@ export function CaseScreen({ roles = ALL_ROLES }: { roles?: readonly Role[] }) {
               onClose={() => setToasts((all) => all.filter((v) => v.id !== t.id))} />
           ))}
         </ToastRegion>
-      </div>
-    </Tooltip.Provider>
+      )}
+    </div>
   );
 }
 
@@ -226,7 +276,7 @@ function TabButton({ id, tab, onTab, isNew, children }: { id: string; tab: strin
   const on = tab === id;
   return (
     <button type="button" role="tab" aria-selected={on} onClick={() => onTab(id)}
-      className={cx("relative -mb-px flex items-center border-b-2 px-3 pb-2 pt-1.5 text-[13.5px] font-medium",
+      className={cx("relative -mb-px flex flex-none items-center whitespace-nowrap border-b-2 px-3 pb-2 pt-1.5 text-[13.5px] font-medium",
         on ? "border-primary text-ink" : "border-transparent text-ink-3 hover:text-ink")}>
       {children}
       {isNew && <b aria-label="New" className="ml-1.5 size-1.5 rounded-full bg-dispute" />}
@@ -235,8 +285,8 @@ function TabButton({ id, tab, onTab, isNew, children }: { id: string; tab: strin
 }
 
 /** Presenter controls for the replay (SPEC W3 step 1). Not part of the product UI. */
-function DemoControls({ stage, onGo }: { stage: ReplayStage; onGo: (s: ReplayStage) => void }) {
-  const seg = (s: ReplayStage, label: string) => (
+function DemoControls({ demo, stage, onGo }: { demo: DemoCase; stage: string; onGo: (s: string) => void }) {
+  const seg = (s: string, label: string) => (
     <button type="button" aria-pressed={stage === s} onClick={() => onGo(s)}
       className={cx("rounded-[6px] px-2 py-0.5", stage === s ? "bg-line-strong text-ink" : "text-ink-3")}>{label}</button>
   );
@@ -244,8 +294,8 @@ function DemoControls({ stage, onGo }: { stage: ReplayStage; onGo: (s: ReplaySta
     <div className="fixed bottom-3 left-[72px] z-40 flex items-center gap-1 rounded-[9px] border border-line bg-surface p-[3px] text-xs font-medium shadow-card"
       role="group" aria-label="Demo controls">
       <span className="px-1.5 text-ink-3">Demo</span>
-      {seg("before", "Before answer")}{seg("after", "After answer")}
-      <button type="button" onClick={() => onGo("before")} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
+      {seg(demo.start, "Before answers")}{seg(demo.end, "After answers")}
+      <button type="button" onClick={() => onGo(demo.start)} className="rounded-[6px] px-2 py-0.5 text-ink-3 hover:text-ink">Reset demo</button>
     </div>
   );
 }

@@ -2,24 +2,30 @@
 // Pure: derived from the case so the tabs and the Overview list always agree.
 import type { Draft, Question } from "@/lib/types";
 import { delta, money } from "./format";
-import { groupsOf, latestChanges, latestDraft, latestQuestion, toRows, totalsOf, type CaseInput, type Row, type UiGroup } from "./view-model";
+import { groupTotals } from "./totals";
+import { groupsOf, latestChanges, latestDraft, toRows, type CaseInput, type Row, type UiGroup } from "./view-model";
 
 export type Issue =
   | { id: string; kind: "line"; row: Row; title: string; amount: string; isNew: boolean }
-  | { id: "question"; kind: "question"; question: Question; rows: Row[]; title: string; amount: string }
+  | { id: string; kind: "question"; question: Question; rows: Row[]; title: string; amount: string }
   | { id: "dispute"; kind: "dispute"; draft: Draft; title: string; amount: string };
+
+/** Open questions, oldest first. */
+export const openQuestions = (x: CaseInput): Question[] =>
+  x.questions.filter((q) => q.status === "open").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
 export function issuesOf(x: CaseInput): Issue[] {
   const rows = toRows(x);
   const out: Issue[] = rows
     .filter((r) => r.group === "dispute")
     .map((r) => ({ id: r.key, kind: "line", row: r, title: r.description, amount: delta(r.deltaCents), isNew: r.tag === "Moved from Waiting" }));
-  const q = latestQuestion(x);
-  if (q?.status === "open") {
+  const open = openQuestions(x);
+  open.forEach((q, i) => {
     const asked = rows.filter((r) => q.findingKeys.includes(r.key) && r.group === "waiting");
-    out.push({ id: "question", kind: "question", question: q, rows: asked, title: "Your answer",
-      amount: money(totalsOf(x).waitingCents) });
-  }
+    out.push({ id: q._id, kind: "question", question: q, rows: asked,
+      title: open.length > 1 ? `Question ${i + 1}` : "Your answer",
+      amount: money(groupTotals(asked.map((r) => r.finding)).billedCents) });
+  });
   const d = latestDraft(x);
   if (d) out.push({ id: "dispute", kind: "dispute", draft: d, title: "Dispute", amount: money(d.totalDisputedCents) });
   return out;

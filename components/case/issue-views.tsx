@@ -62,11 +62,11 @@ export function LineIssueView({ x, row, canVerdict, onConfirm, onDismiss }: Line
 }
 
 type QuestionProps = {
-  x: CaseInput; question: Question; rows: Row[]; waitingCents: number; now: Date;
+  x: CaseInput; question: Question; rows: Row[]; amount: string; now: Date;
   canReply: boolean; replyNote?: string; onReply: (questionId: string, text: string) => void;
 };
 
-export function QuestionView({ x, question: q, rows, waitingCents, now, canReply, replyNote, onReply }: QuestionProps) {
+export function QuestionView({ x, question: q, rows, amount, now, canReply, replyNote, onReply }: QuestionProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState<SourceSpan | null>(null);
   const id = `answer-${q._id}`;
@@ -89,7 +89,7 @@ export function QuestionView({ x, question: q, rows, waitingCents, now, canReply
             </div>
           </form>
         )}
-        <p className="mt-3 text-xs text-ink-3">Asked {whenAt(q.createdAt, now)}. {money(waitingCents)} is waiting on this answer.</p>
+        <p className="mt-3 text-xs text-ink-3">Asked {whenAt(q.createdAt, now)}. {amount} is waiting on this answer.</p>
       </section>
       <aside aria-label="What it's about" className={cx(CARD, "self-start px-5 py-5")}>
         {open ? <DocumentView x={x} span={open} onBack={() => setOpen(null)} /> : (

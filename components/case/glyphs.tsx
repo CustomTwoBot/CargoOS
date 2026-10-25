@@ -30,6 +30,7 @@ export const Logo = () => (
   </svg>
 );
 
+export const CasesIcon = () => <Line><rect x="3" y="4" width="14" height="5" rx="1.5" /><rect x="3" y="11" width="14" height="5" rx="1.5" /></Line>;
 export const ListIcon = () => <Line><path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9M3.6 5.5h.01M3.6 10h.01M3.6 14.5h.01" /></Line>;
 export const QuestionsIcon = () => <Line><path d="M3.5 4.5h13v8.5H9.5l-4 3v-3h-2z" /></Line>;
 export const DocumentsIcon = () => <Line><path d="M5.5 2.8h6l3.2 3.2v11.2H5.5zM11.5 2.8V6h3.2" /></Line>;

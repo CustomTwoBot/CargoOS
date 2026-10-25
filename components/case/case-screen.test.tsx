@@ -44,6 +44,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     fireEvent.click(tab(/Your answer/));
     fireEvent.change(screen.getByLabelText("Your answer"), { target: { value: "approved congestion, not rush handling" } });
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+    act(() => { vi.advanceTimersByTime(0); });
     expect(screen.getByText("Rechecking 8 charges with your answer…")).toBeInTheDocument();
     act(() => { vi.advanceTimersByTime(1600); });
     expect(screen.getByText("1 to dispute · 1 waiting on answers · 6 cleared")).toBeInTheDocument();
@@ -55,7 +56,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
 
   it("one operator drafts and approves; nothing is sent", () => {
     render(<CaseScreen />);
-    fireEvent.click(screen.getByRole("button", { name: "After answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
     expect(tab(/Dispute/)).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -65,7 +66,7 @@ describe("CaseScreen (replay, tabs per issue)", () => {
 
   it("the rail switches to Documents and History without losing the case state", () => {
     render(<CaseScreen />);
-    fireEvent.click(screen.getByRole("button", { name: "After answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "After answers" }));
     fireEvent.click(screen.getByRole("button", { name: "Draft dispute" }));
     fireEvent.click(screen.getByRole("button", { name: "History" }));
     expect(screen.getByRole("table", { name: "Events" })).toBeInTheDocument();
