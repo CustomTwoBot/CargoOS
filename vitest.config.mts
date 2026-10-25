@@ -15,7 +15,7 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["**/*.test.ts"],
-          exclude: ["node_modules/**", "tests/e2e/**", ".next/**"],
+          exclude: ["node_modules/**", "tests/e2e/**", ".next/**", "convex/**"],
         },
       },
       {
@@ -26,6 +26,16 @@ export default defineConfig({
           include: ["**/*.test.tsx"],
           exclude: ["node_modules/**", "tests/e2e/**", ".next/**"],
           setupFiles: ["./tests/setup.ts"],
+        },
+      },
+      {
+        // Convex functions run in memory via convex-test (convex/_generated/ai/guidelines.md).
+        extends: true,
+        test: {
+          name: "convex",
+          environment: "edge-runtime",
+          include: ["convex/**/*.test.ts"],
+          server: { deps: { inline: ["convex-test"] } },
         },
       },
     ],
