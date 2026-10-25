@@ -1,137 +1,178 @@
-// The sidebar (docs/design.md §0.1, §7.1). Expanded it names every case with what is at stake and
-// counts what waits on you; collapsed it is the 60px icon rail with dots. The choice is remembered
-// in localStorage ("cargoos.sidebar"), wrapped in try/catch like the theme.
-import { useSyncExternalStore, type ReactNode } from "react";
+// The sidebar (docs/design.md §0.2, decision 1): only places shared by every case. "Waiting on you"
+// (Questions, Approvals), "Cases" (one line each: status dot, title, at stake) and New case. A case's
+// own tabs, Documents and History live inside the case. Collapsed it is a 60px rail of icons with
+// dots and case initials; in the drawer below 1024px it is the full sidebar with a close button.
+import { Tooltip } from "@base-ui/react/tooltip";
+import type { ReactNode } from "react";
+import { caseInitials, type CaseStatus } from "@/components/shell/case-status";
+import { CloseIcon } from "@/components/shell/icons";
+import { setSidebarPref, type SidebarMode } from "@/components/shell/layout";
+import { StatusDot } from "@/components/shell/status-dot";
 import { cx } from "./cx";
 import { money } from "./format";
-import {
-  ApproveIcon, CasesIcon, CollapseIcon, DocumentsIcon, ExpandIcon, HistoryIcon, ListIcon, Logo, PlusIcon, QuestionsIcon,
-} from "./glyphs";
+import { ApproveIcon, CasesIcon, CollapseIcon, ExpandIcon, Logo, PlusIcon, QuestionsIcon } from "./glyphs";
 
 export type View = "cases" | "case" | "documents" | "history" | "questions" | "approvals" | "new";
+/** Where the sidebar can take you. Opening a case goes through `onOpenCase`. */
+export type Place = "cases" | "questions" | "approvals" | "new";
 
-export type SidebarCase = { id: string; title: string; atStakeCents: number; openQuestions: number };
+export type SidebarCase = { id: string; title: string; atStakeCents: number; status: CaseStatus };
 
-type Props = {
-  view: View; onView: (v: View) => void;
+export type SidebarProps = {
+  mode: SidebarMode;
+  view: View; onView: (p: Place) => void;
   cases: SidebarCase[]; activeId: string; onOpenCase: (id: string) => void;
-  counts: { questions: number; documents: number; events: number };
   /** Across every case: open questions and disputes waiting for a decision. */
   inbox: { questions: number; approvals: number };
-  onQuestion: () => void;
-  onNewCase?: () => void;
+  /** Set in the drawer: shows a close button instead of collapse. */
+  onClose?: () => void;
 };
 
-const KEY = "cargoos.sidebar";
-const listeners = new Set<() => void>();
-const readCollapsed = () => { try { return localStorage.getItem(KEY) === "collapsed"; } catch { return false; } };
-const setCollapsed = (v: boolean) => {
-  try { localStorage.setItem(KEY, v ? "collapsed" : "expanded"); } catch { /* not remembered */ }
-  listeners.forEach((l) => l());
-};
-const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
+const REPLAY = "Replay of a recorded run. Synthetic data. Nothing is sent or paid.";
 
-export function Sidebar(p: Props) {
-  const collapsed = useSyncExternalStore(subscribe, readCollapsed, () => false);
-  return collapsed ? <Collapsed {...p} /> : <Expanded {...p} />;
+export function Sidebar(p: SidebarProps) {
+  const { mode, onClose } = p;
+  return (
+    <nav aria-label="Sections"
+      className={cx("flex h-full flex-none bg-surface",
+        onClose ? "w-full" : "border-r border-line",
+        !onClose && (mode === "expanded" ? "w-[256px]" : mode === "collapsed" ? "w-[60px]" : "w-[60px] xl:w-[256px]"))}>
+      {mode !== "collapsed" && <Full {...p} className={mode === "auto" ? "max-xl:hidden" : undefined} />}
+      {mode !== "expanded" && <Rail {...p} className={mode === "auto" ? "xl:hidden" : undefined} />}
+    </nav>
+  );
 }
 
-const Badge = ({ n, tone = "neutral" }: { n: number; tone?: "waiting" | "neutral" }) => (
+const inCase = (v: View) => v === "case" || v === "documents" || v === "history";
+const label = (name: string, n: number) => (n > 0 ? `${name}, ${n} waiting` : name);
+const caseLabel = (c: SidebarCase) => `${c.title}, ${money(c.atStakeCents)} at stake, ${c.status.label}`;
+
+/** A 2px bar at the left edge marks where you are (docs/design.md §3.1, --primary). */
+const CURRENT = "bg-sunken text-ink before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary";
+
+const IconButton = ({ name, onClick, children }: { name: string; onClick: () => void; children: ReactNode }) => (
+  <button type="button" onClick={onClick} aria-label={name} title={name}
+    className="grid size-8 flex-none place-items-center rounded-lg text-ink-3 hover:bg-sunken hover:text-ink">{children}</button>
+);
+
+const Count = ({ n }: { n: number }) => (
   n > 0 ? (
-    <span className={cx("ml-auto min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-[18px]",
-      tone === "waiting" ? "bg-waiting-tint text-waiting" : "bg-sunken text-ink-3")}>{n}</span>
+    <span aria-hidden="true" className="ml-auto min-w-[20px] rounded-[6px] bg-waiting-tint px-1.5 text-center text-[11.5px] font-semibold leading-[18px] text-waiting">{n}</span>
   ) : null
 );
 
-function Expanded({ view, onView, cases, activeId, onOpenCase, counts, inbox, onQuestion, onNewCase }: Props) {
-  const active = cases.find((c) => c.id === activeId);
-  const nav = (label: string, icon: ReactNode, on: boolean, onClick: () => void, badge?: ReactNode) => (
-    <button type="button" onClick={onClick} aria-current={on ? "page" : undefined}
-      className={cx("flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium",
-        on ? "bg-sunken text-ink" : "text-ink-2 hover:bg-sunken hover:text-ink")}>
-      <span className="text-ink-3">{icon}</span>{label}{badge}
+function Full({ view, onView, cases, activeId, onOpenCase, inbox, onClose, className }: SidebarProps & { className?: string }) {
+  const place = (name: string, icon: ReactNode, on: boolean, onClick: () => void, n = 0) => (
+    <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} aria-label={label(name, n)}
+      className={cx("group relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium",
+        on ? CURRENT : "text-ink-2 hover:bg-sunken hover:text-ink")}>
+      <span className={on ? "text-ink" : "text-ink-3 group-hover:text-ink-2"}>{icon}</span>{name}<Count n={n} />
     </button>
   );
   return (
-    <nav aria-label="Sections" className="flex w-[232px] flex-none flex-col border-r border-line bg-surface">
-      <div className="flex items-center gap-2 px-4 pb-3 pt-4">
+    <div className={cx("flex min-h-0 w-full flex-col", className)}>
+      <div className="flex h-14 flex-none items-center gap-2 pl-4 pr-3">
         <span className="text-ink"><Logo /></span>
         <span className="text-[15px] font-[650] tracking-[-0.01em]">CargoOS</span>
-        <button type="button" onClick={() => setCollapsed(true)} title="Collapse sidebar" aria-label="Collapse sidebar"
-          className="ml-auto grid size-7 place-items-center rounded-md text-ink-3 hover:bg-sunken hover:text-ink"><CollapseIcon /></button>
+        <span className="ml-auto" />
+        {onClose
+          ? <IconButton name="Close menu" onClick={onClose}><CloseIcon /></IconButton>
+          : <IconButton name="Collapse sidebar" onClick={() => setSidebarPref("collapsed")}><CollapseIcon /></IconButton>}
       </div>
 
-      <div className="px-2">
-        <div className="px-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Waiting on you</div>
-        {nav("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), <Badge n={inbox.questions} tone="waiting" />)}
-        {nav("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), <Badge n={inbox.approvals} tone="waiting" />)}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        <section aria-labelledby="sb-waiting">
+          <h2 id="sb-waiting" className="px-2.5 pb-1 pt-2 text-[11.5px] font-medium text-ink-3">Waiting on you</h2>
+          {place("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), inbox.questions)}
+          {place("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), inbox.approvals)}
+        </section>
+
+        <section aria-labelledby="sb-cases" className="mt-5">
+          <h2 id="sb-cases" className="pb-1">
+            <button type="button" onClick={() => onView("cases")} aria-current={view === "cases" ? "page" : undefined} aria-label="All cases"
+              className={cx("flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-left text-[11.5px] font-medium",
+                view === "cases" ? "text-ink" : "text-ink-3 hover:text-ink")}>
+              Cases<span className="font-normal text-ink-3">{cases.length}</span>
+            </button>
+          </h2>
+          <ul>
+            {cases.map((c) => {
+              const on = c.id === activeId && inCase(view);
+              return (
+                <li key={c.id}>
+                  <button type="button" onClick={() => onOpenCase(c.id)} aria-current={on ? "page" : undefined}
+                    aria-label={caseLabel(c)} title={`${c.title} · ${c.status.label}`}
+                    className={cx("group relative grid h-9 w-full grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2.5 text-left",
+                      on ? CURRENT : "hover:bg-sunken")}>
+                    <StatusDot tone={c.status.tone} />
+                    <span className={cx("truncate text-[13.5px]", on ? "font-semibold text-ink" : "font-medium text-ink-2 group-hover:text-ink")}>{c.title}</span>
+                    <span className={cx("text-[12.5px] font-semibold", c.atStakeCents ? "text-dispute" : "text-ink-3")}>{money(c.atStakeCents)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {place("New case", <PlusIcon />, view === "new", () => onView("new"))}
+        </section>
       </div>
 
-      <div className="mt-2 px-2">
-        <div className="flex items-center justify-between px-2.5 pb-1 pt-2">
-          <button type="button" onClick={() => onView("cases")}
-            className={cx("text-[11.5px] font-medium", view === "cases" ? "text-ink" : "text-ink-3 hover:text-ink")}>Cases</button>
-          {onNewCase && (
-            <button type="button" onClick={onNewCase} title="New case" aria-label="New case"
-              className="grid size-6 place-items-center rounded-md text-ink-3 hover:bg-sunken hover:text-ink"><PlusIcon /></button>
-          )}
-        </div>
-        <ul>
-          {cases.map((c) => {
-            const on = c.id === activeId && view !== "cases";
-            return (
-              <li key={c.id}>
-                <button type="button" onClick={() => onOpenCase(c.id)} aria-current={on ? "page" : undefined}
-                  className={cx("grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left",
-                    on ? "bg-sunken" : "hover:bg-sunken")}>
-                  <span className="min-w-0">
-                    <span className={cx("block truncate text-[13px] font-semibold", on ? "text-ink" : "text-ink-2")}>{c.title}</span>
-                    {c.openQuestions > 0 && <span className="block text-[11.5px] text-waiting">{c.openQuestions} waiting on you</span>}
-                  </span>
-                  <span className={cx("text-[12.5px] font-semibold", c.atStakeCents ? "text-dispute" : "text-ink-3")}>{money(c.atStakeCents)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      {active && (
-        <div className="mt-3 border-t border-line px-2 pt-3">
-          <div className="truncate px-2.5 pb-1 text-[11.5px] font-medium text-ink-3">{active.title}</div>
-          {nav("Overview", <ListIcon />, view === "case", () => onView("case"))}
-          {counts.questions > 0 && nav("Open question", <QuestionsIcon />, false, onQuestion, <Badge n={counts.questions} tone="waiting" />)}
-          {nav("Documents", <DocumentsIcon />, view === "documents", () => onView("documents"), <Badge n={counts.documents} />)}
-          {nav("History", <HistoryIcon />, view === "history", () => onView("history"), <Badge n={counts.events} />)}
-        </div>
-      )}
-
-      <p className="mt-auto px-4 pb-4 text-[11.5px] leading-4 text-ink-3">
-        Replay of a recorded run. Synthetic data. Nothing is sent or paid.
-      </p>
-    </nav>
+      <p className="flex-none border-t border-line px-4 py-3 text-[11.5px] leading-4 text-ink-3">{REPLAY}</p>
+    </div>
   );
 }
 
-function Collapsed({ view, onView, cases, inbox }: Props) {
-  const item = (label: string, icon: ReactNode, on: boolean, onClick: () => void, dot = false) => (
-    <button type="button" title={label} aria-label={label} aria-current={on ? "page" : undefined} onClick={onClick}
-      className={cx("relative grid size-[38px] place-items-center rounded-[10px] text-ink-3", on ? "bg-sunken text-ink" : "hover:text-ink")}>
-      {icon}
-      {dot && <b className="absolute right-1.5 top-1.5 size-[7px] rounded-full bg-waiting-fill" />}
-    </button>
-  );
+/** One rail button with its name in a tooltip to the right. */
+function RailItem({ name, tip, on, onClick, children }: { name: string; tip?: ReactNode; on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <nav aria-label="Sections" className="flex w-[60px] flex-none flex-col items-center gap-2 border-r border-line bg-surface py-4">
-      <span className="text-ink"><Logo /></span>
-      <button type="button" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar"
-        className="mb-1.5 grid size-[30px] place-items-center rounded-md text-ink-3 hover:bg-sunken hover:text-ink"><ExpandIcon /></button>
-      {cases.length > 1 && item("All cases", <CasesIcon />, view === "cases", () => onView("cases"))}
-      {item("Overview", <ListIcon />, view === "case", () => onView("case"))}
-      {item("Questions", <QuestionsIcon />, view === "questions", () => onView("questions"), inbox.questions > 0)}
-      {item("Approvals", <ApproveIcon />, view === "approvals", () => onView("approvals"), inbox.approvals > 0)}
-      {item("Documents", <DocumentsIcon />, view === "documents", () => onView("documents"))}
-      {item("History", <HistoryIcon />, view === "history", () => onView("history"))}
-    </nav>
+    <Tooltip.Root>
+      <Tooltip.Trigger onClick={onClick} aria-label={name} aria-current={on ? "page" : undefined}
+        className={cx("relative grid size-10 flex-none place-items-center rounded-[10px]",
+          on ? "bg-sunken text-ink" : "text-ink-3 hover:bg-sunken hover:text-ink")}>
+        {children}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner side="right" sideOffset={8} className="z-50">
+          <Tooltip.Popup className="max-w-[260px] rounded-[8px] bg-tip-bg px-2.5 py-1.5 text-meta text-tip-ink shadow-[0_8px_24px_rgba(0,0,0,.25)]">{tip ?? name}</Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
+const Dot = () => <b aria-hidden="true" className="absolute right-[7px] top-[7px] size-2 rounded-full bg-waiting-fill ring-2 ring-surface" />;
+const Rule = () => <span aria-hidden="true" className="my-2 h-px w-7 flex-none bg-line" />;
+
+function Rail({ view, onView, cases, activeId, onOpenCase, inbox, className }: SidebarProps & { className?: string }) {
+  return (
+    <div className={cx("flex min-h-0 w-full flex-col items-center", className)}>
+      <div className="flex h-14 flex-none items-center text-ink"><Logo /></div>
+      <IconButton name="Expand sidebar" onClick={() => setSidebarPref("expanded")}><ExpandIcon /></IconButton>
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-3 pt-1">
+        <Rule />
+        <RailItem name={label("Questions", inbox.questions)} on={view === "questions"} onClick={() => onView("questions")}>
+          <QuestionsIcon />{inbox.questions > 0 && <Dot />}
+        </RailItem>
+        <RailItem name={label("Approvals", inbox.approvals)} on={view === "approvals"} onClick={() => onView("approvals")}>
+          <ApproveIcon />{inbox.approvals > 0 && <Dot />}
+        </RailItem>
+        <Rule />
+        <RailItem name="All cases" on={view === "cases"} onClick={() => onView("cases")}><CasesIcon /></RailItem>
+        {cases.map((c) => {
+          const on = c.id === activeId && inCase(view);
+          return (
+            <RailItem key={c.id} name={caseLabel(c)} on={on} onClick={() => onOpenCase(c.id)}
+              tip={<><b className="block font-semibold">{c.title}</b>{money(c.atStakeCents)} at stake · {c.status.label}</>}>
+              <span className={cx("relative grid size-7 place-items-center rounded-[8px] border text-[11px] font-[650] tracking-[0.02em]",
+                on ? "border-primary-ring text-ink" : "border-line-strong text-ink-2")}>
+                {caseInitials(c.title)}
+                <StatusDot tone={c.status.tone} className="absolute -right-1 -top-1 ring-2 ring-surface" />
+              </span>
+            </RailItem>
+          );
+        })}
+        <RailItem name="New case" on={view === "new"} onClick={() => onView("new")}><PlusIcon /></RailItem>
+      </div>
+      <span title={REPLAY} className="flex-none pb-3 text-[10.5px] font-medium text-ink-3">Replay</span>
+    </div>
   );
 }
