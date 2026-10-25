@@ -5,7 +5,7 @@
 import { useMutation, useQueries, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Person } from "@/lib/types";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -185,8 +185,12 @@ export function useLiveCase(person: Person, toast: Toast): LiveCase | undefined 
 export function useOtherLiveCases(person: Person, toast: Toast): LiveCase[] {
   const demoId = useQuery(api.cases.getDemoCase);
   const ids = useQuery(api.demoCases.listCaseIds);
-  const others = (ids ?? []).filter((id) => id !== demoId);
-  const views = useQueries(Object.fromEntries(others.map((id) => [id, { query: api.cases.getCaseView, args: { caseId: id } }])));
+  const key = (ids ?? []).filter((id) => id !== demoId).join(",");
+  // One request object per list, not per render: useQueries resubscribes whenever it gets a new one.
+  const requests = useMemo(() => Object.fromEntries(key.split(",").filter(Boolean)
+    .map((id) => [id, { query: api.cases.getCaseView, args: { caseId: id as Id<"cases"> } }])), [key]);
+  const views = useQueries(requests);
+  const others = Object.keys(requests);
   const m = useLiveMutations();
   const [waiting, setWaiting] = useState<Record<string, Waiting | undefined>>({});
   const [messages, setMessages] = useState<Record<string, Message>>({});
