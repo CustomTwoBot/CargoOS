@@ -3,14 +3,25 @@ import { useState } from "react";
 import { cx } from "@/components/case/cx";
 import { ChainGlyph } from "@/components/case/glyphs";
 import type { CaseInput } from "@/components/case/view-model";
-import type { DocRow } from "./documents";
+import { linesText, type DocRow } from "./documents";
 import { DocumentCard, meta, StatusText } from "./parts";
+
+/** "Read, 7 facts · lines 2, 3, 5, 7 and 8": the status, then where it was used, on one line. */
+function StatusLine({ row }: { row: DocRow }) {
+  const used = row.lines.length ? linesText(row.lines) : undefined;
+  return (
+    <span className="flex min-w-0 gap-1 text-meta" title={[row.status.label, used].filter(Boolean).join(" · ")}>
+      <StatusText status={row.status} className="shrink-0" />
+      {used && <span className="min-w-0 truncate text-ink-3">· {used}</span>}
+    </span>
+  );
+}
 
 export function ListView({ x, rows }: { x: CaseInput; rows: DocRow[] }) {
   const [selectedId, setSelectedId] = useState(rows[0]?.doc._id);
   const selected = rows.find((r) => r.doc._id === selectedId) ?? rows[0];
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-4 px-6 pb-4">
+    <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4 px-6 pb-4">
       <ul aria-label="Documents" className="min-h-0 overflow-auto rounded-xl border border-line bg-surface p-1.5 shadow-card">
         {rows.map((r) => (
           <li key={r.doc._id}>
@@ -21,9 +32,9 @@ export function ListView({ x, rows }: { x: CaseInput; rows: DocRow[] }) {
                 <ChainGlyph icon={r.icon} />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-[13.5px] font-[650] leading-[19px]">{r.doc.title}</span>
-                <span className="block text-meta text-ink-3">{meta(r)}</span>
-                <StatusText status={r.status} />
+                <span className="block truncate text-[13.5px] font-[650] leading-[19px]" title={r.doc.title}>{r.doc.title}</span>
+                <span className="block truncate text-meta text-ink-3">{meta(r)}</span>
+                <StatusLine row={r} />
               </span>
             </button>
           </li>
