@@ -8,9 +8,14 @@ import { interpretReply, resolveReply } from "@/lib/ai/interpretReply";
 import { formatUSD, moneyInText } from "@/lib/ai/money";
 import { planQuestion, questionCandidates } from "@/lib/ai/planQuestion";
 import { validateSpans } from "@/lib/ai/validateSpans";
-import type { Finding, Question } from "@/lib/types";
+import type { NewCharge, NewFact } from "@/lib/ai/types";
+import { reconcile } from "@/lib/engine/reconcile";
+import type { Charge, Fact, Finding, Question } from "@/lib/types";
+import answerKey from "@/fixtures/scenarioA.json";
+import scenarioFacts from "@/fixtures/scenarioA.facts.json";
+import replyFixture from "@/fixtures/scenarioA.reply.facts.json";
 import { z } from "zod";
-import { AI_CASES, hasRecording, INPUTS, recordingSender, replaySender, type AmbigResult } from "./aiCases";
+import { AI_CASES, hasRecording, INPUTS, recordingSender, replaySender, type AmbigResult, type ScreenshotResult } from "./aiCases";
 
 // ---- Fakes (unit tests of our code; recordings below test the real model) ----
 
@@ -317,6 +322,74 @@ const EXPECT: Record<keyof typeof AI_CASES, () => Promise<void>> = {
     expectNumbersFromFindings(d.body, INPUTS.draftA.findings, 750000);
     for (const cents of moneyInText(d.subject)) expect(cents).toBe(70000);
   },
+  "extract-live-quote": async () => {
+    const x = await AI_CASES["extract-live-quote"](replaySender("extract-live-quote"));
+    expect(factKeys(x.facts)).toEqual(factKeys(fixtureFacts("doc_quote")));
+    expect(x.charges).toEqual([]);
+  },
+  "extract-live-invoice": async () => {
+    const x = await AI_CASES["extract-live-invoice"](replaySender("extract-live-invoice"));
+    expect(chargeKeys(x.charges)).toEqual(chargeKeys(scenarioFacts.charges as Charge[]));
+    expect(x.facts).toEqual([]);
+  },
+  "extract-live-email": async () => {
+    const x = await AI_CASES["extract-live-email"](replaySender("extract-live-email"));
+    expect(factKeys(x.facts)).toEqual(factKeys(fixtureFacts("doc_email")));
+    expect(x.facts[0].effectiveAt).toBe("2026-09-05T14:21:00-07:00"); // the email's Date header, to the minute
+  },
+  "extract-live-chat": async () => {
+    const x = await AI_CASES["extract-live-chat"](replaySender("extract-live-chat"));
+    expect(factKeys(x.facts)).toEqual(factKeys(fixtureFacts("doc_chat")));
+    expect(x.facts.some((f) => f.span.quote.includes("may be extra"))).toBe(false); // hedged, not a fact
+  },
+  "transcribe-live-whatsapp-png": async () => {
+    const r: ScreenshotResult = await AI_CASES["transcribe-live-whatsapp-png"](replaySender("transcribe-live-whatsapp-png"));
+    expect(r.transcription.readable).toBe(true);
+    const text = r.transcription.readable ? normalize(r.transcription.text) : "";
+    for (const message of CHAT_MESSAGES) expect(text).toContain(normalize(message));
+    const booking = r.extraction?.facts.find((f) => f.kind === "booking_date");
+    expect(booking).toMatchObject({ statedBy: "forwarder", fromImage: true });
+    expect(booking?.effectiveAt.slice(0, 10)).toBe("2026-09-08");
+    expect(r.extraction?.facts.every((f) => f.fromImage)).toBe(true);
+    expect(r.extraction?.facts.some((f) => f.span.quote.includes("may be extra"))).toBe(false);
+  },
+  "transcribe-unreadable-png": async () => {
+    const t = await AI_CASES["transcribe-unreadable-png"](replaySender("transcribe-unreadable-png"));
+    expect(t.readable).toBe(false);
+    if (!t.readable) expect(t.reason.length).toBeGreaterThan(0);
+  },
 };
+
+// ---- Live demo files end to end: the 4 extractions -> the engine -> the Scenario A answer key ----
+
+const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
+const CHAT_MESSAGES = answerKey.documents.find((d) => d.id === "doc_chat")!.text.split("\n").map((l) => l.slice(l.indexOf(": ") + 2));
+const fixtureFacts = (docId: string) => (scenarioFacts.facts as Fact[]).filter((f) => f.span.docId === docId);
+const factKeys = (facts: (NewFact | Fact)[]) => facts.map((f) => [
+  f.kind, f.chargeType ?? null, f.amountCents ?? null, f.currency ?? null, f.condition?.bookedBy ?? null,
+  f.validUntil ?? null, f.statedBy, f.effectiveAt.slice(0, 10),
+].join("|")).sort();
+const chargeKeys = (charges: (NewCharge | Charge)[]) => charges
+  .map((c) => [c.lineNo, c.chargeType, c.amountCents, c.currency, normalize(c.description)].join("|")).sort();
+
+const LIVE_TEXT_CASES = ["extract-live-quote", "extract-live-invoice", "extract-live-email", "extract-live-chat"] as const;
+
+describe.skipIf(!LIVE_TEXT_CASES.every((n) => hasRecording(n)))("recorded: live demo files end to end", () => {
+  it("extracted facts and charges reproduce the Scenario A answer key, before and after the reply", async () => {
+    const out = await Promise.all(LIVE_TEXT_CASES.map((n) => AI_CASES[n](replaySender(n))));
+    const c = { ...scenarioFacts.case, revision: 0 } as Parameters<typeof reconcile>[0]["case"];
+    const facts: Fact[] = out.flatMap((x) => x.facts).map((f, i) => ({ ...f, _id: `fact_${i}`, caseId: c._id }));
+    const charges: Charge[] = out.flatMap((x) => x.charges).map((ch) => ({ ...ch, _id: `chg_${ch.lineNo}`, caseId: c._id }));
+    expect(factKeys(facts)).toEqual(factKeys(scenarioFacts.facts as Fact[]));
+
+    const pick = (f: { lineNo: number; status: string; ruleId: string; deltaCents?: number }) => [f.lineNo, f.status, f.ruleId, f.deltaCents ?? null];
+    const before = reconcile({ case: c, facts, charges });
+    expect(before.map(pick)).toEqual(answerKey.expected.findings.map(pick));
+    const after = reconcile({ case: { ...c, revision: 1 }, facts: [...facts, ...(replyFixture.facts as Fact[])], charges, prior: before });
+    expect(after.map(pick)).toEqual(answerKey.expected.replies[0].findingsAfter.map(pick));
+    const atStake = (fs: Finding[]) => fs.filter((f) => f.status === "potential_discrepancy").reduce((s, f) => s + (f.deltaCents ?? 0), 0);
+    expect([atStake(before), atStake(after)]).toEqual([30000, 70000]);
+  });
+});
 
 (Object.keys(AI_CASES) as (keyof typeof AI_CASES)[]).forEach(recorded);

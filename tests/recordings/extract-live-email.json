@@ -1,0 +1,171 @@
+{
+  "name": "extract-live-email",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T05:37:57.933Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You extract facts and invoice lines from one freight document for an invoice checker. Code checks\nevery quote against the document and decides everything else; you only copy what the document says.\n\nFact kinds (use exactly these):\n- agreed_rate: a price agreed for a charge. Needs chargeType and amountCents. Set bookedBy only if the\n  price depends on booking by a date (as YYYY-MM-DD), and validUntil if the document says how long it is valid.\n- permitted_surcharge: a clause that allows a charge on top of the price (e.g. \"PSS/GRI as filed ... apply\").\n  Needs chargeType; amountCents only if the clause states one.\n- exclusion: a charge the document says is not included but will be billed (e.g. duties billed at cost).\n- approval / rejection: a buyer-side person clearly agreeing to / refusing a specific charge.\n- fx_rate: an agreed exchange rate. Quote it; leave amountCents null.\n- validity: a validity period not tied to one price (rare; prefer validUntil on rates).\n- booking_date: the shipment was booked. effectiveAt is when it was booked. No chargeType.\n- incoterm: the incoterm (e.g. \"FOB Ningbo\"). No chargeType.\n\nCharge types (use exactly these): ocean_freight (main sea freight), air_freight, trucking, origin_thc,\ndestination_thc (terminal handling at destination), pss (peak season surcharge), fuel_surcharge,\ncongestion (port congestion fee), handling (handling / rush handling), doc_fee (documentation fee),\ncustoms_entry, drayage (port-to-warehouse trucking), chassis, demurrage, detention, other.\nDuties and taxes are \"other\".\n\nRules:\n- quote: the exact words from the document, character for character, never paraphrased. Use the shortest\n  passage that states the fact; for a priced line, the whole line including its amount.\n- amountCents: the amount written inside the quote, in cents (USD 4,800.00 -> 480000; $4,500 -> 450000).\n  Never add, subtract, convert or total anything. null if the quote has no amount.\n- currency: as written (\"USD\", \"CNY\"); \"USD\" when a \"$\" amount has no other currency. null with no amount.\n- Hedged statements (\"possible\", \"may be extra\", \"we'll see\") are not agreements: never record them.\n- Don't judge whether a charge is right; don't compute totals; skip TOTAL and subtotal lines.\n- effectiveAt: when the fact was stated, from the document or message date and time as written, as\n  YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS (no time zone).\n- statedBy: who stated it: \"supplier\", \"forwarder\", \"carrier\" or \"buyer\".\n- locator: where it is, e.g. \"page 1\", \"line 4\", \"email body\", \"msg 2026-09-08 09:12\".\n- confidence: 0 to 1, how sure you are the fact is stated as you recorded it.\n- Unused optional fields are null. Return empty lists if there is nothing to extract.\n\nThis document is an email (its date is given as sentAt). effectiveAt for its facts = sentAt. A changed\nprice is an agreed_rate; if it only holds when booked by a date, set bookedBy. \"Everything else unchanged\"\nis not a fact. An email has no invoice charges: return none.",
+        "user": "{\n  \"docId\": \"doc_email\",\n  \"type\": \"email\",\n  \"title\": \"email.eml\",\n  \"sender\": \"Derek Wu <derek@pacificcrest.example>\",\n  \"sentAt\": \"2026-09-05T14:21:00-07:00\",\n  \"text\": \"Subject: RE: Q-PCL-0902 revised\\nHi Maya, we can do better on ocean. Ocean freight reduced to $4,500 if booked by Sep 10. Everything else unchanged. - Derek\"\n}",
+        "jsonSchema": {
+          "$defs": {
+            "__schema0": {
+              "type": "string",
+              "description": "{enum: [\"ocean_freight\",\"air_freight\",\"trucking\",\"origin_thc\",\"destination_thc\",\"pss\",\"fuel_surcharge\",\"congestion\",\"handling\",\"doc_fee\",\"customs_entry\",\"drayage\",\"chassis\",\"demurrage\",\"detention\",\"other\"]}"
+            },
+            "__schema1": {
+              "type": "string",
+              "description": "{enum: [\"supplier\",\"forwarder\",\"carrier\",\"buyer\"]}"
+            }
+          },
+          "type": "object",
+          "properties": {
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "{enum: [\"agreed_rate\",\"permitted_surcharge\",\"exclusion\",\"approval\",\"rejection\",\"fx_rate\",\"validity\",\"booking_date\",\"incoterm\"]}"
+                  },
+                  "chargeType": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amountCents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedBy": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "validUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "effectiveAt": {
+                    "type": "string"
+                  },
+                  "statedBy": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "locator": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "chargeType",
+                  "amountCents",
+                  "currency",
+                  "bookedBy",
+                  "validUntil",
+                  "effectiveAt",
+                  "statedBy",
+                  "quote",
+                  "locator",
+                  "confidence"
+                ]
+              }
+            },
+            "charges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "lineNo": {
+                    "type": "integer",
+                    "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                  },
+                  "billedBy": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "chargeType": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "description": "{minimum: -9007199254740991, maximum: 9007199254740991}"
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "locator": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "lineNo",
+                  "billedBy",
+                  "chargeType",
+                  "description",
+                  "amountCents",
+                  "currency",
+                  "quote",
+                  "locator",
+                  "confidence"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "facts",
+            "charges"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"facts\":[{\"kind\":\"agreed_rate\",\"chargeType\":\"ocean_freight\",\"amountCents\":450000,\"currency\":\"USD\",\"bookedBy\":\"2026-09-10\",\"validUntil\":null,\"effectiveAt\":\"2026-09-05T14:21:00\",\"statedBy\":\"forwarder\",\"quote\":\"Ocean freight reduced to $4,500 if booked by Sep 10.\",\"locator\":\"email body\",\"confidence\":0.9}],\"charges\":[]}"
+      }
+    }
+  ]
+}

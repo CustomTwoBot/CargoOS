@@ -1,10 +1,12 @@
-// Convex wiring for the Claude agent (SPEC.md 9, W2 step 7): planQuestion, interpretReply, draftDispute.
+// Convex wiring for the Claude agent (SPEC.md 9, W2 step 7): extraction, planQuestion, interpretReply, draftDispute.
 // Actions call lib/ai; small internal mutations write the results and an append-only event each.
 // On any failure: an extraction_failed event, nothing else changes (lines stay needs_review), no throw.
 import { ConvexError, v, type Infer } from "convex/values";
 import { draftDispute as draftWithClaude, disputedFindings } from "../lib/ai/draftDispute";
+import { extractDocument } from "../lib/ai/extract";
 import { interpretReply as interpretWithClaude, resolveReply } from "../lib/ai/interpretReply";
 import { planQuestion as planWithClaude } from "../lib/ai/planQuestion";
+import { transcribeImage } from "../lib/ai/transcribe";
 import type { CaseState } from "../lib/ai/types";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -19,6 +21,7 @@ const newQuestion = v.object({
   followupOf: v.optional(v.id("questions")),
 });
 const newFact = schema.tables.facts.validator.omit("caseId", "supersedes");
+const newCharge = schema.tables.charges.validator.omit("caseId");
 
 const now = () => new Date().toISOString();
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -53,6 +56,101 @@ export const logFailure = internalMutation({
   },
 });
 
+// ---- Extraction (SPEC.md 9, W2 step 3) ----
+
+// Marks the documents as being read and extracts them in parallel, one action each.
+export const extractDocuments = internalMutation({
+  args: { caseId: v.id("cases"), docIds: v.array(v.id("documents")) },
+  handler: async (ctx, { caseId, docIds }) => {
+    for (const docId of docIds) {
+      const doc = await ctx.db.get(docId);
+      if (!doc || doc.caseId !== caseId || doc.readStatus === "read") continue;
+      await ctx.db.patch(docId, { readStatus: "reading" });
+      await ctx.scheduler.runAfter(0, internal.ai.extractAndStore, { caseId, docId });
+    }
+  },
+});
+
+// One document: get its text (read the file, or transcribe an image once), extract, check, save.
+export const extractAndStore = internalAction({
+  args: { caseId: v.id("cases"), docId: v.id("documents") },
+  handler: async (ctx, { caseId, docId }): Promise<null> => {
+    const doc: Doc<"documents"> | null = await ctx.runQuery(internal.ai.getDocument, { docId });
+    if (!doc || doc.caseId !== caseId || doc.readStatus === "read") return null; // never read twice
+    const fail = async (stage: string, error: string) => {
+      await ctx.runMutation(internal.ai.markNotRead, { docId, error });
+      await ctx.runMutation(internal.ai.logFailure, { caseId, stage, error, details: { docId } });
+    };
+    try {
+      let text = doc.text;
+      if (text.trim() === "" && doc.fileId) {
+        if (doc.textFrom === "image") {
+          const prepared = await ctx.runAction(internal.files.prepareImageFile, { fileId: doc.fileId });
+          if (!prepared.ok) { await fail("transcribe", prepared.reason); return null; }
+          const transcription = await transcribeImage(prepared.image);
+          if (!transcription.readable) { await fail("transcribe", `Not readable: ${transcription.reason}`); return null; }
+          text = transcription.text;
+          // Saved before extraction, so a retry never transcribes the image again.
+          await ctx.runMutation(internal.ai.saveDocText, { docId, text });
+        } else if (doc.textFrom === "pdf" || doc.textFrom === "eml" || doc.textFrom === "txt") {
+          const file = await ctx.runAction(internal.files.readFileText, { fileId: doc.fileId, textFrom: doc.textFrom });
+          if (!file.ok) { await fail("read_file", file.reason); return null; }
+          text = file.text;
+          await ctx.runMutation(internal.ai.saveDocText, { docId, text, sentAt: file.sentAt, sender: file.sender });
+        }
+      }
+      if (text.trim() === "") { await fail("extract", "The document has no text."); return null; }
+
+      const latest: Doc<"documents"> | null = await ctx.runQuery(internal.ai.getDocument, { docId });
+      const extraction = await extractDocument({ ...(latest ?? doc), text });
+      await ctx.runMutation(internal.ai.saveExtraction, {
+        caseId, docId,
+        facts: extraction.facts as Infer<typeof newFact>[],
+        charges: extraction.charges as Infer<typeof newCharge>[],
+        dropped: extraction.dropped,
+      });
+      // TODO(Dev): schedule internal.pipeline.processChange here once convex/pipeline.ts lands.
+    } catch (e) {
+      await fail("extract", message(e));
+    }
+    return null;
+  },
+});
+
+export const getDocument = internalQuery({
+  args: { docId: v.id("documents") },
+  handler: (ctx, { docId }) => ctx.db.get(docId),
+});
+
+export const saveDocText = internalMutation({
+  args: { docId: v.id("documents"), text: v.string(), sentAt: v.optional(v.string()), sender: v.optional(v.string()) },
+  handler: async (ctx, { docId, text, sentAt, sender }) => {
+    const doc = await ctx.db.get(docId);
+    if (!doc) return;
+    // Keep metadata the uploader set; fill it from the file (e.g. an email's Date / From) otherwise.
+    await ctx.db.patch(docId, { text, ...(sentAt && !doc.sentAt ? { sentAt } : {}), ...(sender && !doc.sender ? { sender } : {}) });
+  },
+});
+
+export const markNotRead = internalMutation({
+  args: { docId: v.id("documents"), error: v.string() },
+  handler: async (ctx, { docId, error }) => {
+    await ctx.db.patch(docId, { readStatus: "not_read", readError: error });
+  },
+});
+
+export const saveExtraction = internalMutation({
+  args: { caseId: v.id("cases"), docId: v.id("documents"), facts: v.array(newFact), charges: v.array(newCharge), dropped: v.array(v.string()) },
+  handler: async (ctx, { caseId, docId, facts, charges, dropped }) => {
+    const factIds = [];
+    for (const fact of facts) factIds.push(await ctx.db.insert("facts", { ...fact, caseId }));
+    const chargeIds = [];
+    for (const charge of charges) chargeIds.push(await ctx.db.insert("charges", { ...charge, caseId }));
+    await ctx.db.patch(docId, { readStatus: "read", readError: undefined });
+    await logEvent(ctx, caseId, "agent", "facts_extracted", { docId, factIds, chargeIds, dropped });
+  },
+});
+
 // ---- planQuestion ----
 
 // Scheduled by the pipeline when a needs_review line has no open question.
@@ -61,6 +159,8 @@ export const planQuestion = internalAction({
   handler: async (ctx, { caseId }): Promise<null> => {
     const state: CaseState | null = await ctx.runQuery(internal.ai.caseState, { caseId });
     if (!state) return null;
+    // Wait until every document is read: an invoice read before its quote would look unsupported.
+    if (state.documents.some((d) => d.readStatus === "reading")) return null;
     try {
       const question = await planWithClaude(state, state.findings);
       if (question) {

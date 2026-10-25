@@ -32,7 +32,10 @@ export interface SourceDoc {
   _id: string; caseId: string; type: DocType; title: string;
   sender?: string; sentAt?: string;   // ISO datetime
   text: string;                       // full text; every span quotes from this
-  fileId?: string;                    // Convex storage id for the original PDF
+  fileId?: string;                    // Convex storage id for the original file (PDF, .eml, .txt, image)
+  textFrom?: "pdf" | "eml" | "txt" | "image" | "paste"; // how `text` was obtained; "image" = transcribed by Claude
+  readStatus?: "reading" | "read" | "not_read";         // extraction progress; "not_read" = failed or unreadable
+  readError?: string;                                   // why it couldn't be read (shown in Documents)
 }
 
 export interface SourceSpan {
@@ -55,6 +58,7 @@ export interface Fact {
   supersedes?: string[];               // set by code, never by the LLM
   origin: "extraction" | "reply" | "manual";
   confidence?: number;                 // 0-1, extraction certainty only
+  fromImage?: boolean;                 // extracted from a transcribed screenshot / photo
 }
 
 export interface Charge {
@@ -65,6 +69,7 @@ export interface Charge {
   span: SourceSpan;
   editedBy?: Role;                     // set when changed in the line editor
   confidence?: number;
+  fromImage?: boolean;                 // extracted from a transcribed screenshot / photo
 }
 
 export interface Finding {

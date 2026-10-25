@@ -148,3 +148,67 @@ describe("createDraft + draftDispute action", () => {
     expect((await events(t, caseId)).map((e) => [e.type, e.actor])).toEqual([["draft_created", "clerk"]]);
   });
 });
+
+describe("extraction actions", () => {
+  async function pastedDoc(t: Test, caseId: Id<"cases">, readStatus: "reading" | "read" = "reading") {
+    return t.run((ctx) => ctx.db.insert("documents", {
+      caseId, type: "chat", title: "Pasted chat", textFrom: "paste", readStatus,
+      text: "9/30/26, 8:00 AM - Derek PCL: congestion fee $200 confirmed",
+    }));
+  }
+  const counts = (t: Test) => t.run(async (ctx) => [(await ctx.db.query("facts").collect()).length, (await ctx.db.query("charges").collect()).length]);
+
+  it("on a Claude failure writes extraction_failed, marks the document Not read, and adds no facts or charges", async () => {
+    const { t, caseId } = await setup([]);
+    const docId = await pastedDoc(t, caseId);
+    const before = await counts(t);
+    await t.action(internal.ai.extractAndStore, { caseId, docId });
+    expect(await counts(t)).toEqual(before);
+    expect(await t.run((ctx) => ctx.db.get(docId))).toMatchObject({ readStatus: "not_read", readError: expect.stringContaining("ANTHROPIC_API_KEY") });
+    const evs = await events(t, caseId);
+    expect(evs.map((e) => [e.type, e.payload.stage, e.payload.docId])).toEqual([["extraction_failed", "extract", docId]]);
+  });
+
+  it("never extracts a document twice (seeded documents are already read)", async () => {
+    const { t, caseId } = await setup([]);
+    const seeded = await t.run(async (ctx) => (await ctx.db.query("documents").collect())[0]);
+    expect(seeded.readStatus).toBe("read");
+    await t.action(internal.ai.extractAndStore, { caseId, docId: seeded._id });
+    expect(await events(t, caseId)).toEqual([]);
+  });
+
+  it("extractDocuments marks unread documents as reading and extracts them in parallel", async () => {
+    const { t, caseId } = await setup([]);
+    const a = await pastedDoc(t, caseId);
+    const b = await pastedDoc(t, caseId);
+    const seeded = await t.run(async (ctx) => (await ctx.db.query("documents").collect())[0]._id);
+    await t.mutation(internal.ai.extractDocuments, { caseId, docIds: [a, b, seeded] });
+    expect((await t.run((ctx) => Promise.all([a, b].map((id) => ctx.db.get(id))))).map((d) => d?.readStatus)).toEqual(["reading", "reading"]);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    // No API key here, so both fail cleanly; the seeded document was left alone.
+    expect((await events(t, caseId)).filter((e) => e.type === "extraction_failed").map((e) => e.payload.docId).sort()).toEqual([a, b].sort());
+  });
+
+  it("saveExtraction stores facts and charges, marks the document read and writes facts_extracted", async () => {
+    const { t, caseId } = await setup([]);
+    const docId = await pastedDoc(t, caseId);
+    const before = await counts(t);
+    const span = { docId, locator: "msg 2026-09-30 08:00", quote: "congestion fee $200 confirmed" };
+    await t.mutation(internal.ai.saveExtraction, {
+      caseId, docId, dropped: ["fact: quote is not in doc"],
+      facts: [{ kind: "approval", chargeType: "congestion", amountCents: 20000, currency: "USD", effectiveAt: "2026-09-30T08:00:00-07:00", statedBy: "forwarder", origin: "extraction", span, fromImage: true }],
+      charges: [],
+    });
+    expect(await counts(t)).toEqual([before[0] + 1, before[1]]);
+    expect(await t.run((ctx) => ctx.db.get(docId))).toMatchObject({ readStatus: "read" });
+    const [ev] = await events(t, caseId);
+    expect([ev.type, ev.payload.docId, ev.payload.dropped]).toEqual(["facts_extracted", docId, ["fact: quote is not in doc"]]);
+  });
+
+  it("planQuestion waits while any document is still being read", async () => {
+    const { t, caseId } = await setup();
+    await pastedDoc(t, caseId, "reading");
+    await t.action(internal.ai.planQuestion, { caseId });
+    expect(await events(t, caseId)).toEqual([]); // no question, and no Claude call (which would have failed here)
+  });
+});

@@ -5,11 +5,19 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { CLAUDE_MODEL } from "./config";
 
+export type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+
+export interface ClaudeImage {
+  mediaType: ImageMediaType;
+  data: string; // base64
+}
+
 export interface ClaudeRequest {
   model: string;
   system: string;
   user: string;
   jsonSchema: Record<string, unknown>;
+  image?: ClaudeImage; // sent before the text (vision)
 }
 
 export interface ClaudeReply {
@@ -39,6 +47,7 @@ export interface CallClaudeOptions<T> {
   schema: z.ZodType<T>;
   // Extra checks that JSON Schema can't express (e.g. "no digits"). Returns problems; any problem = invalid output.
   check?: (value: T) => string[];
+  image?: ClaudeImage;
   send?: ClaudeSender;
 }
 
@@ -57,7 +66,15 @@ export function anthropicSender(apiKey = process.env.ANTHROPIC_API_KEY): ClaudeS
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         system: request.system,
-        messages: [{ role: "user", content: request.user }],
+        messages: [{
+          role: "user",
+          content: request.image
+            ? [
+              { type: "image", source: { type: "base64", media_type: request.image.mediaType, data: request.image.data } },
+              { type: "text", text: request.user },
+            ]
+            : request.user,
+        }],
         output_config: { effort: "medium", format: { type: "json_schema", schema: request.jsonSchema } },
       });
       const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
@@ -84,8 +101,8 @@ function parseReply<T>(reply: ClaudeReply, schema: z.ZodType<T>, check?: (value:
   return { value: parsed.data };
 }
 
-export async function callClaude<T>({ system, user, schema, check, send = anthropicSender() }: CallClaudeOptions<T>): Promise<T> {
-  const request: ClaudeRequest = { model: CLAUDE_MODEL, system, user, jsonSchema: zodOutputFormat(schema).schema };
+export async function callClaude<T>({ system, user, schema, check, image, send = anthropicSender() }: CallClaudeOptions<T>): Promise<T> {
+  const request: ClaudeRequest = { model: CLAUDE_MODEL, system, user, jsonSchema: zodOutputFormat(schema).schema, ...(image ? { image } : {}) };
   const problems: string[] = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const reply = await send(request);
