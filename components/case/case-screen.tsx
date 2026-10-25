@@ -133,7 +133,7 @@ function Screen({ cases: given = DEMO_CASES, roles: rolesOverride, person, toast
     <Tooltip.Provider delay={150}>
       <AppShell title={title} waiting={counts.questions + counts.approvals > 0}
         sidebar={(mode, close) => (
-          <Sidebar mode={mode} person={person} view={view} activeId={activeKey} cases={sidebarCases} inbox={{ questions: counts.questions, approvals: counts.approvals }}
+          <Sidebar mode={mode} replay={!live} person={person} view={view} activeId={activeKey} cases={sidebarCases} inbox={{ questions: counts.questions, approvals: counts.approvals }}
             onView={(p: Place) => { setView(p); close?.(); }} onOpenCase={(id) => { open(id, tabOf(id)); close?.(); }} onClose={close} />
         )}>
         {view === "cases" && (cases.length ? (
