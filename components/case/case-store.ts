@@ -129,7 +129,7 @@ export function useCaseStore(cases: DemoCase[], toast: Toast, viewer: Person = D
         patch(id, (l) => {
           before = l.verdicts[key];
           return { ...l, verdicts: { ...l.verdicts, [key]: v },
-            log: event(demo, l, caseId, v === "confirmed" ? "confirm" : "dismiss", v === "confirmed" ? "finding_confirmed" : "finding_dismissed", { findingKey: key }) };
+            log: event(demo, l, caseId, v === "confirmed" ? "confirm" : "dismiss", v === "confirmed" ? "finding_confirmed" : "finding_dismissed", { findingKey: key, personId: viewer.id }) };
         });
         toast(v === "confirmed" ? "Kept in dispute. Saved to case history." : "Marked as not an issue. Saved to case history.", () =>
           patch(id, (l) => {

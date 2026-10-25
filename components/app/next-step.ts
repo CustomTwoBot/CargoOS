@@ -31,7 +31,7 @@ const holds = (p: Person, role: Person["roles"][number]) => p.roles.includes(rol
 const nameOf = (id?: string) => (id ? firstName(personById(id) ?? OWNER) : firstName(OWNER));
 
 /** Who asks for approval: the seeded person who reviews lines but can't approve ("Maya"). */
-const BOOKKEEPER = PEOPLE.find((p) => p.roles.includes("clerk") && !p.roles.includes("controller"));
+export const BOOKKEEPER = PEOPLE.find((p) => p.roles.includes("clerk") && !p.roles.includes("controller"));
 export const bookkeeperName = () => (BOOKKEEPER ? firstName(BOOKKEEPER) : "The bookkeeper");
 
 /** The one thing that happens next on this bill, seen by `viewer`. */

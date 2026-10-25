@@ -149,9 +149,13 @@ function WaitRequestCard({ bill }: { bill: Bill }) {
       <span className="text-ink-3">
         {asker} reviews these lines and asks you to approve the dispute; you accept or reject it here. Whoever asks can&apos;t approve, so you don&apos;t ask yourself.
       </span>
-      <Link href="/settings" className="w-fit text-[13px] font-semibold text-link underline underline-offset-4">
-        Using one screen? Set it to {asker} in Settings to ask
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Link href="/settings" className="w-fit text-[13px] font-semibold text-link underline underline-offset-4">
+          Using one screen? Set it to {asker} in Settings to ask
+        </Link>
+        {/* SPEC §8 owner page: the owner may ask too, and then can't decide it (approval_blocked on the server). */}
+        <Button variant="ghost" onClick={() => bill.actions.draftDispute()}>Ask anyway (you won&apos;t be able to approve it)</Button>
+      </div>
     </Card>
   );
 }

@@ -31,3 +31,18 @@ describe("the owner's screen once money is on hold", () => {
     expect(screen.getByRole("link", { name: "Using one screen? Set it to Maya in Settings to ask" })).toHaveAttribute("href", "/settings");
   });
 });
+
+describe("the owner asks anyway (SPEC §8 owner page)", () => {
+  it("the request is Sam's, so Sam can't accept it: the card says so and a try is blocked", () => {
+    render(<BillsProvider><BillPage id={SCENARIO_A.id} /></BillsProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    tick(1200);
+    fireEvent.click(screen.getByRole("button", { name: "Yes, recheck the bill" }));
+    tick(5000);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask anyway (you won't be able to approve it)" }));
+    expect(screen.getByText("You requested this, so another owner decides.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try to accept anyway" }));
+    expect(screen.getByText(/^Blocked: you can’t approve a dispute you requested./)).toBeInTheDocument();
+  });
+});

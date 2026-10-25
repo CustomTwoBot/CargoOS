@@ -73,3 +73,14 @@ describe("requests and decisions (CLAUDE.md rule 8, docs/design.md §0.3)", () =
     expect(decisionBlocked(MAYA, {})).toBe("Only Sam can accept or reject a dispute.");
   });
 });
+
+describe("line decisions name the person (History shows who, not 'Someone · clerk')", () => {
+  it("Keep in dispute and Not an issue carry the viewer's id", () => {
+    const { act: a, x } = setup(MAYA);
+    const key = x().findings.find((f) => f.status === "potential_discrepancy")!.key;
+    act(() => a().verdict(key, "confirmed"));
+    act(() => a().verdict(key, "false_positive"));
+    const payloads = x().events.filter((e) => e.type === "finding_confirmed" || e.type === "finding_dismissed").map((e) => e.payload);
+    expect(payloads).toEqual([{ findingKey: key, personId: "maya" }, { findingKey: key, personId: "maya" }]);
+  });
+});
