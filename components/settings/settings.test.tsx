@@ -39,7 +39,7 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Settings", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Person on this device" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /^Sam · Owner/ })).toBeChecked();
-    expect(screen.getByText("Can't accept a dispute they requested")).toBeInTheDocument();
+    expect(screen.getByText("Accept a dispute they requested")).toBeInTheDocument();
   });
 
   it("marks only the account block as where you are, coming from Approvals, in the sidebar and the rail", () => {

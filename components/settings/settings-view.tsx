@@ -41,7 +41,7 @@ export function SettingsView({ person, caseCount, onReset, initial = "device" }:
       <header className="px-4 pb-3 pt-3.5 md:px-6">
         <h1 className="text-title font-[650] tracking-[-0.012em]">Settings</h1>
         <p className="mt-0.5 text-[13px] text-ink-2">
-          This screen is set to {displayName(person)}. <span className="text-ink-3">Synthetic data. Nothing is sent or paid automatically.</span>
+          This screen is set to {displayName(person)}.
         </p>
       </header>
       <div className="mx-4 grid grid-cols-[164px_minmax(0,1fr)] gap-5 md:mx-6 lg:grid-cols-[188px_minmax(0,1fr)] lg:gap-8">
@@ -123,7 +123,7 @@ const List = ({ label, items }: { label: string; items: string[] }) => (
 );
 
 const Row = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="grid grid-cols-[140px_minmax(0,1fr)] items-center gap-4 border-t border-line px-4 py-3 first:border-t-0">
+  <div className="grid grid-cols-[180px_minmax(0,1fr)] items-center gap-4 border-t border-line px-4 py-3 first:border-t-0">
     <span className="text-[13px] text-ink-3">{label}</span>
     <span className="min-w-0 text-[13.5px] font-medium text-ink">{children}</span>
   </div>
