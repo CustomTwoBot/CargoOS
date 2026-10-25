@@ -1,4 +1,8 @@
-# Design QA log (docs/design.md §0.3 p.6)
+# Design QA log
+
+The rounds under "Old layout" are obsolete (the §0.4 rework replaced that interface). Current findings are in "Rework" at the end.
+
+# Old layout (docs/design.md §0.3 p.6)
 
 Standing check of the integrated frontend: `claude/ui-polish-shell-5a167f` + `claude/ui-polish-case-9bf2f3` + `claude/ui-polish-inbox-243ee9` merged locally on `claude/ui-design-qa-cfbc24`. Every state is captured with Playwright at 1440 / 1180 / 900 / 768 in light and dark (both recorded cases before and after answers, every issue tab, Documents, History, Dispute draft and accepted, menu, toast, Questions, Approvals, Cases, New case). Judged against `docs/design.md` §0–§0.3 and `app/CLAUDE.md`.
 
@@ -80,3 +84,40 @@ New this round: Settings, the person on the device (Sam, Maya, Leo), and the Rev
 ## Paused — 25 Oct
 
 QA paused at the request of the coordinating session: the whole interface is being reworked, so the open items above (C16–C21, I12–I14, S5) are against the old layout. Re-check them only if they survive the new design.
+
+
+# Rework (docs/design.md §0.4)
+
+Judged against `docs/mockups/d.html` / `d2.html`, §0.4 and `app/CLAUDE.md`, and above all the 10-second test for a first-time viewer: what the invoice is, what isn't owed and why, who is asked, what changed after the answer, who decides, that nothing is sent. Journey per width × theme (1440 / 1180 / 900 / 768, light and dark): Sam before → open line 1 → open the email → ⋯ menu → Sam answers → recheck ($700, was $300) → Maya → Ask Sam to approve → Sam rejects with a reason → Maya sees it; separately Maya asks → Sam accepts → message on the canvas; Scenario B before/after; Reset demo; Leo; New case; Settings.
+Owners: **shell** = shell-sidebar (sidebar, header, layout, narrow switch, demo bar, New case, Settings), **case** = case-calm (canvas), **inbox** = inbox-calm (thread).
+
+## Rework round 1 — 25 Oct, integration `e35f404` (ui-polish 0108d79+, shell 8a3fdb1, case 9c0e05a, inbox f46f72e)
+
+**10-second test: passes at 1440 and 768.** Verdict ($300 may not be owed, one sentence, the bar), the invoice table with coloured result words, "Question for you" in the thread, "was $300" and "Your answer changed 2 charges" after the answer, "Ask Sam to approve" / Accept · Reject, and "Nothing is sent" in the header and thread all read without help. Status is words, not icons, everywhere. No horizontal page scroll, no console errors, typecheck clean.
+Already with shell before this round: focus stays on the message after Reset demo; the dock overlaps the last thread item at 1180.
+
+| # | Sev | Screen · width · theme | What's wrong | Why | Fix | Owner | Status |
+|---|---|---|---|---|---|---|---|
+| H1 | ugly | Demo bar → Reset demo · all · both | Reset from the demo bar resets only the open case: Pacific Crest stays "Disputed $700 · accepted" with its bar on "After answers". Settings › Demo data says every case goes back. | A rehearsal or a second run starts mid-story. | Demo-bar Reset = the Settings reset: every case back to before the answers, bar on "Before answers". | shell | open |
+| T1 | ugly | Thread, check summary · all · both | "Line 1, Ocean freight…: $300 over. Billed $4,800. Agreed $4,500 (email, Sep 5, …). Over by $300." says the amount twice and reads like a log line; the mockup says it as one human sentence. | 10-second test: the "why" should read at a glance. | Thread template (code, not LLM): "Line 1, ocean freight, is $300 over: Derek lowered it to $4,500 on Sep 5 if booked by Sep 10, and you booked Sep 8." At minimum drop the "Billed … Over by $300." tail; the canvas has the numbers. | inbox | open |
+| T2 | ugly | Thread, request / decision lines · all · both | "You asked Sam to approve a dispute…", "Sam rejected the dispute." + reason, "You accepted the dispute." are bold, centred paragraphs: a third style next to CargoOS messages and the small grey "4 documents added" line. | Heavy and inconsistent; it's the moment the judge should see "who decides". | Render them as system lines (13px ink-2, centred, name in 600) or as CargoOS messages; the reject reason on its own line in quotes, ink-2. | inbox | open |
+| T3 | ugly | Thread "Line N" links · all · dark | "Line 1" reads as plain text in dark (`--link` is near-white); light has a solid underline on Line 1 and a dotted one on Lines 4/6. | Links aren't findable; two link styles. | One style for every line link: `text-link` + dotted underline in light and dark. Dark `--link` needs a visible blue (e.g. `#9DB8E8`); that token is in globals.css, coordinator's call. | inbox (+ token: coordinator) | open |
+| T4 | ugly | Maya after Sam rejects · all · both | The dock repeats the rejection that is already the last thread item, and Maya has no next step. | Dead end; says it twice. | Dock: "Sam rejected it. Fix the lines, then ask again." + `Review lines` + `Ask Sam again`. | inbox | open |
+| T5 | ugly | Leo's thread · all · both | Only "4 documents added · Oct 24, 1:50 PM" while the canvas lists 5 documents; the pane is otherwise empty. | §0.4 п.5: Leo's thread is about documents; the count disagrees. | One line per document read ("Read Quote Q-PCL-0902 · 7 facts", …, "Read Sam's answer · 2 facts"), counts matching the canvas. | inbox | open |
+| K1 | ugly | Scenario B verdict, Checked against · all · both | Three identical chips "Your answer · Oct 24". | Looks like a bug. | One chip per answer with its time ("Your answer · 2:05 PM", "· 2:31 PM", "· 2:44 PM"), or one chip "Your 3 answers · Oct 24". | case | open |
+| K2 | ugly | Leo's documents list · all · both | "Reply from ops lead · Your answer · You · Oct 24": Sam answered, not Leo. | Wrong attribution. | "Sam's answer · Oct 24" when the viewer isn't the answerer (same rule as the thread). | case | open |
+| H2 | ugly | New case, Add from your phone · all · both | A grey "QR code" box next to a raw "/upload/new" path. | Reads unfinished to a judge. | Draw a real QR in code (inline SVG), or replace it with "Open <host>/upload on your phone"; never show the raw route. | shell | open |
+| T6 | nit | Thread composer · 1440, 1180 · both | The hint wraps ("nothing is / sent.") and a second replay line follows: three lines under the box. At 1180 the placeholder wraps too. | Busy footer. | One line: "Your answer becomes evidence. Nothing is sent."; the replay note goes into the Replay tooltip. | inbox | open |
+| T7 | nit | Thread first line · all · both | "4 documents added" doesn't say who added them (mockup: "Maya added 4 documents"). | Who did what is the story. | Name the person. | inbox | open |
+| T8 | nit | Scenario B thread · all · both | "Drayage Oakland -> Reno NV" with an ASCII arrow; the canvas shows "→". | Inconsistent. | Use the canvas's display formatter for charge names in the thread. | inbox | open |
+| T9 | nit | Thread header · 1180 · both | "Never pays or / sends." wraps to two lines at 360px. | Ragged header. | Allow it at 360, or shorten to "Asks when it can't tell. Never pays or sends." | inbox | open |
+| K3 | nit | Expanded line 1 · all · both | The chat conclusion "Sep 8 is before Sep 10, so the lower price applies." runs on after the quote and wraps; the engine why-line under it repeats Billed/Agreed. | Four lines where the mockup has three. | Conclusion on its own line; keep one conclusion. | case | open |
+| K4 | nit | Document view · all · both | The focused quote is a pale tint, weaker than the quotes in the proof and the thread. | The thing you came to see is the faintest. | Full `--highlight` for the focused quote. | case | open |
+| K5 | nit | Scenario B verdict after answers · all · both | "was $3,865" (the previous recheck); the viewer saw $3,340 at the start. | Confusing number. | "was $3,340": the at-stake before any answer. | case | open |
+| K6 | nit | Message to the seller · all · both | "Export PDF"; §0.4 says "Save PDF". | Spec wording. | "Save PDF". | case | open |
+| H3 | nit | Case at <1024 with a question for this person · 900, 768 · both | Opens on Invoice. | §0.4 п.7: open the thread when a question waits for this person. | Default the switch to CargoOS in that case. | shell | open |
+| H4 | nit | Leo's demo bar · all · both | "Before answers / After answers" for a screen without findings (old C21 is back). | Noise. | Only "Reset demo" for an uploader. | shell | open |
+| H5 | nit | Toasts · 900, 768 · both | Toasts appear top-right over the CargoOS header. | Overlap. | Bottom, above the demo bar, as at ≥1024. | shell | open |
+| H6 | nit | New case thread header · all · both | No CargoOS mark; the case thread has one. | Inconsistent. | Same header component. | shell | open |
+| H7 | nit | New case drop zone · all · both | "Drop the invoice and everything that was agreed — / quotes, emails, chats" breaks right after the dash. | Awkward break. | `text-wrap: balance` or a non-breaking space before the dash. | shell | open |
+| S5 | nit | Dev badge · next dev | The Next.js dev indicator covers the composer's send button and the rail avatar. | Dev only, but the demo may run on next dev. | `devIndicators: false` (Pranav). | Pranav | open |
