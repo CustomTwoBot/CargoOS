@@ -22,6 +22,8 @@ vi.mock("convex/react", async () => {
     },
   };
 });
+// No Convex provider: CI sets NEXT_PUBLIC_CONVEX_URL, and the real provider would need the real convex/react.
+vi.mock("@/components/convex-provider", () => ({ useHasConvex: () => false }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(), usePathname: () => "/bills", useRouter: () => ({ push: vi.fn() }) }));
 
 const CHAT = "9/28/26, 10:02 AM - Derek PCL: heads up, possible congestion at LB terminal, may be extra";
