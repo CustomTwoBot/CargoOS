@@ -1,66 +1,69 @@
 import { describe, expect, it } from "vitest";
+import { personById } from "@/lib/people";
 import { SCENARIO_A } from "@/components/case/fixture";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
-import { personById } from "@/lib/people";
-import { caseInitials, caseStatus, waitingOn } from "./case-status";
+import { caseHeading, caseInitials, caseLine, caseName, caseSubline, pendingFor } from "./case-status";
 import { sidebarMode } from "./layout";
 
-describe("caseStatus", () => {
-  const before = SCENARIO_A.at(SCENARIO_A.start);
-  const after = SCENARIO_A.at(SCENARIO_A.end);
-  const draft = SCENARIO_A.draft(after)!;
+const sam = personById("sam")!, maya = personById("maya")!, leo = personById("leo")!;
+const before = SCENARIO_A.at(SCENARIO_A.start);
+const after = SCENARIO_A.at(SCENARIO_A.end);
+const draft = SCENARIO_A.draft(after)!;
+const requested = { ...after, drafts: [{ ...draft, status: "pending_approval" as const, requestedBy: "maya" }] };
 
-  it("waits on you while a question is open", () => {
-    expect(caseStatus(before)).toEqual({ tone: "you", label: "Waiting on you" });
-    expect(caseStatus(SCENARIO_B.at(SCENARIO_B.start)).tone).toBe("you");
+describe("caseLine: where a case goes in the sidebar and the word under it (§0.4 п.1)", () => {
+  it("an open question needs the owner, and waits for Sam on the bookkeeper's screen", () => {
+    expect(caseLine(before, sam)).toEqual({ needs: true, text: "Answer 1 question", tone: "waiting" });
+    expect(caseLine(SCENARIO_B.at(SCENARIO_B.start), sam).text).toMatch(/^Answer \d+ questions$/);
+    expect(caseLine(before, maya)).toEqual({ needs: false, text: "Waiting for Sam", tone: "waiting" });
   });
 
-  it("is ready to dispute once answered with money at stake", () => {
-    expect(caseStatus(after)).toEqual({ tone: "dispute", label: "Ready to dispute" });
+  it("after the answers both can dispute $700", () => {
+    expect(caseLine(after, sam)).toEqual({ needs: true, text: "Ready to dispute $700", tone: "dispute" });
+    expect(caseLine(after, maya)).toEqual({ needs: true, text: "Ready to dispute $700", tone: "dispute" });
   });
 
-  it("waits on you again while a drafted dispute needs your decision, and a rejected one can be drafted again", () => {
-    expect(caseStatus({ ...after, drafts: [{ ...draft, status: "pending_approval" }] }).tone).toBe("you");
-    expect(caseStatus({ ...after, drafts: [{ ...draft, status: "rejected" }] }).tone).toBe("dispute");
+  it("a bookkeeper's request needs the owner's decision and waits for Sam on the bookkeeper's screen", () => {
+    expect(caseLine(requested, sam)).toEqual({ needs: true, text: "Approve dispute · $700", tone: "waiting" });
+    expect(caseLine(requested, maya)).toEqual({ needs: false, text: "Waiting for Sam", tone: "waiting" });
   });
 
-  it("has nothing to do after the dispute is accepted", () => {
-    expect(caseStatus({ ...after, drafts: [{ ...draft, status: "approved" }] })).toEqual({ tone: "none", label: "Nothing to do" });
-  });
-});
-
-describe("per person", () => {
-  const sam = personById("sam")!, maya = personById("maya")!;
-  const before = SCENARIO_A.at(SCENARIO_A.start);
-  const after = SCENARIO_A.at(SCENARIO_A.end);
-  const requested = { ...after, drafts: [{ ...SCENARIO_A.draft(after)!, status: "pending_approval" as const, requestedBy: "maya" }] };
-
-  it("an open question waits on the owner, and on the bookkeeper's screen it waits for Sam", () => {
-    expect(caseStatus(before, sam).tone).toBe("you");
-    expect(caseStatus(before, maya)).toEqual({ tone: "none", label: "Waiting for Sam" });
-    expect(waitingOn([before], sam).questions).toBe(1);
-    expect(waitingOn([before], maya).questions).toBe(0);
+  it("an accepted dispute is earlier work; a rejected request comes back to whoever made it", () => {
+    const accepted = { ...after, drafts: [{ ...draft, status: "approved" as const }] };
+    expect(caseLine(accepted, sam)).toEqual({ needs: false, text: "Disputed $700 · accepted", tone: "muted" });
+    const rejected = { ...requested, drafts: [{ ...requested.drafts[0], status: "rejected" as const }] };
+    expect(caseLine(rejected, maya)).toMatchObject({ needs: true, text: "Dispute rejected" });
+    expect(caseLine(rejected, sam).needs).toBe(false);
   });
 
-  it("a bookkeeper's request waits on the owner, not on the bookkeeper", () => {
-    expect(caseStatus(requested, sam).tone).toBe("you");
-    expect(caseStatus(requested, maya)).toEqual({ tone: "none", label: "Waiting for Sam" });
-    expect(waitingOn([requested], sam).approvals).toBe(1);
-    expect(waitingOn([requested], maya).approvals).toBe(0);
-  });
-
-  it("a rejected request comes back to the bookkeeper who made it", () => {
-    const back = { ...requested, drafts: [{ ...requested.drafts[0], status: "rejected" as const }] };
-    expect(waitingOn([back], maya).approvals).toBe(1);
-    expect(caseStatus(back, maya).tone).toBe("dispute");
+  it("an uploader gets no amounts and nothing to act on, only how many documents", () => {
+    expect(caseLine(before, leo)).toEqual({ needs: false, text: "4 documents", tone: "muted" });
   });
 });
 
-describe("caseInitials", () => {
-  it("takes the first two words that start with a letter", () => {
-    expect(caseInitials("Bayline 40HC Ningbo-LB")).toBe("BN");
-    expect(caseInitials("Juniper Peak 3x40HC Shanghai-Oakland")).toBe("JP");
-    expect(caseInitials("40HC")).toBe("4");
+describe("pendingFor: what waits on this person in the thread", () => {
+  it("counts questions for whoever answers them and decisions for whoever may decide", () => {
+    expect(pendingFor(before, sam)).toBe(1);
+    expect(pendingFor(before, maya)).toBe(0);
+    expect(pendingFor(requested, sam)).toBe(1);
+    expect(pendingFor(requested, maya)).toBe(0);
+    expect(pendingFor({ ...after, drafts: [{ ...draft, status: "pending_approval" as const, requestedBy: "sam" }] }, sam)).toBe(0);
+  });
+});
+
+describe("case names", () => {
+  it("names a case by forwarder and invoice number, and heads it with the invoice", () => {
+    expect(caseName(before)).toBe("Pacific Crest · PCL-INV-1012");
+    expect(caseHeading(before)).toBe("Invoice PCL-INV-1012 from Pacific Crest Logistics");
+    expect(caseSubline(before)).toBe("40HC Ningbo → Long Beach · Oct 12");
+    const b = SCENARIO_B.at(SCENARIO_B.start);
+    expect(caseName(b, "Kestrel Bay Logistics")).toBe("Kestrel Bay · KBL-INV-2291");
+    expect(caseSubline(b)).toBe("3x40HC Shanghai → Oakland · Oct 14");
+  });
+
+  it("takes two letters for the rail from the forwarder", () => {
+    expect(caseInitials("Pacific Crest · PCL-INV-1012")).toBe("PC");
+    expect(caseInitials("Kestrel Bay · KBL-INV-2291")).toBe("KB");
   });
 });
 

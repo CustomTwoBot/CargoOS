@@ -59,6 +59,14 @@ export type ReadingItem = {
 
 export const NEW_CASE_COPY = {
   heading: "New case",
+  dropTitle: "Drop the invoice and everything that was agreed — quotes, emails, chats",
+  dropBody: "PDFs, photos, .eml files, WhatsApp exports or text. Several at once.",
+  chooseFiles: "Choose files",
+  pasteBox: "Paste text",
+  pastePlaceholder: "Paste an invoice, quote, email or chat exactly as written.",
+  addPasted: "Add text",
+  intro: "Add the invoice and what was agreed: the quote, emails and chats. I'll read each one and check every charge against them. Nothing is sent or paid.",
+  examplesLead: "Or watch a recorded case:",
   sub: "Add the forwarder's invoice and what was agreed.",
   trust: "Synthetic data. Nothing is sent or paid automatically.",
   name: "Shipment",
