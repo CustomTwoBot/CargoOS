@@ -1,0 +1,117 @@
+{
+  "name": "interpretReply-A-ambig",
+  "model": "claude-sonnet-5-5",
+  "recordedAt": "2026-10-25T03:01:05.645Z",
+  "calls": [
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You read a buyer-side ops lead's reply to a question about freight invoice lines.\nReturn how the reply answers the question, and the approvals or rejections it states.\n\n- interpretation: \"yes\" (every line asked about was agreed), \"no\" (none was agreed), \"partial\" (some agreed,\n  some not), or \"ambiguous\" (the reply does not clearly say, for any line).\n- facts: one entry per line the reply clearly settles. kind \"approval\" if the reply says it was agreed,\n  \"rejection\" if it says it was not. chargeType is the line's chargeType as given. quote is the exact words\n  from the reply that say so, copied character for character. Several facts may share one quote.\n  Never record a fact the reply does not state; if unsure, leave it out.\n- followUpQuestion: only when the interpretation is \"ambiguous\", one short, polite question asking for a\n  clear yes or no on each line. Otherwise \"\".\n- Do not calculate or restate amounts.",
+        "user": "{\n  \"question\": \"Invoice line 4 bills a $200 congestion fee and line 6 bills $400 rush handling. Neither is in the quote or emails; the WhatsApp chat only says congestion 'may be extra'. Did anyone agree to either charge?\",\n  \"askedAbout\": [\n    {\n      \"key\": \"chg_4\",\n      \"line\": 4,\n      \"chargeType\": \"congestion\",\n      \"description\": \"Port congestion fee\",\n      \"billed\": \"$200\"\n    },\n    {\n      \"key\": \"chg_6\",\n      \"line\": 6,\n      \"chargeType\": \"handling\",\n      \"description\": \"Rush handling\",\n      \"billed\": \"$400\"\n    }\n  ],\n  \"reply\": \"I think we discussed something?\"\n}",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "interpretation": {
+              "type": "string",
+              "description": "{enum: [\"yes\",\"partial\",\"no\",\"ambiguous\"]}"
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "{enum: [\"approval\",\"rejection\"]}"
+                  },
+                  "chargeType": {
+                    "type": "string",
+                    "description": "{enum: [\"ocean_freight\",\"air_freight\",\"trucking\",\"origin_thc\",\"destination_thc\",\"pss\",\"fuel_surcharge\",\"congestion\",\"handling\",\"doc_fee\",\"customs_entry\",\"drayage\",\"chassis\",\"demurrage\",\"detention\",\"other\"]}"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "chargeType",
+                  "quote"
+                ]
+              }
+            },
+            "followUpQuestion": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "interpretation",
+            "facts",
+            "followUpQuestion"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"interpretation\":\"ambiguous\",\"facts\":[],\"followUpQuestion\":\"Could you confirm with a clear yes or no whether anyone agreed to the congestion fee on line 4 and to the rush handling charge on line 6?\"}"
+      }
+    },
+    {
+      "request": {
+        "model": "claude-sonnet-5-5",
+        "system": "You read a buyer-side ops lead's reply to a question about freight invoice lines.\nReturn how the reply answers the question, and the approvals or rejections it states.\n\n- interpretation: \"yes\" (every line asked about was agreed), \"no\" (none was agreed), \"partial\" (some agreed,\n  some not), or \"ambiguous\" (the reply does not clearly say, for any line).\n- facts: one entry per line the reply clearly settles. kind \"approval\" if the reply says it was agreed,\n  \"rejection\" if it says it was not. chargeType is the line's chargeType as given. quote is the exact words\n  from the reply that say so, copied character for character. Several facts may share one quote.\n  Never record a fact the reply does not state; if unsure, leave it out.\n- followUpQuestion: only when the interpretation is \"ambiguous\", one short, polite question asking for a\n  clear yes or no on each line. Otherwise \"\".\n- Do not calculate or restate amounts.",
+        "user": "{\n  \"question\": \"Could you confirm with a clear yes or no whether anyone agreed to the congestion fee on line 4 and to the rush handling charge on line 6?\",\n  \"askedAbout\": [\n    {\n      \"key\": \"chg_4\",\n      \"line\": 4,\n      \"chargeType\": \"congestion\",\n      \"description\": \"Port congestion fee\",\n      \"billed\": \"$200\"\n    },\n    {\n      \"key\": \"chg_6\",\n      \"line\": 6,\n      \"chargeType\": \"handling\",\n      \"description\": \"Rush handling\",\n      \"billed\": \"$400\"\n    }\n  ],\n  \"reply\": \"not sure, maybe? I'd have to check\"\n}",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "interpretation": {
+              "type": "string",
+              "description": "{enum: [\"yes\",\"partial\",\"no\",\"ambiguous\"]}"
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "{enum: [\"approval\",\"rejection\"]}"
+                  },
+                  "chargeType": {
+                    "type": "string",
+                    "description": "{enum: [\"ocean_freight\",\"air_freight\",\"trucking\",\"origin_thc\",\"destination_thc\",\"pss\",\"fuel_surcharge\",\"congestion\",\"handling\",\"doc_fee\",\"customs_entry\",\"drayage\",\"chassis\",\"demurrage\",\"detention\",\"other\"]}"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "chargeType",
+                  "quote"
+                ]
+              }
+            },
+            "followUpQuestion": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "interpretation",
+            "facts",
+            "followUpQuestion"
+          ],
+          "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+        }
+      },
+      "reply": {
+        "stopReason": "end_turn",
+        "text": "{\"interpretation\":\"ambiguous\",\"facts\":[],\"followUpQuestion\":\"Could you please confirm with a clear yes or no whether the congestion fee on line 4 and the rush handling charge on line 6 were each agreed?\"}"
+      }
+    }
+  ]
+}

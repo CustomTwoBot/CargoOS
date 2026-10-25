@@ -264,7 +264,7 @@ describe("R4 permitted surcharge, R5 exclusion, R6 no evidence", () => {
     const duties = charge({ lineNo: 9, chargeType: "other", amountCents: 31000 });
     const excl = fact({ kind: "exclusion", chargeType: "other" });
     expect(evaluateCharge(duties, ctx([...factsA, excl], [...chargesA, duties]))).toMatchObject({
-      status: "outside_quote_scope", ruleId: "R5_EXCLUDED_SCOPE", factIds: [excl._id],
+      status: "outside_quote_scope", ruleId: "R5_EXCLUDED_SCOPE", expectedCents: 31000, factIds: [excl._id],
     });
   });
 });
