@@ -10,7 +10,9 @@ import { validCitations } from "./validateSpans";
 
 // Only these needs_review rules can be resolved by a person; R1 and R2 are decided by code.
 const ASKABLE_RULES = new Set<Finding["ruleId"]>(["R3_MATH_CURRENCY", "R6_NO_EVIDENCE", "R7_CONFLICT"]);
-const ROLES = new Set<string>(["clerk", "controller", "ops_lead"]);
+// People model (SPEC.md 5.5): only the owner (Sam, ops_lead) answers questions. The clerk is the one
+// asking, the controller only approves, and the uploader sees no amounts, so every question goes to ops_lead.
+const ASKED: Role = "ops_lead";
 
 const PlanSchema = z.object({
   ask: z.boolean(),
@@ -19,20 +21,16 @@ const PlanSchema = z.object({
   reason: z.string(),
 });
 
-// The group one question should cover: askable waiting lines not already in an open question, for one person.
+// The group one question should cover: askable waiting lines no question already covers. They all go to
+// the same person, so they are always grouped into one question. Open and closed_unresolved questions both
+// cover their lines (SPEC.md 6 "Engine decisions", same rule as convex/pipeline.ts): once the owner's one
+// follow-up ends unresolved, those lines are never asked about again. Only answered questions stop covering.
 export function questionCandidates(state: CaseState, open: Finding[]): { to: Role; findings: Finding[] } | null {
-  const covered = new Set(state.questions.filter((q) => q.status === "open").flatMap((q) => q.findingKeys));
+  const covered = new Set(state.questions.filter((q) => q.status !== "answered").flatMap((q) => q.findingKeys));
   const askable = open
     .filter((f) => f.status === "needs_review" && ASKABLE_RULES.has(f.ruleId) && !covered.has(f.key))
     .sort((a, b) => a.lineNo - b.lineNo);
-  const byRole = new Map<Role, Finding[]>();
-  for (const f of askable) {
-    const to: Role = f.routeTo && ROLES.has(f.routeTo) ? (f.routeTo as Role) : "ops_lead";
-    byRole.set(to, [...(byRole.get(to) ?? []), f]);
-  }
-  // One question per call; start with whoever holds the earliest line.
-  const first = byRole.entries().next();
-  return first.done ? null : { to: first.value[0], findings: first.value[1] };
+  return askable.length === 0 ? null : { to: ASKED, findings: askable };
 }
 
 function describe(state: CaseState, to: Role, findings: Finding[]): string {
