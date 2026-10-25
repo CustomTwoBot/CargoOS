@@ -38,6 +38,7 @@ export const REASON: Record<RuleId, { code: string; plain: string }> = {
   R7_CONFLICT: { code: "R7", plain: "Sources disagree" },
   R8_APPROVED: { code: "R8", plain: "Approved by you" },
   R9_REJECTED: { code: "R9", plain: "You said it was never agreed" },
+  R10_LEARNED: { code: "R10", plain: "Accepted before" },
 };
 
 /** The plain reason, refined where one rule can land a line in two groups. */

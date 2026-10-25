@@ -77,6 +77,9 @@ describe("CaseScreen (replay, tabs per issue)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     expect(screen.getByText("“They did expedite it. Pay it this time.”")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Draft dispute" })).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(screen.getByRole("button", { name: /^History/ }));
+    expect(screen.getAllByText("draft_rejected").length).toBeGreaterThan(0);
+    expect(screen.getByText("Rejected the dispute. Nothing went to the seller.")).toBeInTheDocument();
   });
 
   it("the rail switches to Documents and History without losing the case state", () => {

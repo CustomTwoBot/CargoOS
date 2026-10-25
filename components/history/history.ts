@@ -11,7 +11,7 @@ export type Who = "you" | "rules" | "agent";
 
 export const WHO_NAME: Record<Who, string> = { you: "You", rules: "CargoOS rules", agent: "CargoOS agent" };
 
-const ROLE_NAME = { clerk: "clerk", controller: "controller", ops_lead: "ops lead" } as const;
+const ROLE_NAME = { clerk: "clerk", controller: "controller", ops_lead: "ops lead", uploader: "uploader" } as const;
 
 export type Entry = {
   id: string; at: string; code: CaseEvent["type"];
@@ -158,6 +158,16 @@ export function historyEntries(x: CaseInput): Entry[] {
         what = "Approval blocked: only the controller can approve"; break;
       case "approved":
         what = "Approved the dispute. Nothing was sent."; break;
+      case "draft_rejected":
+        what = "Rejected the dispute. Nothing went to the seller.";
+        quotes = str(p.reason) ? [str(p.reason)!] : [];
+        break;
+      case "rule_learned":
+        what = "Remembered this charge as accepted for the forwarder"; break;
+      case "rule_undone":
+        what = "Forgot a remembered charge"; break;
+      case "document_uploaded":
+        what = `Uploaded ${name(doc)}`; break;
     }
 
     const who: Who = e.actor === "system" ? "rules" : e.actor === "agent" ? "agent" : "you";

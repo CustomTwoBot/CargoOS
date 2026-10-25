@@ -118,16 +118,16 @@ export function useCaseStore(cases: DemoCase[], toast: Toast) {
 
       accept: (draftId) => {
         patch(id, (l) => ({ ...l,
-          drafts: l.drafts.map((d) => (d._id === draftId ? { ...d, status: "approved", approvedBy: ACTION_ROLE.approve, acceptedBy: ME } : d)),
+          drafts: l.drafts.map((d) => (d._id === draftId ? { ...d, status: "approved", approvedBy: ME, acceptedBy: ME } : d)),
           log: event(l, caseId, "approve", "approved", { draftId }) }));
         toast("Accepted. Nothing was sent.");
       },
 
-      // Event type "draft_rejected" arrives with SPEC §5.5; until then the rejection lives on the draft only.
       reject: (draftId, reason) => {
         patch(id, (l) => ({ ...l,
           drafts: l.drafts.map((d) => (d._id === draftId
-            ? { ...d, status: "rejected", rejectedBy: ME, rejectedAt: new Date().toISOString(), rejectionReason: reason } : d)) }));
+            ? { ...d, status: "rejected", rejectedBy: ME, rejectedAt: new Date().toISOString(), rejectionReason: reason } : d)),
+          log: event(l, caseId, "approve", "draft_rejected", { draftId, reason }) }));
         toast("Rejected. Nothing went to the seller.");
       },
 
