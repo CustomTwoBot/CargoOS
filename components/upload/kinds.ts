@@ -79,8 +79,9 @@ export function billTitle(files: { name: string; docType: UploadDocType }[]): st
   return describeDoc("", { as: "freight_invoice", fileName: invoice.name }).title;
 }
 
-/** Paste box choices: what the pasted text is. */
+/** Paste box choices: what the pasted text is. Invoice first: only an invoice's lines become charges to check. */
 export const PASTE_TYPES: { value: UploadDocType; label: string }[] = [
+  { value: "freight_invoice", label: "Invoice" },
   { value: "email", label: "Email" },
   { value: "chat", label: "Chat" },
   { value: "other", label: "Note" },

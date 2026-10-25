@@ -106,6 +106,17 @@ describe("New bill: replay", () => {
     expect(rows()[0]).toHaveTextContent("Note");
   });
 
+  it("pasted invoice text preselects Invoice, so its lines become charges", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Paste text" }));
+    const kinds = screen.getByRole("radiogroup", { name: "What it is" });
+    expect(within(kinds).getAllByRole("radio").map((r) => r.getAttribute("value"))[0]).toBe("freight_invoice");
+    fireEvent.change(screen.getByLabelText("Pasted text"), {
+      target: { value: "Harborline Freight — Invoice HLF-2207\n1  Ocean freight 20GP Busan-Oakland   2,900.00" },
+    });
+    expect(within(kinds).getByRole("radio", { name: "Invoice" })).toBeChecked();
+  });
+
   it("says Drop to add while files are dragged over, through nested enter and leave", async () => {
     mount();
     const zone = screen.getByTestId("drop-zone");

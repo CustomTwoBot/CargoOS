@@ -1,6 +1,6 @@
 // What an upload is called, from its name or text, and how the rows add up.
 import { describe, expect, it } from "vitest";
-import { billReady, billTitle, headline, kindLabel, stateLabel, typeFromName, typeOfFile, type UploadRow } from "./kinds";
+import { billReady, billTitle, headline, kindLabel, pasteTypeOf, stateLabel, typeFromName, typeOfFile, type UploadRow } from "./kinds";
 
 const row = (p: Partial<UploadRow>): UploadRow => ({ key: "k", name: "n", kind: "Invoice", icon: "PDF", docType: "freight_invoice", state: "read", ...p });
 
@@ -20,6 +20,11 @@ describe("upload kinds", () => {
     expect(typeOfFile({ name: "export.txt", type: "text/plain" }, "10/12/26, 09:14 - Derek PCL: hi")).toBe("chat");
     expect(typeOfFile({ name: "x.eml", type: "" }, "")).toBe("email");
     expect(typeOfFile({ name: "notes.txt", type: "text/plain" }, "Subject: rate\nhello")).toBe("email");
+  });
+
+  it("guesses a paste's type, invoices included", () => {
+    expect(pasteTypeOf("Harborline Freight — Invoice HLF-2207\n1  Ocean freight   2,900.00")).toBe("freight_invoice");
+    expect(pasteTypeOf("Subject: RE: rate\nOcean is $2,150.")).toBe("email");
   });
 
   it("labels rows", () => {

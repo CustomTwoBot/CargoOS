@@ -10,7 +10,7 @@ import { instant, toRows, totalsOf, type Row } from "@/components/case/view-mode
 import { bookkeeperName, type Step } from "@/components/app/next-step";
 import type { Bill } from "@/components/app/bills-provider";
 import { Button, Card, Kicker, LinkButton } from "@/components/app/ui";
-import { BadgeCheck, Ban, CircleCheck, Clock, Hourglass, MessageSquareText, Scale, Stamp, Undo2 } from "@/components/app/icons";
+import { BadgeCheck, Ban, CircleCheck, Clock, FileUp, Hourglass, MessageSquareText, Scale, Stamp, Undo2 } from "@/components/app/icons";
 import { OWNER, firstName } from "@/components/shell/person";
 import type { Person } from "@/lib/types";
 import { AnswerCard, ReadingRow, Spinner } from "./answer-card";
@@ -36,6 +36,14 @@ export function NextStepCard({ bill, step, person }: Props) {
         <Card className="flex items-center gap-3 px-6 py-5" aria-live="polite">
           <Spinner /><span className="font-semibold">Reading documents · {step.read} of {step.total}</span>
           <span className="text-ink-3">Lines show up as each one is read.</span>
+        </Card>
+      );
+    case "noLines":
+      return (
+        <Card focus className="flex flex-col gap-1.5 px-6 py-[22px]">
+          <Kicker icon={FileUp}>No lines yet</Kicker>
+          <span className="text-[17px] font-bold">No invoice lines yet. Add the invoice, or check it&apos;s marked as Invoice.</span>
+          <span className="text-ink-3">Every document is read. CargoOS checks lines only from the invoice; the quote, emails and chats are what it checks them against.</span>
         </Card>
       );
     case "rechecking":

@@ -11,6 +11,7 @@ import type { Person } from "@/lib/types";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useHasConvex } from "@/components/convex-provider";
+import { billForwarder } from "./bill-name";
 import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
 import { useCaseStore, type CaseActions, type CaseLocal, type Toast } from "@/components/case/case-store";
 import type { DemoCase } from "@/components/case/demo-case";
@@ -227,7 +228,8 @@ function Bills({ person, toast, lives, live, given, demoSetup, children }: {
   }
   for (const l of lives.created) {
     bills.push({ id: l.x.case._id, demo: l.demo, x: l.x, local: l.local, actions: l.actions,
-      forwarder: l.x.case.forwarder ?? l.x.case.title, invoiceRef: invoiceRefOf(l.x), live: true, created: true });
+      // Made on /bills/new: no forwarder on the case, so read it from the invoice ("Harborline Freight").
+      forwarder: l.x.case.forwarder ?? billForwarder(l.x), invoiceRef: invoiceRefOf(l.x), live: true, created: true });
   }
 
   const value: BillsValue = {
