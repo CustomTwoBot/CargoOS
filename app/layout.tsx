@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Host_Grotesk } from "next/font/google";
+import { LiveProvider } from "@/components/live/live-provider";
 import "./globals.css";
 
 const hostGrotesk = Host_Grotesk({
@@ -13,8 +14,9 @@ export const metadata: Metadata = {
   description: "Checks a freight invoice against what was agreed before you pay it.",
 };
 
-// Sets the theme class before first paint so the page doesn't flash (docs/design.md §3.2).
-const themeScript = `try{if(localStorage.getItem("cargoos.theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+// Sets the theme class before first paint so the page doesn't flash (docs/design.md §3.2). "system"
+// follows the OS (Settings → Appearance, §0.3).
+const themeScript = `try{var t=localStorage.getItem("cargoos.theme");if(t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -22,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full"><LiveProvider>{children}</LiveProvider></body>
     </html>
   );
 }

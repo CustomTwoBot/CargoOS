@@ -77,19 +77,23 @@ function linesUsing(x: CaseInput, doc: SourceDoc): number[] {
 }
 
 /** "2:05 PM", in Pacific time: added to the date when two documents of a kind share a day. */
-const pacificTime = (iso: string) =>
+export const pacificTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
 
-/** The case's documents, oldest first; documents without a date go last. */
-export function docRows(x: CaseInput): DocRow[] {
+/**
+ * The case's documents, oldest first; documents without a date go last. `asked` is who answers
+ * CargoOS as this screen names them: an answer reads "Your answer" on their screen and "Sam's answer"
+ * elsewhere, without a sender (the kind already says who).
+ */
+export function docRows(x: CaseInput, asked = "you"): DocRow[] {
   const sorted = [...x.documents]
     .sort((a, b) => (a.sentAt && b.sentAt ? compareInstants(a.sentAt, b.sentAt) : a.sentAt ? -1 : b.sentAt ? 1 : 0));
   const day = (d: SourceDoc) => (d.sentAt ? `${d.type} ${pacificDate(d.sentAt)}` : undefined);
   const shared = (d: SourceDoc) => sorted.filter((o) => day(o) && day(o) === day(d)).length > 1;
   return sorted.map((doc) => ({
-    doc, kind: KIND[doc.type], icon: ICON[doc.type],
+    doc, kind: doc.type === "reply" && asked !== "you" ? `${asked}'s answer` : KIND[doc.type], icon: ICON[doc.type],
     date: doc.sentAt ? `${pacificDate(doc.sentAt)}${shared(doc) ? `, ${pacificTime(doc.sentAt)}` : ""}` : undefined,
-    sender: doc.sender ? SENDER[doc.sender] ?? doc.sender : undefined,
+    sender: doc.type === "reply" || !doc.sender ? undefined : SENDER[doc.sender] ?? doc.sender,
     status: statusOf(doc, x.events),
     lines: linesUsing(x, doc),
   }));

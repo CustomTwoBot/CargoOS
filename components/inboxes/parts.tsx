@@ -1,5 +1,6 @@
-// Shared frame of both inboxes: header with the count, a list on the left, the selected item on
-// the right (docs/design.md §0.1 "evidence left, decision right", §7.11 inbox).
+// Shared frame of both inboxes (docs/design.md §0.2 decisions 5 and 6): a light list on the left,
+// the selected item with the room on the right. Below 1024px the screen shows one of the two: the
+// list, or the item full width with a link back to the list.
 import { useSyncExternalStore, type ReactNode } from "react";
 import { cx } from "@/components/case/cx";
 
@@ -11,29 +12,65 @@ export const SECONDARY = "rounded-md border border-line-strong bg-surface px-3.5
 let clientNow: Date | undefined;
 export const useNow = () => useSyncExternalStore(() => () => {}, () => (clientNow ??= new Date()), () => null);
 
-type FrameProps = { title: string; count: string; sub: string; list: ReactNode; detail: ReactNode };
+/** Wide enough for list and detail side by side. Prerendering and browsers without matchMedia count as wide. */
+export const WIDE = "(min-width: 1024px)";
+const subscribeWide = (onChange: () => void) => {
+  const m = typeof window.matchMedia === "function" ? window.matchMedia(WIDE) : undefined;
+  m?.addEventListener("change", onChange);
+  return () => m?.removeEventListener("change", onChange);
+};
+export const useWide = () => useSyncExternalStore(subscribeWide,
+  () => (typeof window.matchMedia === "function" ? window.matchMedia(WIDE).matches : true), () => true);
 
-export function InboxFrame({ title, count, sub, list, detail }: FrameProps) {
+type FrameProps = {
+  title: string; count: string; sub: string; list: ReactNode; detail: ReactNode;
+  /** Narrow screens only: the detail replaces the list, with this link back ("Back to questions"). */
+  reading: boolean; backLabel: string; onBack: () => void;
+};
+
+export function InboxFrame({ title, count, sub, list, detail, reading, backLabel, onBack }: FrameProps) {
+  const wide = useWide();
+  const showDetail = wide || (reading && !!detail);
+  const showList = wide || !showDetail;
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="px-6 pb-3 pt-3.5">
-        <h1 className="flex items-baseline gap-2.5 text-title font-[650] tracking-[-0.012em]">
-          {title}<span className="text-[13px] font-medium tracking-normal text-ink-2">{count}</span>
-        </h1>
-        <p className="mt-0.5 text-[13px] text-ink-2">{sub}</p>
-      </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] gap-4 px-6 pb-4">
-        <div className="min-h-0 overflow-auto">{list}</div>
-        <div className="flex min-h-0 min-w-0 flex-col">{detail}</div>
+    <div className={cx("flex min-h-0 flex-1 flex-col", !wide && "overflow-auto")}>
+      {showList && (
+        <header className="px-4 pb-3 pt-3.5 md:px-6">
+          <h1 className="flex items-baseline gap-2.5 text-title font-[650] tracking-[-0.012em]">
+            {title}{count && <span className="text-[13px] font-medium tracking-normal text-ink-2">{count}</span>}
+          </h1>
+          {sub && <p className="mt-0.5 text-[13px] text-ink-2">{sub}</p>}
+        </header>
+      )}
+      <div className={cx("px-4 pb-4 md:px-6", wide ? "grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] gap-6" : "flex flex-col")}>
+        {showList && <div className={cx(wide && "min-h-0 overflow-auto")}>{list}</div>}
+        {showDetail && (
+          <div className={cx("flex min-w-0 flex-col", wide ? "min-h-0 overflow-auto" : "pt-3.5")}>
+            {!wide && (
+              <button type="button" onClick={onBack}
+                className="mb-3 flex items-center gap-1 self-start text-[13.5px] font-semibold text-link hover:underline">
+                <Chevron dir="left" />{backLabel}
+              </button>
+            )}
+            {detail}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+export const Chevron = ({ dir }: { dir: "left" | "right" | "down" }) => (
+  <svg viewBox="0 0 16 16" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+    strokeLinejoin="round" aria-hidden="true" className="block flex-none">
+    <path d={dir === "left" ? "M10 3.5L5.5 8l4.5 4.5" : dir === "right" ? "M6 3.5L10.5 8 6 12.5" : "M3.5 6l4.5 4.5L12.5 6"} />
+  </svg>
+);
+
 /** One quiet card saying why the list is empty and what would fill it. */
 export function InboxEmpty({ title, text }: { title: string; text: string }) {
   return (
-    <div className={cx(CARD, "px-5 py-5")}>
+    <div className={cx(CARD, "max-w-[560px] px-5 py-5")}>
       <p className="text-row font-semibold">{title}</p>
       <p className="mt-1 text-why text-ink-2">{text}</p>
     </div>
@@ -51,20 +88,96 @@ export function ItemList({ label, quiet, children }: ListProps) {
   );
 }
 
-type ItemProps = { selected: boolean; onSelect: () => void; children: ReactNode };
+type ItemProps = {
+  selected: boolean; onSelect: () => void; title: string; meta: string;
+  /** A dot before the title for what still waits on you, with this text for screen readers ("Unanswered"). */
+  dot?: string;
+};
 
-/** A selectable row. The row only selects; actions live in the detail next to the list. */
-export function Item({ selected, onSelect, children }: ItemProps) {
+/** A selectable row: title (two lines at most) and one line of meta. The row only selects; actions live in the detail. */
+export function Item({ selected, onSelect, title, meta, dot }: ItemProps) {
   return (
     <li className="border-b border-line last:border-0">
       <button type="button" aria-current={selected || undefined} onClick={onSelect}
-        className={cx("block w-full px-4 py-3 text-left outline-offset-[-2px]", selected ? "bg-sunken shadow-[inset_0_0_0_1px_var(--primary-ring)]" : "hover:bg-sunken")}>
-        {children}
+        aria-label={`${dot ? `${dot}: ` : ""}${title}, ${meta}`}
+        className={cx("block w-full px-4 py-3 text-left outline-offset-[-2px]",
+          // The selected row: sunken fill and a 2px primary bar on the left (docs/design.md §3.1 --primary).
+          selected ? "bg-sunken shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-sunken")}>
+        <span className="flex items-start gap-2">
+          <span aria-hidden="true" className={cx("mt-[7px] size-2 flex-none rounded-full", dot && "bg-waiting-fill")} />
+          {dot && <span className="sr-only">{dot}: </span>}
+          <span className={cx("line-clamp-2 text-row font-semibold", !dot && "text-ink-2")} title={title}>{title}</span>
+        </span>
+        {/* Each " · " part stays whole ("15 minutes ago" never breaks after "minutes"); the line wraps between parts. */}
+        <span className="mt-0.5 block pl-4 text-meta text-ink-2">
+          {meta.split(" · ").map((part, i) => <span key={i}>{i > 0 && " · "}<span className="whitespace-nowrap">{part}</span></span>)}
+        </span>
       </button>
     </li>
   );
 }
 
-export const SectionLabel = ({ children }: { children: string }) => (
-  <h2 className="mb-2 mt-5 text-meta font-medium text-ink-3">{children}</h2>
-);
+type FoldProps = { label: string; count: number; open: boolean; onToggle: () => void; children: ReactNode };
+
+/** A done section folded to one line ("Answered (3)") at the bottom of the list. */
+export function Fold({ label, count, open, onToggle, children }: FoldProps) {
+  return (
+    <div className="mt-4">
+      <button type="button" aria-expanded={open} onClick={onToggle}
+        className="flex items-center gap-1.5 rounded-md px-1 py-1 text-meta font-medium text-ink-2 hover:text-ink">
+        <Chevron dir={open ? "down" : "right"} />{label} ({count})
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+type HeadProps = { title: string; meta?: string; onOpen?: () => void };
+
+/** Top of a detail: the case (wraps, never cut), one muted line, and the way into the case. */
+export function DetailHead({ title, meta, onOpen }: HeadProps) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="text-panel font-[650] [overflow-wrap:anywhere]">{title}</h2>
+        {meta && <p className="mt-0.5 text-meta text-ink-3">{meta}</p>}
+      </div>
+      {onOpen && <button type="button" className={cx(SECONDARY, "flex-none")} onClick={onOpen}>Open case</button>}
+    </div>
+  );
+}
+
+export type LineRow = { key: string; lineNo: number; description: string; chip?: ReactNode; amount?: string };
+
+/**
+ * Invoice lines as compact rows: line number, name, one chip, amount. One grid for all rows (subgrid),
+ * so chips start on one edge and amounts end on one edge whatever their widths. In a card narrower
+ * than 560px the chip moves under the name, so the name keeps the width instead of wrapping word by word.
+ */
+export function LineRows({ label, rows }: { label: string; rows: LineRow[] }) {
+  const amounts = rows.some((r) => r.amount);
+  const chips = rows.some((r) => r.chip);
+  // Narrow: number | name | amount, chip on a second row under the name. Wide: number | name | chip | amount.
+  const cols = chips && amounts ? "grid-cols-[1.5rem_minmax(0,1fr)_max-content] @[560px]:grid-cols-[1.5rem_minmax(0,1fr)_max-content_max-content]"
+    : chips ? "grid-cols-[1.5rem_minmax(0,1fr)] @[560px]:grid-cols-[1.5rem_minmax(0,1fr)_max-content]"
+    : amounts ? "grid-cols-[1.5rem_minmax(0,1fr)_max-content]" : "grid-cols-[1.5rem_minmax(0,1fr)]";
+  return (
+    <div className="@container">
+      <ul aria-label={label} className={cx("grid items-center gap-x-3", cols)}>
+        {rows.map((r) => (
+          <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center gap-y-1 border-b border-line py-2 last:border-0">
+            <span className="col-start-1 row-start-1 text-xs text-ink-3">{r.lineNo}</span>
+            <span className="col-start-2 row-start-1 text-[14px] font-semibold">{r.description}</span>
+            {chips && (
+              <span className={cx("col-start-2 row-start-2 inline-flex items-center gap-1 justify-self-start rounded-sm border border-line px-2 text-meta font-semibold leading-[22px] text-ink-2",
+                "@[560px]:col-start-3 @[560px]:row-start-1")}>{r.chip}</span>
+            )}
+            {amounts && (
+              <b className={cx("row-start-1 text-right text-[14px] font-semibold", chips ? "col-start-3 @[560px]:col-start-4" : "col-start-3")}>{r.amount}</b>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

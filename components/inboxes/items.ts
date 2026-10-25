@@ -3,10 +3,12 @@
 // counts, the lists and the case tabs always agree. Amounts come from the case, never from here.
 import type { DemoCase } from "@/components/case/demo-case";
 import { capitalize, delta, inCurrency, money } from "@/components/case/format";
+import { openQuestions, questionTitle } from "@/components/case/issues";
 import { groupTotals } from "@/components/case/totals";
 import { currencyOf, instant, toRows, type CaseInput, type Row, type UiGroup } from "@/components/case/view-model";
-import type { CaseEvent, Party, SourceSpan } from "@/lib/types";
-import { decisionOf } from "./people";
+import type { CaseEvent, DocType, Draft, Party, Question, SourceSpan } from "@/lib/types";
+import { firstName, personOf, type DraftDecision } from "./people";
+import { signedBy } from "./message";
 
 /** One case as the inboxes read it. `forwarder` names the party a dispute goes to, when known. */
 export type InboxCase = { demo: DemoCase; x: CaseInput; forwarder?: string };
@@ -18,24 +20,42 @@ export type InboxLine = {
   agreed?: string;
   /** The plain reason when nothing was agreed above zero: "Billed twice", "You said it was never agreed". */
   reason: string;
+  /** The engine rule's short code: "R6" (nobody agreed), "R7" (sources disagree). */
+  code: string;
 };
+
+/** A quote CargoOS cites in a question, with the document it comes from. */
+export type Mention = SourceSpan & { docTitle?: string; docType?: DocType };
 
 export type QuestionItem = {
   /** Unique across cases: `${caseId}:${questionId}`. */
   id: string; caseId: string; caseTitle: string; questionId: string;
   status: "open" | "answered";
+  /** Which question of the case: "Question 1", "Question 2", "Follow-up"; absent when the case has only one. */
+  label?: string;
   text: string; askedAt: string; citations: SourceSpan[];
+  /** The citations with their documents, in the same order. */
+  mentions: Mention[];
+  /** The sources disagree (a covered line is R7, or the quotes come from two documents or more). */
+  conflict: boolean;
   lines: InboxLine[];
+  /** Billed total of every covered line, "$600". */
+  total: string;
   /** Billed total of the covered lines still waiting, "$600"; "$0" once answered. */
   waiting: string;
   /** The operator's answer, word for word, and when it came in. */
   answer?: { text: string; at?: string };
+  /** For a follow-up: the earlier answer it follows up on, word for word. */
+  followUpOf?: { answer?: string };
+  /** Replay only: what happens to a reply, and why the answer box is closed when it is. */
+  replay?: { note: string; blocked?: string };
+  /** The case's latest event: the replay's clock reads from it (see replayNow). */
+  caseAt?: string;
 };
 
 /** pending_approval → pending, approved → accepted, rejected → rejected. Drafts nobody requested yet stay out. */
 export type ApprovalStatus = "pending" | "accepted" | "rejected";
 
-// TEMPORARY local shape: requestedBy / decidedBy / rejectionReason come from SPEC §5.5 (see people.ts).
 export type ApprovalItem = {
   /** Unique across cases: `${caseId}:${draftId}`. */
   id: string; caseId: string; caseTitle: string; draftId: string;
@@ -49,6 +69,8 @@ export type ApprovalItem = {
   rejectionReason?: string;
   /** The message to the seller, once accepted: CargoOS's draft, or the owner's edit of it. Empty until drafted. */
   subject: string; message: string;
+  /** The case's latest event: the replay's clock reads from it (see replayNow). */
+  caseAt?: string;
 };
 
 /** What the sidebar shows: open questions, requests waiting for a decision, rejections sent back. */
@@ -58,11 +80,25 @@ const line = (r: Row): InboxLine => ({
   key: r.key, lineNo: r.lineNo, description: r.description, group: r.group,
   billed: inCurrency(r.billedCents, r.currency), delta: delta(r.deltaCents),
   agreed: r.finding.expectedCents ? inCurrency(r.finding.expectedCents, r.currency) : undefined,
-  reason: r.reason.plain,
+  reason: r.reason.plain, code: r.reason.code,
 });
 
 const eventAt = (events: CaseEvent[], type: CaseEvent["type"], match: (p: Record<string, unknown>) => boolean) =>
   events.filter((e) => e.type === type && match(e.payload)).sort((a, b) => instant(a.at) - instant(b.at)).at(-1)?.at;
+
+/** The latest time the case shows: its events and when its questions were asked (a question can postdate the last event). */
+const latestAt = (x: CaseInput) => [...x.events.map((e) => e.at), ...x.questions.map((q) => q.createdAt)]
+  .reduce<string | undefined>((m, t) => (!m || instant(t) > instant(m) ? t : m), undefined);
+
+/**
+ * The replay's "now": a minute after the latest event of any case listed, the same way the case
+ * store stamps what you do. Ages then read "12 minutes ago" next to "Asked today at 1:41 PM",
+ * not hours on the wall clock. Undefined when no item carries a time.
+ */
+export function replayNow(items: { caseAt?: string }[]): Date | undefined {
+  const times = items.flatMap((i) => (i.caseAt ? [instant(i.caseAt)] : [])).filter((t) => !Number.isNaN(t));
+  return times.length ? new Date(Math.max(...times) + 60_000) : undefined;
+}
 
 const byTime = (a?: string, b?: string) => (a && b ? instant(a) - instant(b) : a ? -1 : b ? 1 : 0);
 
@@ -75,16 +111,26 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
       const waiting = covered.filter((r) => r.group === "waiting").map((r) => r.finding);
       const reply = q.status === "answered" ? x.replies.find((r) => r.questionId === q._id) : undefined;
       const doc = reply && x.documents.find((d) => d._id === reply.docId);
+      const mentions = q.citations.map((c): Mention => {
+        const from = x.documents.find((d) => d._id === c.docId);
+        return { ...c, docTitle: from?.title, docType: from?.type };
+      });
       return {
         id: `${demo.id}:${q._id}`, caseId: demo.id, caseTitle: demo.title, questionId: q._id,
         status: q.status === "open" ? "open" : "answered",
-        text: q.text, askedAt: q.createdAt, citations: q.citations,
+        label: labelOf(x, q),
+        text: q.text, askedAt: q.createdAt, citations: q.citations, mentions,
+        conflict: covered.some((r) => r.finding.ruleId === "R7_CONFLICT") || new Set(q.citations.map((c) => c.docId)).size > 1,
         lines: covered.map(line),
+        total: money(groupTotals(covered.map((r) => r.finding), currencyOf(x)).billedCents),
         waiting: money(groupTotals(waiting, currencyOf(x)).billedCents),
         answer: doc && {
           text: doc.text,
           at: eventAt(x.events, "reply_received", (p) => p.questionId === q._id) ?? doc.sentAt,
         },
+        followUpOf: q.followupOf ? { answer: answerText(x, q.followupOf) } : undefined,
+        replay: q.status === "open" ? replayOf(demo, x, q._id) : undefined,
+        caseAt: latestAt(x),
       };
     });
   });
@@ -95,6 +141,37 @@ export function questionItems(cases: InboxCase[]): QuestionItem[] {
   return [...open, ...answered];
 }
 
+/** questionTitle without its one-question name ("Your answer"), which says nothing in a list of cases. */
+const labelOf = (x: CaseInput, q: Question) => {
+  const t = questionTitle(x, q);
+  return t === "Your answer" ? undefined : t;
+};
+
+const answerText = (x: CaseInput, questionId: string) => {
+  const reply = x.replies.find((r) => r.questionId === questionId);
+  return reply && x.documents.find((d) => d._id === reply.docId)?.text;
+};
+
+/**
+ * A replay reads the recorded answer whatever you type, and plays answers in the order they were
+ * recorded (answering a later one first would jump to a snapshot that already holds the earlier one).
+ */
+function replayOf(demo: DemoCase, x: CaseInput, questionId: string): QuestionItem["replay"] {
+  if (!demo.answers[questionId]) return { note: "This replay has no recorded answer for this question." };
+  const open = new Set(openQuestions(x).map((q) => q._id));
+  const next = Object.keys(demo.answers).find((id) => open.has(id));
+  const nextQ = next && next !== questionId ? x.questions.find((q) => q._id === next) : undefined;
+  return {
+    note: "Replay of a recorded run: CargoOS reads the recorded answer.",
+    blocked: nextQ && `Answer ${questionTitle(x, nextQ)} in this case first. In this replay the answers play in the order they were recorded.`,
+  };
+}
+
+const signedAs = (body: string, personId?: string) => {
+  const p = personOf(personId);
+  return p ? signedBy(body, firstName(p)) : body;
+};
+
 const STATUS: Partial<Record<string, ApprovalStatus>> = { pending_approval: "pending", approved: "accepted", rejected: "rejected" };
 
 /** Requests to decide (oldest request first), then decided ones (latest decision first). */
@@ -104,20 +181,23 @@ export function approvalItems(cases: InboxCase[]): ApprovalItem[] {
     return x.drafts.flatMap((d): ApprovalItem[] => {
       const status = STATUS[d.status];
       if (!status) return [];
-      const extra = decisionOf(d);
+      const legacy = d as Draft & DraftDecision;
       const forDraft = (p: Record<string, unknown>) => p.draftId === d._id;
       return [{
         id: `${demo.id}:${d._id}`, caseId: demo.id, caseTitle: demo.title, draftId: d._id, status,
         forwarder: forwarder ?? capitalize(d.to), to: d.to,
         total: money(d.totalDisputedCents), lineCount: d.findingKeys.length,
         lines: d.findingKeys.flatMap((k) => (rows.has(k) ? [line(rows.get(k)!)] : [])),
-        requestedBy: extra.requestedBy,
+        requestedBy: d.requestedBy,
         requestedAt: eventAt(x.events, "approval_requested", forDraft) ?? eventAt(x.events, "draft_created", forDraft),
-        decidedBy: status === "accepted" ? extra.acceptedBy : status === "rejected" ? extra.rejectedBy : undefined,
-        decidedAt: status === "accepted" ? eventAt(x.events, "approved", forDraft) : status === "rejected" ? extra.rejectedAt : undefined,
-        rejectionReason: status === "rejected" ? extra.rejectionReason : undefined,
+        decidedBy: status === "accepted" ? d.approvedBy ?? legacy.acceptedBy : status === "rejected" ? d.rejectedBy : undefined,
+        decidedAt: status === "accepted" ? eventAt(x.events, "approved", forDraft)
+          : status === "rejected" ? eventAt(x.events, "draft_rejected", forDraft) ?? legacy.rejectedAt : undefined,
+        rejectionReason: status === "rejected" ? d.rejectionReason : undefined,
         subject: status === "accepted" ? d.subject : "",
-        message: status === "accepted" ? extra.editedBody ?? d.body : "",
+        // The owner who accepted writes to the seller, so CargoOS's draft is signed with their name.
+        message: status === "accepted" ? d.editedBody ?? signedAs(d.body, d.approvedBy ?? legacy.acceptedBy) : "",
+        caseAt: latestAt(x),
       }];
     });
   });

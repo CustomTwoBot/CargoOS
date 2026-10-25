@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SCENARIO_A, scenarioAAt } from "@/components/case/fixture";
-import { ago, approvalItems, inboxCounts, questionItems } from "./items";
+import { SCENARIO_B } from "@/components/demo/scenario-b/scenario-b";
+import { ago, approvalItems, inboxCounts, questionItems, replayNow } from "./items";
 import { allAsking, CASE_B, caseB, DEMO_REJECTION, inboxCase, scenarioAWithDraft } from "./sample";
 
 describe("questionItems", () => {
@@ -34,6 +35,37 @@ describe("questionItems", () => {
     expect(a.lines.map((l) => [l.lineNo, l.group, l.delta])).toEqual([[4, "cleared", "—"], [6, "dispute", "+$400"]]);
   });
 
+  it("each item knows its total, where its quotes come from, and whether the sources disagree", () => {
+    const [a] = questionItems([inboxCase(SCENARIO_A, scenarioAAt("before"))]);
+    expect(a).toMatchObject({ total: "$600", conflict: false });
+    expect(a.lines.map((l) => l.code)).toEqual(["R6", "R6"]);
+    expect(a.mentions.map((m) => [m.docType, m.quote])).toEqual([["chat", "possible congestion at LB terminal, may be extra"]]);
+    const drayage = questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("before"))]).find((q) => q.questionId === "b_q_2")!;
+    expect(drayage).toMatchObject({ total: "$5,850", conflict: true });
+    expect(drayage.mentions.map((m) => m.docType)).toEqual(["email", "proforma"]);
+  });
+
+  it("labels questions when a case has more than one: Question 1, Question 2, Follow-up", () => {
+    expect(questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("before"))]).map((q) => q.label)).toEqual(["Question 1", "Question 2"]);
+    expect(questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("after-q2"))]).map((q) => [q.questionId, q.label]))
+      .toEqual([["b_q_3", "Follow-up"], ["b_q_2", "Question 2"], ["b_q_1", "Question 1"]]);
+    expect(questionItems([inboxCase(SCENARIO_A, scenarioAAt("before"))])[0].label).toBeUndefined();
+  });
+
+  it("a follow-up carries the earlier answer word for word", () => {
+    const q = questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("after-q2"))]).find((i) => i.status === "open")!;
+    expect(q.questionId).toBe("b_q_3");
+    expect(q.followUpOf).toEqual({ answer: "Lena and I went over drayage on a call last month. I'd have to check my notes." });
+  });
+
+  it("replay: says the recorded answer is read, and blocks answers out of the recorded order", () => {
+    const [fees, drayage] = questionItems([inboxCase(SCENARIO_B, SCENARIO_B.at("before"))]);
+    expect(fees.replay).toEqual({ note: "Replay of a recorded run: CargoOS reads the recorded answer.", blocked: undefined });
+    expect(drayage.replay?.blocked).toBe("Answer Question 1 in this case first. In this replay the answers play in the order they were recorded.");
+    const [b] = questionItems([inboxCase(CASE_B, caseB("asking"))]);
+    expect(b.replay).toEqual({ note: "This replay has no recorded answer for this question." });
+  });
+
   it("no cases, no questions", () => {
     expect(questionItems([])).toEqual([]);
   });
@@ -51,6 +83,13 @@ describe("approvalItems", () => {
       [1, "Ocean freight 40HC Ningbo-Long Beach", "$4,500", "$4,800", "+$300"],
       [6, "Rush handling", undefined, "$400", "+$400"],
     ]);
+  });
+
+  it("still reads drafts the replay store wrote before lib/types Draft had the decision fields", () => {
+    const x = scenarioAWithDraft("rejected");
+    const legacy = { ...x, events: x.events.filter((e) => e.type !== "draft_rejected"),
+      drafts: x.drafts.map((d) => ({ ...d, rejectedBy: "you", rejectedAt: "2026-10-24T14:12:00-07:00" })) };
+    expect(approvalItems([inboxCase(SCENARIO_A, legacy)])[0]).toMatchObject({ decidedBy: "you", decidedAt: "2026-10-24T14:12:00-07:00" });
   });
 
   it("decided ones follow, latest decision first: accepted with the message, rejected with the reason", () => {
@@ -102,5 +141,14 @@ describe("ago", () => {
     expect(ago("2026-10-23T09:10:00-07:00", now)).toBe("yesterday");
     expect(ago("2026-10-20T09:10:00-07:00", now)).toBe("4 days ago");
     expect(ago("2026-10-24T16:30:00-07:00", now)).toBe("just now");
+  });
+});
+
+describe("replayNow", () => {
+  it("is a minute after the latest thing any listed case shows, so ages follow the replay, not the wall clock", () => {
+    expect(replayNow(questionItems(allAsking()))?.toISOString()).toBe("2026-10-24T20:56:00.000Z"); // 1:56 PM, after A's 1:55 PM question
+    const requested = approvalItems([inboxCase(SCENARIO_A, scenarioAWithDraft()), inboxCase(CASE_B, caseB("drafted"))]);
+    expect(replayNow(requested)?.toISOString()).toBe("2026-10-24T21:08:05.000Z"); // after the 2:07 PM request
+    expect(replayNow([])).toBeUndefined();
   });
 });

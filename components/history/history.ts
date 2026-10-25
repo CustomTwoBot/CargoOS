@@ -180,6 +180,12 @@ export function historyEntries(x: CaseInput): Entry[] {
 }
 
 /** One check and everything that led to it, or the open stretch after the last check. */
+/** What happened to documents: the only steps an uploader sees (docs/design.md §0.3). No findings, amounts or quotes. */
+const DOCUMENT_STEPS: CaseEvent["type"][] = ["doc_added", "document_uploaded", "facts_extracted", "extraction_failed"];
+
+export const uploaderEntries = (entries: Entry[]): Entry[] =>
+  entries.filter((e) => DOCUMENT_STEPS.includes(e.code)).map((e) => ({ ...e, quotes: [], lines: [] }));
+
 export type Round = { key: string; label: string; revision?: number; entries: Entry[] };
 
 /**

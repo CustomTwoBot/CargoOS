@@ -1,12 +1,24 @@
 // Message to the seller after the owner accepts a dispute (SPEC §8 owner page). The owner edits
-// the words; amounts and line numbers are locked chips taken from the findings. Export PDF prints
+// the words; amounts and line numbers are locked chips taken from the findings. Save PDF prints
 // the message; Copy text puts it on the clipboard. CargoOS never sends it.
 import { memo, useEffect, useRef, useState } from "react";
 import { cx } from "@/components/case/cx";
-import { plainMessage, printPage, splitLocked } from "./message";
+import { lockedGroups, plainMessage, printPage, type Part } from "./message";
 import { PRIMARY, SECONDARY } from "./parts";
 
-const CHIP = "inline-block rounded-[5px] border border-line-strong bg-sunken px-[3px] font-semibold leading-[20px]";
+// A locked value reads as text with a quiet tint, not a box; its punctuation stays on its line.
+const TOKEN = "rounded-[3px] bg-sunken px-[2px] font-semibold [box-decoration-break:clone]";
+
+/** Words and locked values; `editable` marks the values as not editable inside a contentEditable. */
+function Parts({ text, editable }: { text: string; editable: boolean }) {
+  const one = (p: Part, key: number) => p.kind === "locked"
+    ? <span key={key} data-locked={editable ? "" : undefined} contentEditable={editable ? false : undefined}
+        title={editable ? "Locked. This number comes from CargoOS rules." : undefined} className={TOKEN}>{p.text}</span>
+    : <span key={key}>{p.text}</span>;
+  return lockedGroups(text).map((g, i) => (Array.isArray(g)
+    ? <span key={i} className="whitespace-nowrap">{g.map(one)}</span>
+    : one(g, i)));
+}
 
 /** Print through a hidden frame, so only the message is printed. */
 function printInFrame(html: string) {
@@ -46,7 +58,7 @@ type EditorProps = { initial: string; label: string; singleLine?: boolean; onTex
  */
 const LockedEditor = memo(function LockedEditor({ initial, label, singleLine, onText }: EditorProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [parts] = useState(() => splitLocked(initial));
+  const [first] = useState(initial);
   const onTextRef = useRef(onText);
   useEffect(() => { onTextRef.current = onText; });
 
@@ -89,9 +101,7 @@ const LockedEditor = memo(function LockedEditor({ initial, label, singleLine, on
       spellCheck
       className={cx("rounded-md px-2 py-1 -mx-2 text-[14px] leading-[24px] outline-none hover:bg-sunken focus:bg-sunken focus:shadow-[inset_0_0_0_1px_var(--line-strong)]",
         singleLine ? "font-semibold" : "whitespace-pre-wrap")}>
-      {parts.map((p, i) => p.kind === "locked"
-        ? <span key={i} data-locked="" contentEditable={false} title="Locked. This number comes from CargoOS rules." className={CHIP}>{p.text}</span>
-        : <span key={i}>{p.text}</span>)}
+      <Parts text={first} editable />
     </div>
   );
 });
@@ -120,15 +130,15 @@ export function SellerMessage({ to, subject, message, onChange, readOnly, print 
       <dl className="mt-3 grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-y-1 text-[14px]">
         <dt className="text-ink-3">To</dt><dd>{to}</dd>
         <dt className="text-ink-3">Subject</dt>
-        <dd>{readOnly ? <span className="font-semibold">{subject}</span>
+        <dd>{readOnly ? <span className="font-semibold"><Parts text={subject} editable={false} /></span>
           : <LockedEditor initial={subject} label="Subject" singleLine onText={(s) => update({ subject: s })} />}</dd>
       </dl>
       <div className="mt-3 border-t border-line pt-3">
-        {readOnly ? <p className="whitespace-pre-wrap text-[14px] leading-[24px]">{message}</p>
+        {readOnly ? <p className="whitespace-pre-wrap text-[14px] leading-[24px]"><Parts text={message} editable={false} /></p>
           : <LockedEditor initial={message} label="Message" onText={(b) => update({ body: b })} />}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-        <button type="button" className={PRIMARY} onClick={() => print(printPage({ to, ...text.current }))}>Export PDF</button>
+        <button type="button" className={PRIMARY} onClick={() => print(printPage({ to, ...text.current }))}>Save PDF</button>
         <button type="button" className={SECONDARY} onClick={copy}>Copy text</button>
         {copied && <span role="status" className="text-meta text-ink-2">Copied.</span>}
       </div>

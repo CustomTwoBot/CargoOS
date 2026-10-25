@@ -36,7 +36,7 @@ export function DropTargets({ onAdd, counts = {}, paste, onPaste, large }: Props
     <DropArea label="Files" onDocs={onAdd}>
       {() => (
         <div className="grid gap-3">
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
             {DROP_TARGETS.map((t) => {
               const n = counts[t.type] ?? 0;
               const label = TYPE_LABEL[t.type];

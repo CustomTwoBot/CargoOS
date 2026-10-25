@@ -55,6 +55,85 @@ UI-тексты, имена токенов и код на английском, 
 - **Ввод:** `Add evidence` в шапке открывает панель справа (вариант A); правка строки прямо в строке (вариант A) в раскрытом списке на Overview.
 - **Состояния:** вариант A, тихо внутри карточек (`components/states/quiet.tsx`); тосты снизу справа с Undo для Agree / Not an issue.
 
+
+### 0.2 Спокойнее и по размеру окна (25 октября; уточняет §0.1)
+
+**Что мешает сейчас.** Верх кейса занимает ~260px: заголовок с двумя пилюлями, длинная строка источников, строка доверия, три кнопки, затем карточка At stake (подпись, число, count line, тэглайн, время, итог, полоса, легенда) и только потом вкладки; одни и те же суммы видны трижды. В списке под заголовком секции «To dispute» каждая строка снова несёт красный залитый тег «To dispute». Сайдбар смешивает три уровня: глобальные инбоксы, список кейсов и навигацию открытого кейса (Overview, Open question, Documents, History) под повтором названия кейса; «Open question» стоит рядом с «Overview», хотя это не место, а ярлык на вкладку. Страница вопросов несёт полный текст вопроса в каждом пункте списка и повторяет его справа. Экран зафиксирован на 1280px.
+
+**Решения.**
+1. **Сайдбар только про места, общие для всех кейсов:** «Waiting on you» (Questions n, Approvals n), «Cases» (каждый кейс одной строкой: точка статуса, название, сумма at stake), «+ New case». Ничего от открытого кейса в сайдбаре нет. Внизу короткая строка Replay. Свёрнутый вид: иконки с точками.
+2. **Навигация кейса живёт в кейсе.** Полоса вкладок: Overview, дела (строки, вопросы, Dispute), а справа две тихие вкладки-вида **Documents** и **History**.
+3. **Верх кейса — две строки, не больше.**
+   - Шапка (≈56px): название + одна пилюля статуса; справа `Draft dispute` и меню «⋯» (Add evidence, тема). Под названием одна приглушённая строка: `Invoice PCL-INV-1012 · Pacific Crest Logistics · Replay · Synthetic data. Nothing is sent or paid automatically.` Список «checked against» уходит в Documents.
+   - Денежная полоса (≈64px): слева `At stake` и сумма (≈32px, красная); справа одна полоса счёта с сегментами и одна строка цифр под ней: `Matches $6,600 · At stake $300 · Waiting $600 · Invoice $7,500` (+ `CNY 4,200 not converted`). Во время пересчёта эту строку заменяет «Rechecking 8 charges…». Count line и тэглайн с этого места убираются.
+   - Полоса закреплена над всеми вкладками кейса (как сейчас).
+4. **Overview — один столбец списка.** Секции несут статус и подытог: `To dispute · 4 · +$3,340`, `Questions for you · 2`, `Waiting · 1`, `Cleared · 7 · $5,575` (свёрнута). Строка: маленький глиф статуса, название, один числовой чип (`Agreed $4,500 → Billed $4,800`, `Billed twice`, `No agreement`), сумма. Залитых тегов в строках нет. Вопрос — компактная строка «2 charges need your answer · $600 → Answer». Лента «What was agreed» уходит в Documents. После ответа сверху полоса «Your answer changed N charges».
+5. **Вопросы.** Список слева: название кейса, «2 charges · $600», давность; одна-две строки, без текста вопроса. Справа: вопрос крупно, строки, которых он касается, компактными рядами, «Closest mention» свёрнуто под «Show what the chat said», поле ответа. Отвеченные свёрнуты в «Answered (n)».
+6. **Размер окна.** ≥1280: сайдбар развёрнут; 1024–1279: сайдбар свёрнут в рейку по умолчанию; <1024: сайдбар скрыт за кнопкой меню (выезжает поверх), вкладки прокручиваются, вкладка дела складывает доказательства над решением, инбоксы показывают либо список, либо деталь. Поддерживаем от 768px. Горизонтальной прокрутки страницы нет; `min-w-[1280px]` убираем.
+7. **Слова.** `At stake` вместо `At stake, may not be owed` (пояснение в «?»). Строки спеки (To dispute, Waiting on answers, Cleared, Agree, Not an issue, Draft dispute, Approve/Accept, строка доверия) остаются дословно, но статус в строках передаётся формой, а не повтором слова.
+
+**Кто что делает (файлы не пересекаются).** Оболочка: `components/case/case-screen.tsx`, `sidebar.tsx`, `cases-list.tsx`, `app/layout.tsx`. Кейс: `components/case/workspace.tsx`, `chrome.tsx`, `overview.tsx`, `overview-tab.tsx`, `case-tabs.tsx`, `issue-views.tsx`, `evidence-panel.tsx`. Инбоксы: `components/inboxes/*`. Общий контракт: `CaseWorkspace` получает `view` и `onView(view)` (`"case" | "documents" | "history"`).
+
+
+### 0.3 Люди на устройстве, Settings, виды кейса (решение Dzhamal, 25 октября; меняет §0 и §0.2 п.2)
+
+**Демо:** два ноутбука и телефон. Ноутбук 1: Maya, bookkeeper. Ноутбук 2: Sam, owner. Телефон: загрузка документов (iOS-приложение ведёт отдельная сессия, здесь его не трогаем). Люди и их роли — `lib/people.ts` (SPEC §5.5): Sam = clerk + ops_lead + controller + uploader, Maya = clerk + uploader, Leo = uploader.
+
+1. **Человек этого устройства выбирается в Settings**, не на главном экране (меняет §0 «никакого контрола» и SPEC §5.5 «never by a UI control»; спеку поправить после сообщения команде). По умолчанию Sam (все роли = прежний «один оператор»). Хранится в `localStorage` (`cargoos.person`), читается как тема: try/catch, сервер рендерит Sam.
+   - Названия в UI по спеке: **Owner** (Sam, решает и пишет продавцу), **Bookkeeper** (Maya, проверяет и просит одобрения), **Uploader** (Leo, только документы, без денег и находок).
+2. **Settings** — отдельное место, вход внизу сайдбара: блок «аватар · Sam · Owner · Bayline Trading», клик открывает Settings (и в свёрнутом виде — аватар). Страница с подменю слева:
+   - **This device** — кто работает на этом экране: три карточки-радио с тем, что человек может и не может («Accepts or rejects disputes», «Can't approve what they requested»…).
+   - **Workspace** — название, базовая валюта USD, участники (из `PEOPLE`, роли чипами), `Invite` неактивна с подсказкой «Demo workspace».
+   - **Appearance** — Light / Dark / System. Тема уходит из меню «⋯» кейса сюда.
+   - **Billing** — заглушка: план, «Invoices checked this month», карта не нужна, всё помечено `Demo`; кнопок оплаты нет.
+   - **Demo data** — Reset demo, Replay/Live, пометка «Synthetic data».
+3. **Как меняется интерфейс по человеку** (компоненты проверяют роли через `canAct`, человек — для правила «не одобряет своё»):
+   - **Owner:** всё как сейчас. Не может принять спор, который сам запросил: вместо Accept строка «You requested this. Another owner decides.» (сервер всё равно пишет `approval_blocked`).
+   - **Bookkeeper:** находки, Agree / Not an issue, правка строк, Add evidence, **Request approval** вместо Draft dispute → Accept. Вопросы видит без поля ответа («Waiting for Sam»). Approvals: свои запросы со статусом и причиной отказа, без Accept/Reject.
+   - **Uploader:** в сайдбаре только Cases (без сумм и точек статуса) и New case; кейс открывается сразу на Documents с загрузкой; ни At stake, ни находок, ни History с суммами.
+   - Внизу сайдбара всегда видно, кто это устройство, — чтобы на демо было понятно, какой ноутбук чей.
+4. **Виды кейса — уровень выше вкладок дел** (меняет §0.2 п.2: Documents и History в правом конце полосы вкладок незаметны). Под шапкой кейса подчёркнутые вкладки первого уровня: **Review** · **Documents 6** · **History 14** (иконка, имя, число). Полоса денег закреплена под ними для Review и Documents. Сегментная полоса Overview + дела показывается только в Review. На <1024 вкладки первого уровня остаются в одну строку.
+5. **Глифы.** Ни одного залитого круга с пиктограммой. Итог цепочки «How CargoOS checked line N» — тот же глиф статуса, что во вкладке и строке Overview (обводка, цвет статуса), размер как у остальных шагов.
+6. **Постоянная дизайн-проверка.** Отдельная сессия смотрит интегрированный интерфейс на 1440/1180/900/768 в обеих темах после каждого нового коммита, ведёт `docs/design-qa.md` и отправляет дефекты сессии-владельцу файлов.
+
+**Кто что делает.** Оболочка + люди + Settings: `case-screen.tsx`, `sidebar.tsx`, `cases-list.tsx`, `case-store.ts`, `roles.ts`, `components/shell/*`, `components/settings/*` (новая), `app/layout.tsx`. Кейс: файлы кейса из §0.2 + `case-menu.tsx`, `glyphs.tsx`, `components/documents/*`, `components/history/*`. Инбоксы: `components/inboxes/*` (включая `people.ts`: заменить временную модель на `lib/people.ts`). Контракт: `CaseWorkspace`, `QuestionsInbox`, `ApprovalsInbox` получают `viewer: Person` (из `lib/types`, по умолчанию Sam); `CaseActions` сами ставят `requestedBy` / `approvedBy` = `viewer.id` и не принимают спор от того, кто его запросил.
+
+
+### 0.4 Реворк: счёт слева, CargoOS справа (25 октября; заменяет раскладку §0.1–§0.3, люди и Settings из §0.3 остаются)
+
+**Зачем.** Судья должен понять идею за 10 секунд: «вот счёт, вот что из него не было согласовано и почему, ИИ спросил одного человека, ответ всё пересчитал, спор одобряет владелец, ничего не отправляется». Прошлые версии были приборной панелью: вкладки по делам, секции, чипы, глифы, отдельные страницы Questions/Approvals. Каждый элемент нужно было выучить. Макеты и сравнение: `docs/mockups/` (`d.html` до ответа, `d2.html` после ответа глазами Maya, `c.html` — ChatGPT в чистом виде, `b.html` — иконки против цветного текста). Откат: тег `ui-before-rework`.
+
+**Что проверили и решили.**
+- **Как в ChatGPT — да, но не чат-бот.** Сайдбар как у ChatGPT (New case сверху, кейсы как чаты, аккаунт внизу) и лента CargoOS с полем ввода внизу знакомы всем. Но счёт внутри чата (`c.html`) сжимается до карточки и продукт выглядит обёрткой над чатом, а свободного чата у нас нет по спеке. Поэтому раскладка «документ + ассистент» (как Canvas): слева размеченный счёт, справа лента работы CargoOS. Поле ввода активно только когда CargoOS ждёт ответа этого человека.
+- **Цветной текст вместо иконок — да, но цветом пишем статус, а не всю строку.** Вся строка красным или жёлтым кричит, жёлтый текст плохо читается, без цвета ничего не понятно (`b.html`, вариант 2). Решение: название строки всегда тёмное; статус — короткое цветное слово (`$300 over`, `Asked you`, `Matches`); суммы дельты цветные. Иконок статуса (×, ?, ✓, круги) больше нет нигде.
+
+**Раскладка (1440).**
+1. **Сайдбар 248px, как в ChatGPT.** Логотип; кнопка `＋ New case` во всю ширину; группа **Needs you** — кейсы, где этот человек должен действовать; группа **Earlier** — остальные. Строка кейса: `Forwarder · номер счёта` и под ней цветной статус словами (`Answer 1 question`, `Approve dispute · $700`, `Waiting for Sam`, `Ready to dispute $700`, `Paid · nothing disputed`). Внизу аккаунт `аватар · Sam · Owner · Bayline Trading` → Settings. Страниц Questions и Approvals больше нет: их работа — Needs you + лента кейса.
+2. **Шапка кейса 60px.** `Invoice PCL-INV-1012 from Pacific Crest Logistics`, под ней приглушённо `40HC Ningbo → Long Beach · Oct 12 · Synthetic data. Nothing is sent or paid automatically.` Справа `Replay` и `⋯` (Add evidence, Audit log, Reset). Никаких пилюль статуса — статус говорит вердикт.
+3. **Холст (слева, фон `--bg`, лист до 760px по центру):**
+   - **Вердикт.** Крупно `$300 may not be owed` (красная сумма); после ответа рядом пилюля `was $300`, число меняется с подсчётом. Под ним одно предложение, которое объясняет всё: `Pacific Crest billed $7,500. $6,600 matches what was agreed, $300 is more than agreed, and $600 waits for your answer.` (цветные суммы, «your answer» → «Sam's answer» у Maya). Полоса счёта без легенды — легенда это предложение. Строка `Checked against` с чипами источников (`Quote · Sep 2`, `Email from Derek · Sep 5`, `WhatsApp · Sep 8–28`, `Invoice · Oct 12`, после ответа `Sam's answer · Oct 24`): клик открывает документ.
+   - **Invoice lines.** Таблица в порядке счёта, как настоящий счёт: `# · Charge · Billed · Agreed · Result`. `Agreed` — сумма или приглушённые слова (`per quote terms`, `not agreed yet`, `Sam approved it`, `nobody agreed`). `Result` — цветное слово. Строки To dispute слегка подкрашены красным, ждущие — жёлтым. Справа сверху фильтр `All 8 · To dispute 1 · Waiting 2 · Cleared 5` (фильтр, не вкладки). Клик по строке раскрывает доказательство прямо под ней: цитаты с подсветкой и источником, одна строка вывода (why-строка движка), кнопки `Keep in dispute` / `Not an issue` (clerk) и правка строки. Изменившаяся строка после ответа: метка `New` и короткая подсветка.
+   - **Документ.** Клик по источнику или цитате заменяет холст документом (текст, цитата подсвечена и прокручена), сверху `← Invoice`.
+   - **Письмо продавцу** после Accept открывается на холсте как документ: правка слов, числа заблокированы, `Copy text` / `Save PDF`.
+4. **Лента CargoOS (справа, 420px).** Шапка `CargoOS` + `Checks every line. Asks when it can't tell. Never pays or sends.` Сообщения в порядке времени, человеческим языком из шаблонов кода (не LLM), ссылки `Line 1` фокусируют строку на холсте:
+   - системные строки (`Maya added 4 documents · Oct 24, 1:40 PM`, `Reading 4 documents…` с прогрессом по файлам);
+   - итог проверки (`I read …, and checked all 8 charges.`, `5 charges match… Line 1 is $300 over: …`);
+   - **вопрос** — жёлтая карточка `Question for you` / `Question for Sam` с цитатой и `Lines 4 and 6 · $600 wait for your answer`;
+   - ответ человека — пузырь справа с именем и временем;
+   - **что изменилось** — `Sam's answer changed 2 charges: · Line 4 … → Matches · Line 6 … → $400 over. At stake is now $700.`;
+   - запрос, решение, отказ с причиной, письмо — тоже сообщения.
+   - **Низ ленты = следующий шаг этого человека.** Есть открытый вопрос к нему → поле ввода (`Answer CargoOS… e.g. “approved on WhatsApp”`, подсказка `Your answer becomes evidence. CargoOS rechecks the lines; nothing is sent.`). Иначе — карточка действия: Maya `Dispute $700 with Pacific Crest: lines 1 and 6.` + `Ask Sam to approve`; Sam на чужом запросе `Accept` / `Reject` (причина обязательна); Sam на своём — `You requested this. Another owner decides.`; ждём другого — серая строка `Waiting for Sam's answer.`
+5. **Люди (§0.3 остаётся).** Leo: сайдбар без сумм, кейс открывается на документах с большой зоной загрузки, лента только про документы. Maya: всё видит, отвечать не может, просит одобрения. Sam: отвечает и решает.
+6. **Новый кейс.** Как новый чат: на холсте большая зона `Drop the invoice and everything that was agreed — quotes, emails, chats`, вставка текста, QR для телефона; лента показывает `Reading 4 documents…` с галочками по файлам, затем итог проверки. В replay `Load example` проигрывает это.
+7. **Ширина.** ≥1280: всё как выше. 1024–1279: сайдбар рейкой, лента 360px. <1024: сайдбар за ☰, холст и лента — одна колонка с переключателем `Invoice · CargoOS 2` сверху (число — новые сообщения/ожидание); при открытом вопросе к этому человеку по умолчанию открыта лента. От 768px, без горизонтальной прокрутки.
+8. **Убираем.** Вкладки по делам, Overview, секции с подытогами, glyphs статусов, страницы Questions/Approvals, отдельные виды Documents/History (Audit log остаётся в `⋯`), `What changed`-баннер (его работа — сообщение в ленте), денежную полосу с легендой.
+9. **Слова.** Короткие и человеческие; статусы: `$300 over`, `Asked you` / `Asked Sam`, `Matches`, `Not an issue` (после решения клерка), `Waiting for rate` (валюта). Спековые `To dispute / Waiting / Cleared` — названия фильтров.
+10. **Демо-кнопки** (`Before answers / After answers / Reset demo`) остаются плавающими снизу по центру холста, не перекрывают ленту и поле ввода.
+
+**Контракт (`components/case/panes.ts`).** Шапка и раскладка — `components/case/workspace.tsx`; холст — `components/canvas/*` (`CaseCanvas`); лента — `components/thread/*` (`CaseThread`, `threadOf(x, viewer)`). Обе панели получают `CaseContext` (`demo, x, local, actions, viewer, now, forwarder`) и общий `Focus` (`invoice` | `line` | `doc` | `message`): лента зовёт `onFocus`, холст показывает. Модели (`view-model.ts`, `evidence.ts`, `issues.ts`, `case-store.ts`, `history.ts`, `inboxes/items.ts`, `inboxes/message.ts`) переиспользуем.
+
+**Кто что делает.** Оболочка (shell-sidebar): `workspace.tsx`, `case-screen.tsx`, `sidebar.tsx`, `cases-list.tsx`, `components/shell/*`, `components/settings/*`, `components/new-case/*`, удаление страниц инбоксов из навигации. Холст (case-calm): `components/canvas/*` (новая), `components/documents/*`, `components/inputs/*`, `evidence.ts`, `view-model.ts`, удаление старых видов кейса (`overview*.tsx`, `case-tabs.tsx`, `issue-views.tsx`, `chrome.tsx`, `glyphs.tsx`, `evidence-panel.tsx`). Лента (inbox-calm): `components/thread/*` (новая), `components/inboxes/*`, `components/history/*`. Каждый переписывает свои старые тесты под новый интерфейс.
+
 ---
 
 ## 1. Решения
