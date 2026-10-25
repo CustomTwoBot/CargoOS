@@ -22,7 +22,7 @@ describe("DocumentsView on Scenario A", () => {
       "Email: RE: Q-PCL-0902 revisedEmail · Forwarder · Sep 5Read, 1 fact· line 1",
       "WhatsApp: Derek PCL / Sam BaylineChat · Sep 28Read, 1 fact· line 1",
       "Invoice PCL-INV-1012Invoice · Forwarder · Oct 12Read, 8 invoice lines",
-      "Reply from ops leadYour answer · You · Oct 24Read, 2 facts· lines 4 and 6",
+      "Reply from ops leadYour answer · Oct 24Read, 2 facts· lines 4 and 6",
     ]);
     expect(within(list()).getAllByRole("button")[0]).toHaveAttribute("aria-current", "true");
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();

@@ -18,7 +18,8 @@ export const typeOfFile = (name: string): EvidenceType =>
 
 const isText = (f: File) => f.type.startsWith("text/") || /\.(txt|eml|csv|md)$/i.test(f.name);
 
-export function UploaderCanvas({ x, onAdd, onFocus }: { x: CaseInput; onAdd: AddEvidence; onFocus: (f: Focus) => void }) {
+/** `asked`: who answers CargoOS, as this screen names them ("Sam" on the uploader's screen). */
+export function UploaderCanvas({ x, asked, onAdd, onFocus }: { x: CaseInput; asked: string; onAdd: AddEvidence; onFocus: (f: Focus) => void }) {
   const [over, setOver] = useState(false);
   const [note, setNote] = useState<string>();
   const [pasting, setPasting] = useState(false);
@@ -69,7 +70,7 @@ export function UploaderCanvas({ x, onAdd, onFocus }: { x: CaseInput; onAdd: Add
       <section aria-label="Documents" className="overflow-hidden rounded-[14px] border border-line bg-surface shadow-card">
         <h2 className="border-b border-line px-[18px] py-3 text-row font-[650]">Documents in this case · {x.documents.length}</h2>
         <ul>
-          {docRows(x).map((r) => (
+          {docRows(x, asked).map((r) => (
             <li key={r.doc._id} className="border-t border-line first:border-0">
               <button type="button" onClick={() => onFocus({ kind: "doc", docId: r.doc._id })}
                 className="flex w-full items-baseline justify-between gap-4 px-[18px] py-3 text-left hover:bg-sunken">

@@ -2,6 +2,7 @@
 // that was clicked marked in full and scrolled into view. Everything else CargoOS took from it is
 // marked lightly, so the reader sees what was used.
 import { useEffect, useRef } from "react";
+import { highlight } from "@/components/case/evidence";
 import type { CaseInput } from "@/components/case/view-model";
 import { docRows, itemsOf } from "@/components/documents/documents";
 import { DocumentText, FAILED, meta, StatusText } from "@/components/documents/parts";
@@ -9,10 +10,10 @@ import { DocumentText, FAILED, meta, StatusText } from "@/components/documents/p
 const FOCUS = "focus";
 const same = (a: string, b: string) => a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
 
-type Props = { x: CaseInput; docId: string; quote?: string; onBack: () => void; marks: boolean };
+type Props = { x: CaseInput; docId: string; quote?: string; onBack: () => void; marks: boolean; asked: string };
 
-export function DocView({ x, docId, quote, onBack, marks }: Props) {
-  const row = docRows(x).find((r) => r.doc._id === docId);
+export function DocView({ x, docId, quote, onBack, marks, asked }: Props) {
+  const row = docRows(x, asked).find((r) => r.doc._id === docId);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = box.current?.querySelector("[data-selected]");
@@ -21,8 +22,11 @@ export function DocView({ x, docId, quote, onBack, marks }: Props) {
   if (!row) return <Back onBack={onBack}><p className="text-why text-ink-2">This document isn&apos;t in the case.</p></Back>;
   const items = marks ? itemsOf(x, row.doc) : [];
   const hit = quote ? items.find((i) => same(i.quote, quote)) : undefined;
-  // The clicked quote goes first, so it wins where marks overlap.
-  const marked = quote ? [{ id: hit?.id ?? FOCUS, quote }, ...items.filter((i) => i !== hit)] : items;
+  // The clicked quote is marked in full; a lighter mark it overlaps (one that starts earlier would win) gives way.
+  const range = (q: string) => { const h = highlight(row.doc.text, q); return h ? [h.before.length, h.before.length + h.match.length] : undefined; };
+  const focused = quote ? range(quote) : undefined;
+  const clear = (q: string) => { const r = range(q); return !focused || !r || r[1] <= focused[0] || r[0] >= focused[1]; };
+  const marked = quote ? [{ id: hit?.id ?? FOCUS, quote }, ...items.filter((i) => i !== hit && clear(i.quote))] : items;
   const st = row.status;
   return (
     <Back onBack={onBack}>
